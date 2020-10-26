@@ -1,5 +1,5 @@
 1. Wallet.dat encryption when going offline.
-2. Database (being able to see historical transactions of yourself in and out). DB in encrypted when goind offline.
+2. Database (being able to see historical transactions of yourself in and out). DB in encrypted when going offline.
 3. Signatures - after initial recognition if 2 people use this wallet it will automatically recognize sender (if same addresses are used between)
 4. Address book with categories
 5. Messaging arbitrary length text (with signatures and auto recognition)
