@@ -17,4 +17,14 @@ pip3 install pycryptodome
 
 To use the app you also need Komodo deamon and zcash params.
 
-Zcash params for Windows and Linux may be downloaded using attached scripts (komodo-win, komodo-lin)
+Zcash params for Windows and Linux may be downloaded using attached scripts (komodo-win, komodo-lin).
+
+When all above conditions are met you should run:
+
+1. Windows, cmd:
+python zundernet.py
+
+2. Linux, terminal:
+python3 zundernet.py
+
+Then you point the app to komodo-cli and wallet file to be able to use it.
