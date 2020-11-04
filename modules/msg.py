@@ -235,12 +235,41 @@ class Msg:
 		uid.set(addr)
 		
 		frame_to_destroy.destroy()		
+		
+	
+	
+		
+		
+
+	def get_last_addr_from(self):
+	
+		idb=localdb.DB()
+		rr=idb.select('jsons',['json_content' ],{'json_name':['=',"'last_msg_from_addr'"]} )
+		
+		if len(rr)>0:
+			disp_dict=json.loads(rr[0][0])
+			return disp_dict['addr']
+		else:
+			return localdb.get_default_addr()
+			
+	
+	def set_last_addr_from(self,addr):
+		
+		if addr=='':
+			return
+			
+		idb=localdb.DB()
+		table={'jsons':[{'json_content':json.dumps({'addr':addr}), 'json_name':'last_msg_from_addr'}]}
+		idb.upsert(table,['json_content','json_name' ],{'json_name':['=',"'last_msg_from_addr'"]} )
+
 			
 			
 	def send_reply(self,*args):
 		global tmpaddr
 		selframe = Toplevel()
 		selframe.title('Write message ')
+		
+		# selframe.after(500,self.get_last_addr_from)
 
 		msg_grid=[]
 		tmpdict={'from':[{'T':'LabelC', 'L':'Select own address','width':19},{'T':'Button', 'L':'...', 'uid':'selownadr', 'width':4}, {'T':'LabelV','L':'','uid':'ownaddr','width':80}]}
@@ -261,6 +290,11 @@ class Msg:
 		# print(msg_grid)
 		
 		msg_table=flexitable.FlexiTable(selframe,msg_grid)
+		
+		last_addr=self.get_last_addr_from()
+
+		if last_addr!='':
+			msg_table.set_textvariable( 'ownaddr',last_addr)
 		
 		def send():
 			global tmpaddr
@@ -292,6 +326,8 @@ class Msg:
 			
 			idb=localdb.DB()
 			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
+			
+			self.set_last_addr_from( froma)
 			selframe.destroy()
 			
 		msg_table.set_cmd('send',[ ], send)
