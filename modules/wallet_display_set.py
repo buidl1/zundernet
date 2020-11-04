@@ -1,4 +1,5 @@
-
+# -- todo: add default from addr for msg
+# -- detect wrong path for deamon
 
 import tkinter as tk
 from tkinter import filedialog, StringVar, ttk, messagebox, Toplevel 
@@ -75,6 +76,34 @@ class WalDispSet:
 
 	
 
+
+	def get_last_addr_from(self): # get_last_addr_from(self) set_last_addr_from(self,addr)
+	
+		idb=localdb.DB()
+		rr=idb.select('jsons',['json_content' ],{'json_name':['=',"'last_book_from_addr'"]} )
+		
+		if len(rr)>0:
+			disp_dict=json.loads(rr[0][0])
+			return disp_dict['addr']
+		else:
+			return localdb.get_default_addr()
+			
+	
+	def set_last_addr_from(self,addr):
+		# print('last_book_from_addr ',addr)
+		if addr=='':
+			return
+			
+		idb=localdb.DB()
+		table={'jsons':[{'json_content':json.dumps({'addr':addr}), 'json_name':'last_book_from_addr'}]}
+		idb.upsert(table,['json_content','json_name' ],{'json_name':['=',"'last_book_from_addr'"]} )
+
+
+
+
+
+	
+
 	def send_to_addr(self,addr,exampleval=0.0001): 
 		tmpsignature=localdb.get_addr_to_hash(addr)
 		
@@ -99,6 +128,16 @@ class WalDispSet:
 
 				
 		send_from=flexitable.FlexiTable(rootframe,grid_settings)
+		
+		last_addr=self.get_last_addr_from()
+		if last_addr!='':
+			send_from.set_textvariable( 'z1',last_addr)
+			idb=localdb.DB()
+			disp_dict=idb.select('jsons',['json_content','last_update_date_time'],{'json_name':['=',"'display_wallet'"]})
+			if len(disp_dict)>0:
+				disp_dict=json.loads(disp_dict[0][0])
+				tmpmaxv=disp_dict['addr_amount_dict'][last_addr]['confirmed']+disp_dict['addr_amount_dict'][last_addr]['unconfirmed']
+				send_from.set_textvariable('setmax1',tmpmaxv)
 		
 		for ij,ar in enumerate(automate_rowids):
 			
@@ -175,6 +214,8 @@ class WalDispSet:
 			if table['queue_waiting'][0]['wait_seconds']==0:
 				self.queue_com.put([ table['queue_waiting'][0]['id'],'Sending\n',self.message_asap_tx_done])
 		
+		
+			self.set_last_addr_from( z)
 			rootframe.destroy()
 				
 				
@@ -690,24 +731,27 @@ class WalDispSet:
 		idb=localdb.DB()
 		
 		def cancell(id):
-			disp_dict=idb.select('queue_waiting', ["type","command","created_time","status","wait_seconds","json","id"],{'id':['=',id]})
-			table={}	
-			if disp_dict[0][3]!='done':
+			try:
+				disp_dict=idb.select('queue_waiting', ["type","command","created_time","status","wait_seconds","json","id"],{'id':['=',id]})
+				table={}	
+				if disp_dict[0][3]!='done':
+					
+					table['queue_done']=[{"type":disp_dict[0][0]
+									, "wait_seconds":disp_dict[0][4]
+									, "created_time":disp_dict[0][2]
+									, "command":disp_dict[0][1]
+									, "json":disp_dict[0][5]
+									, "id":disp_dict[0][6]
+									, "result":'cancelled'
+									, 'end_time':app_fun.now_to_str(False)
+									} ]
+					idb.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
 				
-				table['queue_done']=[{"type":disp_dict[0][0]
-								, "wait_seconds":disp_dict[0][4]
-								, "created_time":disp_dict[0][2]
-								, "command":disp_dict[0][1]
-								, "json":disp_dict[0][5]
-								, "id":disp_dict[0][6]
-								, "result":'cancelled'
-								, 'end_time':app_fun.now_to_str(False)
-								} ]
-				idb.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
-			
-			idb.delete_where('queue_waiting',{'id':['=',id]})
-			time.sleep(1)
-			frame_table.update_frame(self.prepare_queue_frame())
+				idb.delete_where('queue_waiting',{'id':['=',id]})
+				time.sleep(1)
+				frame_table.update_frame(self.prepare_queue_frame())
+			except:
+				pass # double click cancell error
 		
 		for x1 in grid:
 		
