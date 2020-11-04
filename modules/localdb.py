@@ -2,7 +2,7 @@
 import sqlite3 as sql
 import modules.app_fun as app_fun
 import modules.aes as aes
-# import  app_fun
+import json
 import datetime
 import time
 
@@ -825,5 +825,21 @@ def get_addr_to_hash(addrto,onlylentest=False):
 		
 		
 
+# if only 1 addr >0 disp_dict['wl'] {'addr':aa,'confirmed': amount_init, 'unconfirmed': am_unc,'#conf':cc_conf,'#unconf':cc_unc }
 
-
+def get_default_addr():	
+	idb= DB()
+	disp_dict=idb.select('jsons',['json_content','last_update_date_time'],{'json_name':['=',"'display_wallet'"]})
+	if len(disp_dict)>0:
+		disp_dict=json.loads(disp_dict[0][0])
+		ready_addr=''
+		for rr in disp_dict['wl']:
+			if rr['confirmed']+rr['unconfirmed']>=0.0001:
+				if ready_addr=='':
+					ready_addr=rr['addr']
+				else:
+					return '' # if more then 1
+					
+		return ready_addr
+			
+	return ''		
