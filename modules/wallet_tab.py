@@ -23,7 +23,24 @@ from modules.notifications import Notifications
 
 def update_paths(eldeamon,eldata,elchain,db,frame):
 
-	if os.path.exists(eldeamon.get()) and os.path.exists(eldata.get()):
+	tmp_komodod_exe=eldeamon.get()+'/komodod.exe'
+	tmp_komodod_bin=eldeamon.get()+'/komodod'
+	tmp_komodo_cli_exe=eldeamon.get()+'/komodo-cli.exe'
+	tmp_komodo_cli_bin=eldeamon.get()+'/komodo-cli'
+	
+	komodod_ok=False
+	if os.path.exists(eldeamon.get()+'/komodod.exe') or os.path.exists(eldeamon.get()+'/komodod'):
+		komodod_ok=True
+		
+	komodo_cli_ok=False
+	if os.path.exists(eldeamon.get()+'/komodo-cli.exe') or os.path.exists(eldeamon.get()+'/komodo-cli'):
+		komodo_cli_ok=True
+		
+	blockchain_data_ok=False
+	if os.path.exists(eldata.get()+'/wallet.dat') or os.path.exists(eldata.get()+'/wallet.encr'):
+		blockchain_data_ok=True
+
+	if komodod_ok and komodo_cli_ok and blockchain_data_ok: #os.path.exists(eldeamon.get()) and os.path.exists(eldata.get()):
 
 		dict_set={}
 		dict_set['init_settings']=[]
@@ -37,10 +54,13 @@ def update_paths(eldeamon,eldata,elchain,db,frame):
 		db.delete_where('init_settings')
 		db.insert(dict_set,["komodo","datadir","start_chain"]) #,"password_on"
 		frame.destroy()
-	elif not os.path.exists(eldeamon.get()):
-		flexitable.messagebox_showinfo('Path is wrong',eldeamon.get())
+	elif not komodod_ok:
+		flexitable.messagebox_showinfo('Path for komodo deamon is wrong',eldeamon.get()+'\n - no komodod file !')
+	elif  not komodo_cli_ok:
+		flexitable.messagebox_showinfo('Path for komodo-cli is wrong',eldata.get()+'\n - no komodo-cli file !')
 	else:
-		flexitable.messagebox_showinfo('Path is wrong',eldata.get())
+		flexitable.messagebox_showinfo('Path for blockchain data is wrong',eldata.get()+'\n - no wallet file !')
+		
 		
 def ask_paths(): # read from db if possible
 
