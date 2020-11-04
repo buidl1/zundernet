@@ -325,7 +325,7 @@ def thread_loop():
 			autostart='no'
 			dmn.start_deamon( )
 			
-		time.sleep(2)
+		time.sleep(0.5)
 		# root.after(2000,thread_loop)
 
 # root.after(0,thread_loop)
