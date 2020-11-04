@@ -49,8 +49,10 @@ class AddressBook:
 		return all_cat_unique
 			
 			
-			
-			
+	
+
+
+	
 	def prepare_own_addr_frame(self, selecting_filter='All',selecting_to=False):	
 
 		grid_lol3=[]
@@ -227,7 +229,7 @@ class AddressBook:
 	# address book  categories_filter
 	def get_addr_from_book(self,uid,set_and_destroy,*evargs):
 
-
+		print('# get_last_addr_from(self) set_last_addr_from(self,addr)')
 		selframe = Toplevel() #tk.Tk()
 		selframe.title('Select address '+str(uid))
 		filter_frame=ttk.LabelFrame(selframe,text='Filter')
