@@ -18,7 +18,6 @@ import modules.localdb as localdb
 import modules.deamon as deamon
 import modules.wallet_api as wallet_api
 import modules.flexitable as flexitable
-import modules.addr_book as addr_book
 import modules.msg as msg
 import modules.aes as aes
 import modules.donate as donate
@@ -258,7 +257,7 @@ queue_start_stop = queue.Queue()
 queue_com=queue.Queue()	
 additional_obj={}
 
-stat_lab,bstartstop,wallet_summary_frame,wallet_details,wallet_display_set  =wallet_tab.setwallet(tabs0,app_password,autostart,queue_start_stop,queue_com,additional_obj)
+stat_lab,bstartstop,wallet_summary_frame,wallet_details,wallet_display_set,addrb  =wallet_tab.setwallet(tabs0,app_password,autostart,queue_start_stop,queue_com,additional_obj)
 
 
 ################################################### Address book
@@ -266,7 +265,7 @@ tabs2=ttk.Frame(tabs0)
 tabs2.pack()
 tabs0.add( tabs2, text = 'Address book')
 
-addrb=addr_book.AddressBook(wallet_display_set)
+# addrb=addr_book.AddressBook(wallet_display_set)
 addrb.setaddrbook(tabs2)
 # t2=time.time()
 
@@ -325,7 +324,7 @@ def thread_loop():
 			autostart='no'
 			dmn.start_deamon( )
 			
-		time.sleep(0.5)
+		time.sleep(1)
 		# root.after(2000,thread_loop)
 
 # root.after(0,thread_loop)
