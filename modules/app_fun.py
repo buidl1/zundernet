@@ -37,8 +37,10 @@ def check_deamon_running():
 	
 def split_memo( tmpmemo,sign_as_hash=True):
 	cry=aes.Crypto(224) 
-	tmpmemo=tmpmemo.replace(' @zUnderNet','')
+	
+	tmpmemo=tmpmemo.replace('@zUnderNet','')
 	splmemo=tmpmemo.split('\n')
+	# print('app fun replace ',tmpmemo)
 	
 	tmpsign=splmemo[-1]
 	tmpsign_spl=tmpsign.split(';')
