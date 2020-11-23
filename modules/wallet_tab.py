@@ -15,19 +15,17 @@ import random
 import modules.deamon as deamon
 import modules.localdb as localdb
 import getpass
+import modules.app_fun as app_fun
 from modules.wallet_display_set import WalDispSet
+import modules.usb as usb
 from modules.tasks_history import TasksHistory
 from modules.tx_history import TransactionsHistory
 from modules.frame_settings import Settings
 from modules.notifications import Notifications
+import modules.addr_book as addr_book
 
 def update_paths(eldeamon,eldata,elchain,db,frame):
 
-	tmp_komodod_exe=eldeamon.get()+'/komodod.exe'
-	tmp_komodod_bin=eldeamon.get()+'/komodod'
-	tmp_komodo_cli_exe=eldeamon.get()+'/komodo-cli.exe'
-	tmp_komodo_cli_bin=eldeamon.get()+'/komodo-cli'
-	
 	komodod_ok=False
 	if os.path.exists(eldeamon.get()+'/komodod.exe') or os.path.exists(eldeamon.get()+'/komodod'):
 		komodod_ok=True
@@ -37,9 +35,37 @@ def update_paths(eldeamon,eldata,elchain,db,frame):
 		komodo_cli_ok=True
 		
 	blockchain_data_ok=False
-	if os.path.exists(eldata.get()+'/wallet.dat') or os.path.exists(eldata.get()+'/wallet.encr'):
+	decr_wal_exist=os.path.exists(eldata.get()+'/wallet.dat')
+	if decr_wal_exist or os.path.exists(eldata.get()+'/wallet.encr'):
 		blockchain_data_ok=True
+		
+	if decr_wal_exist: # backup!
+	
+		uu=usb.USB()
+		
+		while len(uu.locate_usb())==0:
+			messagebox.showinfo('Please insert USB pendrive','Please insert USB pendrive. Unencrypted wallet.dat file detected - needs to be backed up to external memory.')
 
+		path=''
+		while path==None or path=='':
+			path=filedialog.askdirectory(initialdir=os.getcwd(), title="Select directory on your USB drive")
+			if uu.verify_path_is_usb(path):
+				messagebox.showinfo('Starting backup','Please wait untill backup is finished and relevant message is displayed.' )
+				dest=os.path.join(path,'wallet_'+app_fun.now_to_str()+'.dat')  
+				src=eldata.get()+'/wallet.dat'
+				
+				try:
+					shutil.copy(src, dest)
+					path=''
+					messagebox.showinfo('Backup done','Your wallet is safe now at \n'+dest )
+					break
+				except:
+					exit()
+			else:
+				messagebox.showinfo('Wrong path','Selected path is not USB drive, please try again.' )
+				path=''
+	
+	
 	if komodod_ok and komodo_cli_ok and blockchain_data_ok: #os.path.exists(eldeamon.get()) and os.path.exists(eldata.get()):
 
 		dict_set={}
@@ -327,10 +353,12 @@ def setwallet(tabs0,app_password,autostart,queue_start_stop, queue_com, addit_fr
 	frame_notif=ttk.Frame(tabs1, width=200,height=200) 
 	frame_notif.pack(fill='both',expand=True)
 	tabs1.add( frame_notif, text = 'Notifications')
+	global addrb
+	addrb=addr_book.AddressBook(wds)
 	
 	def set_notif():
-		global notif
-		notif=Notifications(frame_notif,tabs1 )
+		global notif,addrb
+		notif=Notifications(frame_notif,tabs1,addrb )
 		addit_frames['notif']=notif
 	
 	frame_notif.after(2000,set_notif)
@@ -393,5 +421,5 @@ def setwallet(tabs0,app_password,autostart,queue_start_stop, queue_com, addit_fr
 	sett=Settings(frame_settings,wds)
 	
 	
-	return stat_lab,bstartstop,wallet_summary_frame,wallet_details,wds  #,queue_status,tahi,txhi,notif
+	return stat_lab,bstartstop,wallet_summary_frame,wallet_details,wds,addrb  #,queue_status,tahi,txhi,notif
 	
