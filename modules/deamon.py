@@ -478,9 +478,10 @@ class DeamonInit:
 								for mmii,mm in enumerate(memo_orig):
 									
 									table=self.the_wallet.prep_msgs_inout(txid_utf8,mm,'out',dt)
-								
-									if table=={}:
-										continue
+									if table['msgs_inout'][0]['msg']=='':
+										table['msgs_inout'][0]['msg']='Sent amount '+str(round(sum_cur_spending,8))
+									# if table=={}:
+										# continue
 																	 
 									idb.insert(table,['proc_json','type','addr_ext','txid','tx_status','date_time', 'msg', 'uid','in_sign_uid'])
 							else: #'message':
