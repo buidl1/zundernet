@@ -153,8 +153,9 @@ class AddressBook:
 				addr=''
 				bsel_uid='select'+kk
 				
-				if 'tooltip' in vv[6] and send_from!=None:
-					addr=vv[6]['tooltip']
+				if send_from!=None:
+					if 'tooltip' in vv[6]:
+						addr=vv[6]['tooltip']
 					
 					def set_and_destroy(addr,alias):
 						amount_uid='Total'+alias
@@ -172,8 +173,9 @@ class AddressBook:
 					wallet_details.set_cmd(bsel_uid,[addr,kk],set_and_destroy)
 							
 
-	def get_addr_from_wallet(self,set_and_destroy,send_from,addram,sending_to=False,*evargs):
-
+	def get_addr_from_wallet(self, send_from,addram,sending_to=False,*evargs):
+		# print('send_from',send_from)
+		# print('addram',addram)
 		selframe = Toplevel() #tk.Tk()
 		selframe.title('Select address ')
 		filter_frame=ttk.LabelFrame(selframe,text='Filter')
@@ -189,7 +191,7 @@ class AddressBook:
 
 		list_frame=ttk.LabelFrame(selframe,text='Addresses list')
 		list_frame.grid(row=1,column=0)
-		select_table=flexitable.FlexiTable(list_frame,grid_lol_select,600,True) #params=None, grid_lol=None
+		select_table=flexitable.FlexiTable(list_frame,grid_lol_select,800,True) #params=None, grid_lol=None
 
 		self.prepare_own_addr_button_cmd(grid_lol_select,select_table, send_from,addram )
 
@@ -229,7 +231,6 @@ class AddressBook:
 	# address book  categories_filter
 	def get_addr_from_book(self,uid,set_and_destroy,*evargs):
 
-		print('# get_last_addr_from(self) set_last_addr_from(self,addr)')
 		selframe = Toplevel() #tk.Tk()
 		selframe.title('Select address '+str(uid))
 		filter_frame=ttk.LabelFrame(selframe,text='Filter')
@@ -326,6 +327,7 @@ class AddressBook:
 						{'T':'LabelC', 'L':'Valid' } , 
 						{'T':'LabelC', 'L':' ' } , 
 						{'T':'LabelC', 'L':' ' } , 
+						{'T':'LabelC', 'L':' ' } , 
 						{'T':'LabelC', 'L':' ' } 
 						]		
 						
@@ -356,10 +358,11 @@ class AddressBook:
 					cur_addr.append(rr[2])
 					
 					tmphasvk=False
-					tmpnott={'T':'LabelV', 'L':str(tmphasvk), 'uid':'View'+str(ii) , 'visible':visible }
+					uid_tmp=rr[2]
+					tmpnott={'T':'LabelV', 'L':str(tmphasvk), 'uid':'View'+str(uid_tmp) , 'visible':visible }
 					if rr[3].strip()!='':
 						tmphasvk=True
-						tmpnott={'T':'LabelV', 'L':str(tmphasvk), 'uid':'View'+str(ii) , 'visible':visible, 'tooltip':rr[3].strip() }
+						tmpnott={'T':'LabelV', 'L':str(tmphasvk), 'uid':'View'+str(uid_tmp) , 'visible':visible, 'tooltip':rr[3].strip() }
 						
 					addrvalid='Waiting'
 					if rr[5]==-1:
@@ -376,17 +379,18 @@ class AddressBook:
 					elif rr[6]==0:
 						viewk_valid='Waiting'
 						
-					tmpdict[ii]=[{'T':'LabelV', 'L':str(rr[4]), 'uid':'Usage'+str(ii) , 'visible':visible} , 
-							{'T':'LabelV', 'L':rr[0], 'uid':'Category'+str(ii) , 'visible':visible} , 
-							{'T':'LabelV', 'L':rr[1], 'uid':'Alias'+str(ii) , 'visible':visible} , 
-							{'T':'InputL', 'L':rr[2], 'uid':'Address'+str(ii) , 'visible':visible,'width':32} , 
-							{'T':'LabelV', 'L':addrvalid, 'uid':'AddressValid'+str(ii) , 'visible':visible} , 
+					tmpdict[uid_tmp]=[{'T':'LabelV', 'L':str(rr[4]), 'uid':'Usage'+str(uid_tmp) , 'visible':visible} , 
+							{'T':'LabelV', 'L':rr[0], 'uid':'Category'+str(uid_tmp) , 'visible':visible} , 
+							{'T':'LabelV', 'L':rr[1], 'uid':'Alias'+str(uid_tmp) , 'visible':visible} , 
+							{'T':'InputL', 'L':rr[2], 'uid':'Address'+str(uid_tmp) , 'visible':visible,'width':24} , 
+							{'T':'LabelV', 'L':addrvalid, 'uid':'AddressValid'+str(uid_tmp) , 'visible':visible} , 
 							tmpnott , 
-							{'T':'LabelV', 'L':viewk_valid, 'uid':'ViewKeyValid'+str(ii) , 'visible':visible} , 
-							{'T':'Button', 'L':'edit', 'uid':'edit'+str(ii), 'visible':visible } , 
-							{'T':'Button', 'L':'delete', 'uid':'delete'+str(ii), 'visible':visible } , 
-							{'T':'Button', 'L':'copy', 'uid':'copy'+str(ii), 'visible':visible } , 
-							{'T':'Button', 'L':'sendto', 'uid':'sendto'+str(ii) , 'visible':visible} 
+							{'T':'LabelV', 'L':viewk_valid, 'uid':'ViewKeyValid'+str(uid_tmp) , 'visible':visible} , 
+							{'T':'Button', 'L':'Edit', 'uid':'edit'+str(uid_tmp), 'visible':visible } , 
+							{'T':'Button', 'L':'Del.', 'uid':'delete'+str(uid_tmp), 'visible':visible, 'tooltip':'Delete record' } , 
+							{'T':'Button', 'L':'Copy', 'uid':'copy'+str(uid_tmp), 'visible':visible } , 
+							{'T':'Button', 'L':'Send to', 'uid':'sendto'+str(uid_tmp) , 'visible':visible} ,
+							{'T':'Button', 'L':'RP', 'uid':'rp'+str(uid_tmp), 'visible':visible, 'tooltip':'Request payment from' }
 							]
 					grid_settings.append(tmpdict)
 			
@@ -397,7 +401,7 @@ class AddressBook:
 		def update_filter(update_fun,*someargs):
 			global grid_settings
 			update_grid()	
-			main_table.update_frame(grid_settings)
+			main_table.update_frame(grid_settings,-1)
 			update_fun()
 			
 			
@@ -435,7 +439,7 @@ class AddressBook:
 			if tf:
 				idb.delete_where('addr_book',{'Address':['=',"'"+addr+"'"]})
 				update_grid()
-				main_table.update_frame(grid_settings)
+				main_table.update_frame(grid_settings,-1)
 				update_fun()		
 			
 			
@@ -457,7 +461,7 @@ class AddressBook:
 			idb.upsert(table,['usage'],{'Address':['=',"'"+addr+"'"]})
 			
 			update_grid()	
-			main_table.update_frame(grid_settings)
+			main_table.update_frame(grid_settings,-1)
 			update_fun()		
 			
 			
@@ -471,16 +475,108 @@ class AddressBook:
 			sendto_fun(addr)
 			increment_usage(addr , update_fun)
 		
+		# json to string {'amount':, 'toaddr':,title:'','docuri':}
+		# todo defaut send to addr
+		# submit action
+		# title max length 64
+		def request_payment(alias,addr , update_fun, sendto_fun):
+			
+			formframe = Toplevel() 
+			formframe.title('Request payment from '+alias)
+			obligatory=ttk.Frame(formframe )
+			obligatory.grid(row=0,column=0,sticky='NW')
+			grid1=[]
+			grid1.append( {'line1':[{'T':'LabelC', 'L':'Obligatory:'}, {'T':'LabelE' } ]} )
+			grid1.append( {'amount':[{'T':'LabelC', 'L':'Request amount'}, {'T':'InputFloat','L':'0', 'uid':'amount', 'width':32} ]} )
+			select=localdb.get_last_addr_from("'last_payment_to_addr'")
+			grid1.append( {'toaddress':[{'T':'LabelC', 'L':'Payment to address'}, {'T':'Button', 'L':select, 'uid':'toaddr', 'width':32} ]} )
+			grid1.append( {'line1':[{'T':'LabelC', 'L':'Optional:'}, {'T':'LabelE' } ]} )
+			grid1.append( {'title':[{'T':'LabelC', 'L':'Title'}, {'T':'InputL', 'L':'Payment request for invoice nr ', 'uid':'title', 'width':32 } ]} )
+			grid1.append( {'docuri':[{'T':'LabelC', 'L':'Document URI'}, {'T':'InputL', 'uid':'docuri', 'width':32} ]} )
+			select=localdb.get_last_addr_from("'last_book_from_addr'")
+			grid1.append( {'sendfrommyaddr':[{'T':'LabelC', 'L':'Send using'}, {'T':'Button', 'L':select, 'uid':'sendfromaddr', 'width':32 } ]} )
+			grid1.append( {'submit':[{'T':'Button', 'L':'Send request', 'span':2, 'uid':'submit'},  { } ]} )
+			
+			
+			g1_table=flexitable.FlexiTable(obligatory,grid1)			
+			
+			# def selecting_addr_from_book_set_and_destroy_sending( addr,uid,frame_to_destroy,*evargs ): # here also get signature!
+				# uid.set(addr)
+				# frame_to_destroy.destroy()	
+				
+			g1_table.set_cmd('toaddr',[  g1_table, ['toaddr'] ], self.get_addr_from_wallet )
+			g1_table.set_cmd('sendfromaddr',[  g1_table, ['sendfromaddr'] ], self.get_addr_from_wallet )
+			
+			
+			def send_request():
+				localdb.set_last_addr_from( g1_table.get_value('sendfromaddr'),"'last_book_from_addr'")
+				localdb.set_last_addr_from( g1_table.get_value('toaddr'),"'last_payment_to_addr'")
+			
+				tmpam=round(float(g1_table.get_value('amount')),8)
+				
+				if tmpam>100000000 or tmpam<0.0001:
+					flexitable.showinfo('Amount not valid, please correct','Amount '+str(tmpam)+' is not practical, please correct.')
+					return
+				
+				tmptoaddr=g1_table.get_value('toaddr')
+				if tmptoaddr in ['','...']:
+					flexitable.showinfo('Address missing','Please enter valid [Payment to address]')
+					return
+				
+				tmpfromaddr=g1_table.get_value('sendfromaddr')
+				if tmpfromaddr in ['','...']:
+					flexitable.showinfo('Address missing','Please enter valid [Send using] address')
+					return
+					
+				if len(g1_table.get_value('title'))>64:
+					flexitable.showinfo('Title too long','Please correct request title to be less then 64 characters long.')
+					return
+				
+				tmpsignature=localdb.get_addr_to_hash(addr)
+				
+				memo_json={'amount':tmpam
+							,'toaddress':tmptoaddr
+							,'title':g1_table.get_value('title')
+							,'docuri':g1_table.get_value('docuri')}
+			
+				# add sign 
+				ddict={'fromaddr':tmpfromaddr, 'to':[{'z':addr,'a':0.0001,'m':'PaymentRequest;'+json.dumps(memo_json)+tmpsignature }]	} 
+				table={}
+				table['queue_waiting']=[localdb.set_que_waiting('send',jsonstr=json.dumps(ddict) ) ]
+				idb=localdb.DB()
+				idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
+				
+				formframe.destroy()
+			
+			
+			g1_table.set_cmd('submit',[ ], send_request)
+			# submit button - create json and send it 
+			
+			
+			
+			# table={}
+			# if asap:
+				# table['queue_waiting']=[localdb.set_que_waiting('send',jsonstr=json.dumps(ddict) ) ]
+			# else:
+				# table['queue_waiting']=[localdb.set_que_waiting('send',jsonstr=json.dumps(ddict) , wait_seconds=WAIT_S) ]
+				
+			
+			# if table['queue_waiting'][0]['wait_seconds']==0:
+				# self.queue_com.put([ table['queue_waiting'][0]['id'],'Sending\n',self.message_asap_tx_done])
+			
+			
+			
 			
 		# buttons commands for main grid:
 		def update_buttons():
 			global idb, form_grid, grid_settings
+			
 			for x1 in grid_settings:
 			
 				for kk,vv in x1.items():  
 					if kk=='head':
 						continue
-				
+						
 					addr=main_table.get_value('Address'+str(kk) )
 					alias=main_table.get_value('Alias'+str(kk) )
 					categ=main_table.get_value('Category'+str(kk) )
@@ -501,6 +597,11 @@ class AddressBook:
 					
 					send_uid='sendto'+str(kk)
 					main_table.set_cmd(send_uid,[ addr,update_buttons,self.wds.send_to_addr ], subsendto )
+					
+					# request payment
+					# print('request payment')
+					rp_uid='rp'+str(kk)
+					main_table.set_cmd(rp_uid,[ alias,addr,update_buttons,self.wds.send_to_addr ], request_payment )
 					
 		update_buttons()
 				
@@ -572,7 +673,8 @@ class AddressBook:
 			form_table.set_textvariable('addr','')
 			form_table.set_textvariable('viewkey','')
 			update_grid()
-			main_table.update_frame(grid_settings)
+			main_table.update_frame(grid_settings,-1)
+			# print('674\n',grid_settings)
 			update_buttons()
 			
 			update_filter_values()
