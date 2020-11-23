@@ -1,5 +1,4 @@
 
-
 import tkinter as tk
 from tkinter import filedialog, StringVar, ttk, messagebox, Toplevel,Scrollbar
 import os,sys
@@ -172,6 +171,7 @@ class FlexiTable(ttk.Frame): # process buttons last!
 		self.canvas1.config(width=self.min_canvas_width,height=self.min_canvas_height)
 		
 		scrollbar = ttk.Scrollbar(self, orient="vertical", command=self.canvas1.yview)
+		x_scrollbar = ttk.Scrollbar(self, orient="horizontal", command=self.canvas1.xview)
 		
 		scrollable_frame = ttk.Frame(self.canvas1)	
 		
@@ -185,11 +185,15 @@ class FlexiTable(ttk.Frame): # process buttons last!
 		
 		
 		self.canvas1.create_window((0, 0), window=scrollable_frame, anchor="nw") #
-		self.canvas1.configure(yscrollcommand=scrollbar.set )
+		self.canvas1.configure(yscrollcommand=scrollbar.set, xscrollcommand=x_scrollbar.set )
 		
-		self.canvas1.pack(side="left", fill="both", expand=True) #, expand=True
-		
-		scrollbar.pack(side="right", fill="y")	
+		# self.canvas1.pack(side="top", fill="both", expand=True) #, expand=True
+		# scrollbar.pack(side="right", fill="y")	
+		# x_scrollbar.pack(side="bottom", fill="x")	
+				
+		self.canvas1.grid(row=0, column=0, sticky="nsew")
+		scrollbar.grid(row=0, column=1, sticky="ns")
+		x_scrollbar.grid(row=1, column=0, sticky="ew")
 			
 		return scrollable_frame
 		
@@ -223,7 +227,7 @@ class FlexiTable(ttk.Frame): # process buttons last!
 		self.button_args={}
 		self.max_col_width={}
 		self.tooltip_arr={}
-		
+		self.current_grid_lol=json.dumps(grid_lol.copy())
 		
 		rowcounttmp=len(grid_lol)
 		
@@ -267,6 +271,9 @@ class FlexiTable(ttk.Frame): # process buttons last!
 			
 	
 	def add_new_element(self,vv,ii,jj,row_id ):
+	
+		# print('new elem',ii,jj,vv,row_id)
+	
 		if 'T' not in vv:
 			return
 			
@@ -367,6 +374,8 @@ class FlexiTable(ttk.Frame): # process buttons last!
 			print('return - diff type')
 			return
 		
+		# print(373,'ok')
+		
 		if 'tooltip' in vv:
 			tmptt=CreateToolTip(self.elements[-1],vv['tooltip'])
 			if 'uid' in vv.keys():
@@ -402,9 +411,9 @@ class FlexiTable(ttk.Frame): # process buttons last!
 				self.elements[-1].configure(width=self.get_width(vv,jj)-2 )			
 			else:
 				self.elements[-1].configure(width=self.get_width(vv,jj) )	
-				
+		# print('before ading element ui 408')
 		if 'uid' in vv.keys():
-					
+			# print(vv['uid'])
 			if vv['T'] in ['LabelV','InputL','InputINT','InputFloat' ]: 
 				self.elements_uid[vv['uid']]= self.variables[tmpiter]
 				
@@ -429,12 +438,11 @@ class FlexiTable(ttk.Frame): # process buttons last!
 				if len(vv)==0:
 					continue
 					
-				if 'L' not in vv and vv['T']!='InputD'  and vv['T']!='Combox':
+				if 'L' not in vv and 'width' not in vv and vv['T']!='InputD'  and vv['T']!='Combox':
 					continue
 					
 				tmpval=0
 				
-						
 				if 'width' in vv:
 					tmpval=vv['width']
 					
@@ -456,16 +464,32 @@ class FlexiTable(ttk.Frame): # process buttons last!
 				if jj not in self.max_col_width or tmpval>self.max_col_width[jj]:
 					
 					self.max_col_width[jj ]=tmpval
+					
+				# print(ii,jj,tmpval)
 				
 		mmaxtmp=max(self.max_col_width)
-		
 		for jj in range(len(grid_lol[0])):
 			if jj not in self.max_col_width:
 				self.max_col_width[jj ]=int(mmaxtmp/2)+1
+		# print(self.max_col_width)
+		
+		
+		
+		
+		
+		
 				
 		
 	def update_frame(self,grid_lol,head_offset=0):
-	
+		# print('flexi 469')
+		tmpj=json.dumps(grid_lol)
+		if self.current_grid_lol == tmpj :
+			# print('same same')
+			return
+			
+		self.current_grid_lol=tmpj #grid_lol.copy()
+		# print('freshhhh')
+		# print('flexi 476')
 		def del_elems(k):
 			
 			for vvuid,vv in self.row_ids[k].items():
@@ -482,7 +506,8 @@ class FlexiTable(ttk.Frame): # process buttons last!
 				if vvuid in self.tooltip_arr:
 					del self.tooltip_arr[vvuid]
 				
-				del self.elements_uid[vvuid] 
+				if vvuid in self.elements_uid:
+					del self.elements_uid[vvuid] 
 				
 			self.row_ids[k]={}
 			
@@ -517,22 +542,27 @@ class FlexiTable(ttk.Frame): # process buttons last!
 		self.calc_max_col_width(grid_lol ) #max_col_width=
 		
 		tmp_pads=[5,2]
-		
+		# print('flexi 528')
 		for iii,rr2 in enumerate(grid_lol): # prepare grid and variables
 			
 			ii=iii+head_offset
 			row_id=list(rr2.keys())[0]
 			rr=rr2[row_id]
+			# print('flexi 534',iii)
 			
 			if row_id in self.row_ids.keys(): # update
 			
 				for jj,vv in enumerate(rr):
+					# print('flexi 539',jj)
 					
 					if len(vv)==0:
 						continue
 						
 					if 'uid' not in vv:
 						continue
+						
+					# if 'Address' in vv['uid']:
+						# print(' flexi 546 ', vv['uid'])
 						
 					sspan=1
 					if 'span' in vv:
@@ -563,17 +593,31 @@ class FlexiTable(ttk.Frame): # process buttons last!
 				
 						
 						sstyle=self.getstyle(vv['uid'],elemtype,vv['style']['bgc'] , vv['style']['fgc']  ,wid,fontsize  )
-						
+						# try:
 						self.row_ids[row_id][vv['uid']][1].configure(style=sstyle)
+						# except:
+							# pass
 						
+					if row_id in self.row_ids:
+						if vv['uid'] in self.row_ids[row_id]:
+							# try:
+							
+							if 'L' in vv and self.row_ids[row_id][vv['uid']][0]!=None:
+								self.row_ids[row_id][vv['uid']][0].set(vv['L'])
+				
+				
+				# if 'L' in vv and self.row_ids[row_id][vv['uid']][0]!=None:
 					
-					if 'L' in vv and self.row_ids[row_id][vv['uid']][0]!=None:
-						self.row_ids[row_id][vv['uid']][0].set(vv['L'])
-						
-						
-					if 'V' in vv and self.row_ids[row_id][vv['uid']][1]!=None:
-						
-						self.row_ids[row_id][vv['uid']][1].configure(values=vv['V'])
+					# try:
+						# self.row_ids[row_id][vv['uid']][0].set(vv['L'])
+					# except:
+						# print(row_id,vv['uid'],vv['L'])
+						# print(self.row_ids)
+					
+							if 'V' in vv and self.row_ids[row_id][vv['uid']][1]!=None:
+								self.row_ids[row_id][vv['uid']][1].configure(values=vv['V'])
+							# except:
+								# pass
 						
 					if 'pads' in vv:
 						self.elements_grid_opt[self.row_ids[row_id][vv['uid']][1]]['padx']=vv['pads'][0]
@@ -609,7 +653,7 @@ class FlexiTable(ttk.Frame): # process buttons last!
 									self.row_ids[row_id][vv['uid']][1].configure(width=self.get_width(vv,jj) )	
 					
 			else:
-				
+				# print('new elem?')
 				self.row_ids[row_id]={}
 				for jj,vv in enumerate(rr):
 					
@@ -689,21 +733,33 @@ class FlexiTable(ttk.Frame): # process buttons last!
 	
 	def args_to_tupl(self,args_uids):
 		arg_tupl=()
+		# toprint=True
+		# print(args_uids)
 		for aa in args_uids:
-			
+			# if aa=='Rejected':
+				# toprint=True
+			# print(aa)
+				
 			if type(aa)==type('a') and aa in self.elements_uid: 
+				# if toprint: print(699,self.elements_uid)
 				if type([])==type(self.elements_uid[aa]): # button and combox
+					# if toprint: print('# button and combox')
 					arg_tupl+=(self.elements_uid[aa][1],)
 				else:
 					arg_tupl+=(self.elements_uid[aa],) #inputs 
+					# if toprint: print('#inputs ')
 			else:
 				arg_tupl+=(aa,) # or other args
+				# if toprint: print('# or other args')
 				
+		# print(arg_tupl)
 		return arg_tupl
 	
 	
 	def set_cmd(self,button_uid,args_uids,cmd_function):
-	
+			
+		if 	button_uid not in self.elements_uid:
+			return
 				
 		arg_tupl=self.args_to_tupl(args_uids)
 		
