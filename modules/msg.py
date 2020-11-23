@@ -1,6 +1,5 @@
 
 
-
 import tkinter as tk
 from tkinter import filedialog, StringVar, ttk, messagebox, Toplevel 
 import os
@@ -39,24 +38,31 @@ class Msg:
 		
 		for s in ss:
 			
-			tmphash=cry.hash(tmpsign1,s[1]-n_init)
+			ntimes=s[1]-n_init
+			if ntimes>0:
+				tmphash=cry.hash(tmpsign1,ntimes)
+			else:
+				tmphash=tmpsign1
 			
 			n_init=s[1]
 			tmpsign1=tmphash
 			
 			if tmphash==s[0]:
 				new_uid=s[2]
+				
 				if s[3]!=None:
 					addr_from_book=s[3]
-				
+					
 				break
 			tmphash=''
 			
 		tuid=idb.select('in_signatures',['uid' ], {'hex_sign':['=',"'"+sign1+"'"],'n':['=',sign1_n]}   ) #
+		
 		if len(tuid)>0:
 			return -666,''
 		
 		if tmphash=='': 
+			
 			table={}
 			table['in_signatures']=[{'hex_sign':sign1,'n':sign1_n ,'uid':'auto'}]
 			idb.insert(table,['hex_sign','n','uid'  ])
@@ -72,7 +78,7 @@ class Msg:
 			idb.update(table,['hex_sign','n'   ],{'hex_sign':['=',"'"+tmphash+"'"],'n':['=',n_init]})
 		
 		if sign2_n>-1: 
-		
+			
 			cursign=idb.select('in_signatures', ['uid','addr_from_book' ],{'hex_sign':['=', "'"+sign1+"'"], 'n':['=', sign1_n] } ) #
 			tmpaddr=cursign[0][1]
 			tmpuid=cursign[0][0]
@@ -183,6 +189,7 @@ class Msg:
 	
 	def proc_inout(self): # goal - set addr_ext and in_sign_uid for incoming msg
 		idb=localdb.DB()
+		
 		mio=idb.select('msgs_inout',['type','addr_ext','date_time','msg', 'in_sign_uid','uid','tx_status','txid'],{'proc_json':['=',"'False'"]},orderby=[{'date_time':'asc'}]) #
 		
 		if len(mio)==0:
@@ -191,6 +198,7 @@ class Msg:
 		for mm in mio:
 		
 			mm1=mm[1]
+			tmpmsg=mm[3]
 			
 			if mm[0]=='out':
 				table={'msgs_inout':[{'proc_json':'True' }]} 
@@ -223,10 +231,21 @@ class Msg:
 					uidtmp='From '+tmpalias+';uid='+str(uid)+': '+orig_json[0][0]
 					table_n['notifications']=[{'orig_json':uidtmp }]
 					idb.update(table_n,['orig_json' ],{'details':['=',"'"+mm[7]+"'"]})
+					
+					if tmpmsg=='':
+						tmpmsg='Received '+orig_json[0][0]
 						
-				
-				table={'msgs_inout':[{'proc_json':'True', 'in_sign_uid':uid, 'addr_ext':addr_ext}]} 
-				idb.update(table,['proc_json', 'in_sign_uid','addr_ext'],{'uid':['=',mm[5]]})
+				# 'type',
+				tmptype=mm[0]
+				if 'PaymentRequest' in mm[3]:
+					tmptype='PaymentRequest'
+					
+					tmpmsg=tmpmsg.split('PaymentRequest;')
+					tmpmsg=tmpmsg[-1]
+					tmpmsg='Payment request '+app_fun.json_to_str(json.loads(tmpmsg),tt='')				
+					
+				table={'msgs_inout':[{'type':tmptype,'proc_json':'True', 'in_sign_uid':uid, 'addr_ext':addr_ext,'msg':tmpmsg}]} 
+				idb.update(table,['type','proc_json', 'in_sign_uid','addr_ext','msg'],{'uid':['=',mm[5]]})
 				
 			
 		
@@ -241,26 +260,27 @@ class Msg:
 		
 		
 
-	def get_last_addr_from(self):
+	# def get_last_addr_from(self):
 	
-		idb=localdb.DB()
-		rr=idb.select('jsons',['json_content' ],{'json_name':['=',"'last_msg_from_addr'"]} )
+		# idb=localdb.DB()
+		# rr=idb.select('jsons',['json_content' ],{'json_name':['=',"'last_msg_from_addr'"]} )
 		
-		if len(rr)>0:
-			disp_dict=json.loads(rr[0][0])
-			return disp_dict['addr']
-		else:
-			return localdb.get_default_addr()
+		# if len(rr)>0:
+			# disp_dict=json.loads(rr[0][0])
+			# return disp_dict['addr']
+		# else:
+			# return localdb.get_default_addr()
 			
 	
-	def set_last_addr_from(self,addr):
-		
-		if addr=='':
-			return
+	# def set_last_addr_from(self,addr): 
 			
-		idb=localdb.DB()
-		table={'jsons':[{'json_content':json.dumps({'addr':addr}), 'json_name':'last_msg_from_addr'}]}
-		idb.upsert(table,['json_content','json_name' ],{'json_name':['=',"'last_msg_from_addr'"]} )
+		
+		# if addr=='':
+			# return
+			
+		# idb=localdb.DB()
+		# table={'jsons':[{'json_content':json.dumps({'addr':addr}), 'json_name':'last_msg_from_addr'}]}
+		# idb.upsert(table,['json_content','json_name' ],{'json_name':['=',"'last_msg_from_addr'"]} )
 
 			
 			
@@ -269,7 +289,6 @@ class Msg:
 		selframe = Toplevel()
 		selframe.title('Write message ')
 		
-		# selframe.after(500,self.get_last_addr_from)
 
 		msg_grid=[]
 		tmpdict={'from':[{'T':'LabelC', 'L':'Select own address','width':19},{'T':'Button', 'L':'...', 'uid':'selownadr', 'width':4}, {'T':'LabelV','L':'','uid':'ownaddr','width':80}]}
@@ -287,13 +306,12 @@ class Msg:
 		msg_grid.append(tmpdict)
 		tmpdict={'send':[{'T':'Button', 'L':'Send', 'uid':'send','width':6}, {'T':'LabelE' }, {'T':'LabelE' }] }
 		msg_grid.append(tmpdict)
-		# print(msg_grid)
 		
 		msg_table=flexitable.FlexiTable(selframe,msg_grid)
 		
-		last_addr=self.get_last_addr_from()
+		last_addr=localdb.get_last_addr_from("'last_msg_from_addr'")
 
-		if last_addr!='':
+		if last_addr not in ['','...']:
 			msg_table.set_textvariable( 'ownaddr',last_addr)
 		
 		def send():
@@ -327,11 +345,12 @@ class Msg:
 			idb=localdb.DB()
 			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 			
-			self.set_last_addr_from( froma)
+			# self.set_last_addr_from( froma)
+			localdb.set_last_addr_from( froma,"'last_msg_from_addr'")
 			selframe.destroy()
 			
 		msg_table.set_cmd('send',[ ], send)
-		msg_table.set_cmd('selownadr',[self.selecting_addr_from_book_set_and_destroy_sending, msg_table, ['ownaddr'] ], self.addr_book.get_addr_from_wallet )
+		msg_table.set_cmd('selownadr',[msg_table, ['ownaddr'] ], self.addr_book.get_addr_from_wallet ) # self.selecting_addr_from_book_set_and_destroy_sending, 
 		
 		if tmpaddr=='':
 			msg_table.set_cmd('seladr',['addr', self.selecting_addr_from_book_set_and_destroy_sending ], self.addr_book.get_addr_from_book)
@@ -390,56 +409,95 @@ class Msg:
 		self.thr_table=flexitable.FlexiTable(frame1,self.grid_threads, min_canvas_width=200,force_scroll=True)
 		self.set_actions()
 		
-		# print(self.thr_ord)
-		
 		self.update_list()
 		self.main_table=None
 		if len(self.thr_ord )>0:
-			self.cur_uid=self.thr_ord[0]+'_'
-			# print('msg 399',self.grid_threads_msg[ self.cur_uid ])
+			
+			self.cur_uid=self.valid_uids[0] 
+			
 			self.main_table=flexitable.FlexiTable(frame1,self.grid_threads_msg[self.cur_uid], min_canvas_width=800,force_scroll=True)
 			self.set_edit_alias_action(self.cur_uid)
 			
-		
+		self.updating_threads=False
+		self.updating_chat=False
 		
 	# threads : different correspondents
 	def update_tread_frame(self,*evargs):
-		self.proc_inout()
-		self.update_threads()
-		self.thr_table.update_frame(self.grid_threads)
-		self.set_actions()
-		# when assigning - should refresh messages too !
-		
-		
-		
+	
+		while self.updating_threads:
+			time.sleep(1)
+	
+		self.updating_threads=True
+		try:
+			self.proc_inout()
+			self.update_threads()
+			self.thr_table.update_frame(self.grid_threads)
+			self.set_actions()
+			self.updating_threads=False
+			# when assigning - should refresh messages too !
+		except:
+			self.updating_threads=False
 		
 	
-	def update_msgs(self):
-		self.proc_inout()
-		self.update_threads()
-		self.thr_table.update_frame(self.grid_threads)
-		self.set_actions()
-
-		self.update_list()
+	# 2 types of update:
+	# 1. clicking button: updating msg frame with clicked thread
+	# 2. threads update: automatic every few seconds, also updating msg view with last / current msg selected 
+	
+	def update_msg_frame(self,*evargs):
+	
 		
-		# print('\n\n self.grid_threads_msg\n',self.grid_threads_msg)
-		
-		# print('update mesages??? / msg')
-		# if hasattr(self,'cur_uid')==False:
-		if len(self.thr_ord )>0:
-			self.cur_uid=self.thr_ord[0]+'_'
-			# print('cur id ok',self.cur_uid)
+		while self.updating_chat:
+			time.sleep(1)
 			
-		if hasattr(self,'cur_uid'):
-			# print('cur id ok 2',self.cur_uid)
-			if self.main_table==None:
-				# print('first time')
-				self.main_table=flexitable.FlexiTable(self.frame1,self.grid_threads_msg[self.cur_uid], min_canvas_width=700,force_scroll=True)
-			else:
-				# print('update',self.grid_threads_msg[ self.cur_uid ])
-				self.main_table.update_frame(self.grid_threads_msg[ self.cur_uid ],-1)
+		self.updating_chat=True
+		
+		try:
+			self.proc_inout()
+			self.update_list()
+			
+			
+			if len(self.thr_ord )>0:
+				if self.cur_uid not in self.valid_uids:
+					self.cur_uid = self.valid_uids[0] 
+			# if hasattr(self,'cur_uid')==False:
+				# if len(self.thr_ord )>0:
+					# self.cur_uid=self.valid_uids[0] 
 				
-			self.set_edit_alias_action(self.cur_uid)
+			if hasattr(self,'cur_uid'):
+			
+				if self.main_table==None:
+					self.main_table=flexitable.FlexiTable(self.frame1,self.grid_threads_msg[self.cur_uid], min_canvas_width=700,force_scroll=True)
+				else:
+					self.main_table.update_frame(self.grid_threads_msg[ self.cur_uid ],-1)
+				
+				self.set_edit_alias_action(self.cur_uid)
+			self.updating_chat=False
+		except:
+			self.updating_chat=False
+	
+	
+	
+	def update_msgs(self):
+		self.update_tread_frame()
+		# self.proc_inout()
+		# self.update_threads()
+		# self.thr_table.update_frame(self.grid_threads)
+		# self.set_actions()
+
+		# self.update_list()
+		self.update_msg_frame()
+		
+		# if len(self.thr_ord )>0:
+			# if self.cur_uid not in self.valid_uids:
+				# self.cur_uid = self.valid_uids[0] 
+			
+		# if hasattr(self,'cur_uid'):
+			# if self.main_table==None:
+				# self.main_table=flexitable.FlexiTable(self.frame1,self.grid_threads_msg[self.cur_uid], min_canvas_width=700,force_scroll=True)
+			# else:
+				# self.main_table.update_frame(self.grid_threads_msg[ self.cur_uid ],-1)
+				
+			# self.set_edit_alias_action(self.cur_uid)
 			
 			
 			
@@ -448,11 +506,6 @@ class Msg:
 	def update_threads(self):
 	
 		idb=localdb.DB()
-		
-		tmplen=len(self.grid_threads)
-		if tmplen>1:
-			del self.grid_threads[1:tmplen]
-			
 			
 		thr_filter=self.filter_table.get_value('thr')
 		wwhere={} #'Last 7 days','Last 30 days','All'
@@ -462,8 +515,16 @@ class Msg:
 			wwhere={'date_time':['>=',"'"+app_fun.today_add_days(-30)+"'"], 'in_sign_uid':['>',-2]}
 			
 		adr_date=idb.select_max_val( 'msgs_inout',['in_sign_uid','date_time'],where=wwhere,groupby=['addr_ext'])
-		# print('adr_date\n',adr_date)
-		threads_aa={} # BUG - why incoming not in msginout ? bug: dattime wrong? calculated based on last notarized blocks ?? - 20 minutes ...
+		if hasattr(self,"adr_date") and self.adr_date==adr_date:
+			return 0
+			
+		self.adr_date=adr_date
+		
+		tmplen=len(self.grid_threads)
+		if tmplen>1:
+			del self.grid_threads[1:tmplen]
+			
+		threads_aa={} 
 		same_date_count={}
 		unk_count=1
 		
@@ -471,6 +532,7 @@ class Msg:
 		
 			tmpalias=''
 			tmpaddr=ad[0]
+			tmpuid= str(ad[0])
 			if ad[0]!=None and ad[0]!='': # all out + some in
 				
 				alias_from_book=idb.select('addr_book', [ 'Alias'],{'Address':['=',  "'"+ad[0]+"'" ] } ) #
@@ -494,43 +556,28 @@ class Msg:
 					tmpalias='unknown_'+str(unk_count)
 					tmpaddr='unknown' #+str(unk_count)
 					unk_count+=1
+					tmpuid=tmpalias
 					
 			if ad[2] not in threads_aa:
-				threads_aa[ad[2]]=[tmpaddr,tmpalias] 
 				same_date_count[ad[2]]=1
 				
 			else:
 				same_date_count[ad[2]]=same_date_count[ad[2]]+1
-				tmp_add_date='__'+str(same_date_count[ad[2]])
 				
-				threads_aa[ad[2]+tmp_add_date]=[tmpaddr,tmpalias] 
+			threads_aa[ad[2]+'__'+str(same_date_count[ad[2]])]=[tmpaddr,tmpalias,tmpuid ] 
 		
 		self.threads_aa=threads_aa
 		self.thr_ord=sorted(threads_aa.keys(),reverse=True)
+		self.valid_uids=[]
 		
 		for k in self.thr_ord:
-			tmpdict={k:[{'T':'Button', 'L':threads_aa[k][1], 'uid':k, 'tooltip':threads_aa[k][0]}]}
+			tmpdict={k:[{'T':'Button', 'L':threads_aa[k][1], 'uid':threads_aa[k][2], 'tooltip':threads_aa[k][0]}]}
 			
-			self.grid_threads.append(tmpdict)
+			self.grid_threads.append(tmpdict) 
+			self.valid_uids.append(threads_aa[k][2]+'_')
 		
-
+		return 1
 		
-				
-	def update_msg_frame(self,*evargs):
-		self.proc_inout()
-		self.update_list()
-		
-		if hasattr(self,'cur_uid')==False:
-			if len(self.thr_ord )>0:
-				self.cur_uid=self.thr_ord[0]+'_'
-			
-		if hasattr(self,'cur_uid'):
-			if self.main_table==None:
-				self.main_table=flexitable.FlexiTable(self.frame1,self.grid_threads_msg[self.cur_uid], min_canvas_width=700,force_scroll=True)
-			else:
-				self.main_table.update_frame(self.grid_threads_msg[ self.cur_uid ],-1)
-			
-			self.set_edit_alias_action(self.cur_uid)
 			
 	
 
@@ -544,15 +591,16 @@ class Msg:
 		elif msg_filter=='Last 100':
 			llimit=100
 			
-		threads_aa=self.threads_aa
-		
+		threads_aa=self.threads_aa		
 		
 		for k in self.thr_ord:
 			
+			
+			tmpuid=threads_aa[k][2]
+			
 			wwhere={}
 			if threads_aa[k][0]=='unknown':
-				wwhere={'proc_json':['=',"'True'"],'type':['=',"'in'"],'in_sign_uid':['<',0] }
-				
+				wwhere={'proc_json':['=',"'True'"],'type':['=',"'in'"],'in_sign_uid':['<',0] }				
 
 			elif 'uid_' in threads_aa[k][1]:
 			
@@ -563,10 +611,10 @@ class Msg:
 				
 			tmp_msg=idb.select('msgs_inout', ['type','msg','date_time','uid','in_sign_uid' ],where=wwhere, orderby=[ {'date_time':'desc'}], limit=llimit)
 			
-			tmpdict={threads_aa[k][1]:[{'T':'LabelV', 'L':'Correspondence with ['+threads_aa[k][1]+']', 'uid':threads_aa[k][1] ,  'width':64} #,  'width':64
-									,{'T':'Button', 'L':'Edit alias', 'uid':threads_aa[k][0]+'_edit',  'width':8, 'style':{'bgc':'#eee','fgc':'black','fontsize':8 }}
-									,{'T':'Button', 'L':'Reply', 'uid':threads_aa[k][0]+'_reply',  'width':8, 'style':{'bgc':'#fff','fgc':'green','fontsize':8 }}
-									,{'T':'Button', 'L':'Drop alias', 'uid':threads_aa[k][0]+'_drop',  'width':8, 'style':{'bgc':'#eee','fgc':'red','fontsize':8 }} ] }
+			tmpdict={threads_aa[k][1]:[{'T':'LabelV', 'L':'Correspondence with ['+threads_aa[k][1]+']', 'uid':tmpuid ,  'width':32} #,  'width':64
+									,{'T':'Button', 'L':'Edit alias', 'uid':tmpuid+'_edit',  'width':8, 'style':{'bgc':'#eee','fgc':'black','fontsize':8 }}
+									,{'T':'Button', 'L':'Reply', 'uid':tmpuid+'_reply',  'width':8, 'style':{'bgc':'#fff','fgc':'green','fontsize':8 }}
+									,{'T':'Button', 'L':'Drop alias', 'uid':tmpuid+'_drop',  'width':8, 'style':{'bgc':'#eee','fgc':'red','fontsize':8 }} ] }
 			
 			if threads_aa[k][0]=='unknown':
 				tmpdict[threads_aa[k][1]][1]['uid']='edit_unknown_'+str(tmp_msg[0][3])
@@ -585,13 +633,9 @@ class Msg:
 				tmpdict={tm[2]:[{'T':'LabelV', 'L':tm[2]+' '+ tm[1], 'uid':str(tm[3]), 'width':112,'wraplength':600,'style':sstyle2, 'span':4, 'pads':[tmppadx,0] }] } #, 'pads':[tmppadx,0] 
 				msg_flow.append(tmpdict)
 				
-			self.grid_threads_msg[k+'_']=msg_flow
+			self.grid_threads_msg[tmpuid+'_']=msg_flow
 			
 		
-		
-	
-
-
 	def categories_filter(self):
 		all_cat_unique=[]
 		
@@ -610,7 +654,7 @@ class Msg:
 
 		
 	def selecting_addr_from_book_set_and_destroy(self,addr,uid,frame_to_destroy,*evargs ): # here also get signature!
-		# print('orig uid',uid)
+		
 		uid=uid.replace('_edit','')
 		if addr!='':
 			idb=localdb.DB()
@@ -629,7 +673,7 @@ class Msg:
 				idb.update(msg_upd,['addr_ext'],where={'in_sign_uid':['=', uid ]} )
 				
 			elif addr!=uid:
-				# print('addr,uid',addr,uid)
+				
 				in_sign_upd={'in_signatures':[{'addr_from_book':addr}]}
 				idb.update(in_sign_upd,['addr_from_book'],{'addr_from_book':['=', "'"+uid+"'"] })
 				
@@ -638,7 +682,7 @@ class Msg:
 				
 			self.proc_inout()
 			self.update_tread_frame()
-			self.cur_uid=self.thr_ord[0]+'_'
+			self.cur_uid=self.valid_uids[0] #self.thr_ord[0]+'_'
 			self.update_msg_frame()
 			
 		frame_to_destroy.destroy()
@@ -648,8 +692,7 @@ class Msg:
 		flexitable.showinfo(title,label)
 		
 	def edit_alias(self,uid,*evargs):
-		# print('edit , update sql, and recalc all ')
-		# self.select_addr(uid[:-1])
+		
 		self.addr_book.get_addr_from_book( uid[:-1], self.selecting_addr_from_book_set_and_destroy  )
 		
 		
@@ -677,7 +720,7 @@ class Msg:
 					
 			self.proc_inout()
 			self.update_tread_frame()
-			self.cur_uid=self.thr_ord[0]+'_'
+			self.cur_uid=self.valid_uids[0] #self.thr_ord[0]+'_'
 			self.update_msg_frame()
 		
 		
@@ -687,7 +730,6 @@ class Msg:
 			if 'T' in r[1]:
 				if r[1]['T']=='Button':
 					self.main_table.set_cmd(r[1]['uid'],[r[1]['uid']+'_'  ], self.edit_alias)
-					
 					
 			if 'T' in r[2]: # '_reply'
 				if r[2]['T']=='Button':
@@ -705,17 +747,12 @@ class Msg:
 					self.main_table.set_cmd(r[3]['uid'],[r[3]['uid']+'_' ], drop_alias)
 					self.cur_addr=r[3]['uid'].replace('_drop','')
 		
-		
-	
-	
-	
-	
+		 
 	def set_actions(self):	
 	
 		def display_thread(uid,*evargs):
 			
 			self.cur_uid=uid
-			print('uid',uid)
 			self.update_msg_frame()
 			
 		for ii,rr in enumerate(self.grid_threads):
@@ -726,6 +763,7 @@ class Msg:
 				if 'T' in r[0]:
 					if r[0]['T']=='Button':
 						self.thr_table.set_cmd(r[0]['uid'],[r[0]['uid']+'_' ], display_thread)
+						# self.thr_table.set_cmd(r[0]['uid'],[r[0]['uid']+'_' ], display_thread)
 				
 				
 			
