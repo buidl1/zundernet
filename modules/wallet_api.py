@@ -20,8 +20,8 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 
 		tmpmsg,sign1,sign1_n,sign2,sign2_n =app_fun.split_memo(mm[0],False)
 		
-		if tmpmsg=='':
-			return {}
+		# if tmpmsg=='':
+			# return {}
 		 
 			
 		tmpaddr=mm[2] # for incoming save full sign info
@@ -44,7 +44,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 							,'msg':tmpmsg
 							,'uid':'auto'
 							,'in_sign_uid':in_sign_uid}]
-		return table
+		return table #table['msgs_inout'][0]['msg']
 	
 
 
@@ -312,7 +312,13 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 						toalias=' to alias '+self.alias_map[aa]
 						
 					tmpjson='Amount: '+str(init_table["amount"])+toalias
-					table['notifications']=[{'opname':'received','datetime':init_table['dt'],'status':'Confirmed','details':txid,'closed':'False','orig_json':tmpjson
+					tmpopname='received'
+					
+					if table_msg['msgs_inout'][0]['msg'][:14] =='PaymentRequest':
+						tmpjson+=';'+table_msg['msgs_inout'][0]['msg']
+						tmpopname='payment request'
+					
+					table['notifications']=[{'opname':tmpopname,'datetime':init_table['dt'],'status':'Confirmed','details':txid,'closed':'False','orig_json':tmpjson
 											,'uid':'auto'}]
 								
 					idb.insert(table,['opname','datetime','status','details', 'closed','orig_json' ,'uid'])
