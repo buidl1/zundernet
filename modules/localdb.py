@@ -838,8 +838,34 @@ def get_default_addr():
 				if ready_addr=='':
 					ready_addr=rr['addr']
 				else:
-					return '' # if more then 1
+					return '...' # if more then 1
 					
 		return ready_addr
 			
-	return ''		
+	return '...'		
+
+	
+	
+
+
+
+def get_last_addr_from(ttype):  # ttype "'last_book_from_addr'", "'last_msg_from_addr'"
+
+	idb= DB()
+	rr=idb.select('jsons',['json_content' ],{'json_name':['=',ttype]} )
+	
+	if len(rr)>0:
+		disp_dict=json.loads(rr[0][0])
+		return disp_dict['addr']
+	else:
+		return get_default_addr()
+		
+
+def set_last_addr_from( addr, ttype):  # ttype "'last_book_from_addr'", "'last_msg_from_addr'"
+	if addr=='':
+		return
+		
+	idb= DB()
+	table={'jsons':[{'json_content':json.dumps({'addr':addr}), 'json_name':ttype.replace("'","")}]}
+	idb.upsert(table,['json_content','json_name' ],{'json_name':['=',ttype]} )
+
