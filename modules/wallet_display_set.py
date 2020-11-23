@@ -1,5 +1,4 @@
-# -- todo: add default from addr for msg
-# -- detect wrong path for deamon
+
 
 import tkinter as tk
 from tkinter import filedialog, StringVar, ttk, messagebox, Toplevel 
@@ -9,12 +8,14 @@ import json
 import time
 import modules.localdb as localdb
 import modules.app_fun as app_fun
+import modules.usb as usb
 import operator
 import modules.flexitable as flexitable
 import threading
 import modules.aes as aes
 import shutil
 from functools import partial
+import shutil
 
 WAIT_S=900
 
@@ -69,34 +70,64 @@ class WalDispSet:
 
 	def message_asap_tx_done(self,id,msgstr,done):
 
+		if 'new address' in msgstr:
+			uu=usb.USB()
+			
+			while len(uu.locate_usb())==0:
+				messagebox.showinfo('Please insert USB pendrive','To create new address wallet backup to pendrive is required. ')
+
+			path=''
+			while path==None or path=='':
+				path=filedialog.askdirectory(initialdir=os.getcwd(), title="Select directory on your pendrive")
+				if uu.verify_path_is_usb(path):
+					# print('start copy')
+					messagebox.showinfo('Starting backup','Please wait untill backup is finished and relevant message is displayed' )
+					dest=os.path.join(path,'wallet_'+app_fun.now_to_str()+'.dat')
+					idb=localdb.DB('init.db')
+					tt=idb.select('init_settings',columns=[ "datadir" ])  
+					src=os.path.join(tt[0][0],'wallet.dat')
+					try:
+						shutil.copy(src, dest)
+						messagebox.showinfo('Backup done','Your wallet is safe now at \n'+dest )
+						break
+					except:
+						exit()
+				else:
+					messagebox.showinfo('Wrong path','Selected path is not USB drive, please try again' )
+					path=''
+			
 		done=app_fun.json_to_str(done[0][0])
 		messagebox.showinfo(msgstr,done )
 		
-
-
-	
-
-
-	def get_last_addr_from(self): # get_last_addr_from(self) set_last_addr_from(self,addr)
-	
-		idb=localdb.DB()
-		rr=idb.select('jsons',['json_content' ],{'json_name':['=',"'last_book_from_addr'"]} )
+		# if new addr created: ask path to write to... 
+		# must be usb uu=usb.USB()
 		
-		if len(rr)>0:
-			disp_dict=json.loads(rr[0][0])
-			return disp_dict['addr']
-		else:
-			return localdb.get_default_addr()
+		# while len(uu.locate_usb())==0:
+		
+
+
+	
+
+
+	# def get_last_addr_from(self): # get_last_addr_from(self) set_last_addr_from(self,addr)
+	
+		# idb=localdb.DB()
+		# rr=idb.select('jsons',['json_content' ],{'json_name':['=',"'last_book_from_addr'"]} )
+		
+		# if len(rr)>0:
+			# disp_dict=json.loads(rr[0][0])
+			# return disp_dict['addr']
+		# else:
+			# return localdb.get_default_addr()
 			
 	
-	def set_last_addr_from(self,addr):
-		# print('last_book_from_addr ',addr)
-		if addr=='':
-			return
+	# def set_last_addr_from(self,addr): 
+		# if addr=='':
+			# return
 			
-		idb=localdb.DB()
-		table={'jsons':[{'json_content':json.dumps({'addr':addr}), 'json_name':'last_book_from_addr'}]}
-		idb.upsert(table,['json_content','json_name' ],{'json_name':['=',"'last_book_from_addr'"]} )
+		# idb=localdb.DB()
+		# table={'jsons':[{'json_content':json.dumps({'addr':addr}), 'json_name':'last_book_from_addr'}]}
+		# idb.upsert(table,['json_content','json_name' ],{'json_name':['=',"'last_book_from_addr'"]} )
 
 
 
@@ -129,15 +160,15 @@ class WalDispSet:
 				
 		send_from=flexitable.FlexiTable(rootframe,grid_settings)
 		
-		last_addr=self.get_last_addr_from()
-		if last_addr!='':
+		last_addr=localdb.get_last_addr_from("'last_book_from_addr'")
+		if last_addr not in ['','...']:
 			send_from.set_textvariable( 'z1',last_addr)
 			idb=localdb.DB()
 			disp_dict=idb.select('jsons',['json_content','last_update_date_time'],{'json_name':['=',"'display_wallet'"]})
 			if len(disp_dict)>0:
 				disp_dict=json.loads(disp_dict[0][0])
-				tmpmaxv=disp_dict['addr_amount_dict'][last_addr]['confirmed']+disp_dict['addr_amount_dict'][last_addr]['unconfirmed']
-				send_from.set_textvariable('setmax1',tmpmaxv)
+				tmpmaxv=disp_dict['addr_amount_dict'][last_addr]['confirmed']+disp_dict['addr_amount_dict'][last_addr]['unconfirmed']-0.0001
+				send_from.set_textvariable('setmax1',round(tmpmaxv,8))
 		
 		for ij,ar in enumerate(automate_rowids):
 			
@@ -173,8 +204,8 @@ class WalDispSet:
 		send_from.set_textvariable('a1',str(exampleval))
 		
 		def setmax1(*eventsargs):
-			tmpv=send_from.get_value('setmax1')
-			send_from.set_textvariable('a1',tmpv)
+			tmpv=float(send_from.get_value('setmax1')) #-0.0001
+			send_from.set_textvariable('a1',round(tmpv,8))
 		
 		send_from.set_cmd( 'setmax1',[],setmax1)
 								
@@ -215,7 +246,7 @@ class WalDispSet:
 				self.queue_com.put([ table['queue_waiting'][0]['id'],'Sending\n',self.message_asap_tx_done])
 		
 		
-			self.set_last_addr_from( z)
+			localdb.set_last_addr_from( z,"'last_book_from_addr'")
 			rootframe.destroy()
 				
 				
@@ -651,6 +682,17 @@ class WalDispSet:
 		
 		
 	def new_addr(self):
+	
+		# first ask to enter usb pendrive
+		uu=usb.USB()
+		
+		while len(uu.locate_usb())==0:
+			if not flexitable.msg_yes_no('Please insert USB pendrive','To create new address wallet backup to pendrive is required. Click [yes] when you are read or [no] co cancell.'):
+				return
+		# if correct - create new addr
+		# after which - ask to select path to backup wallet 
+	
+	
 		table={}
 		table['queue_waiting']=[localdb.set_que_waiting('new_addr' ) ]
 
@@ -717,7 +759,7 @@ class WalDispSet:
 					tmptooltip=app_fun.json_to_str(rr[4])
 				
 				tmpdict2[tmpid]=[ {'T':'LabelV', 'L':rr[0], 'tooltip':tmptooltip, 'uid':"command"+str(tmpid)},
-									{'T':'LabelV', 'L': rr[1], 'uid':"created_time"+str(tmpid)},
+									{'T':'LabelV', 'L': rr[1].replace(' ','\n'), 'uid':"created_time"+str(tmpid), 'width':12},
 									status_label,
 									{'T':'LabelV', 'L':str(int( int(rr[3])-(datetime.datetime.now()-app_fun.datetime_from_str(rr[1]) ).total_seconds() )), 'uid':"wait_seconds"+str(tmpid) },
 									{'T':'Button', 'L': 'Cancell', 'uid':"Cancell"+str(tmpid) }	
