@@ -16,7 +16,7 @@ sudo apt-get install python3-psutil
 
 sudo apt-get install python3-pip
 
-pip3 install pycryptodome
+sudo pip3 install pycryptodome
 
 To use the app you also need Komodo deamon and zcash params.
 
