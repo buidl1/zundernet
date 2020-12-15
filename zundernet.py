@@ -1,4 +1,7 @@
-
+# todo set paths fro usb and 
+# 1- Change "Select data dir." Path to PIRATE >> "/home/$USER/.komodo/PIRATE" instead of "zundernet" folder
+# 2- komodo path button or include komodo-cli and komodo inside zundernet folder
+# 3- Change "USB dir."  Path  to >> "/media/$USER/" instead of "zundernet" folder
 
 import tkinter as tk
 from tkinter import filedialog, StringVar, ttk, messagebox,Scrollbar,simpledialog
