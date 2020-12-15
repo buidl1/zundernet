@@ -281,14 +281,15 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 				# init_table=txid[iis[0]]
 				if len(kk_ordered)>1:
 					for ii in kk_ordered[1:]:
-						init_table['tmpmemo']+=iis[ii]['tmpmemo']
+						init_table['tmpmemo']+=iis[ii]['tmpmemo'] #merge memos if multiple outindex and multiple memos 
 						init_table['outindex']+=iis[ii]['outindex']
 						
+				table_msg={} # insert only those after first block
+				from_str=''
 				if init_table["block"]>=self.first_block:
-					table_msg={}
 					table_msg=self.prep_msgs_inout(txid,[init_table['tmpmemo'],0,''],'in',init_table['dt'],tx_status='received', in_sign_uid=-2 ) # -2 to be detected
-				
-				idb.insert(table_msg,['proc_json','type','addr_ext','txid','tx_status','date_time', 'msg','uid','in_sign_uid'])
+					from_str=table_msg['msgs_inout'][0]['msg']
+					idb.insert(table_msg,['proc_json','type','addr_ext','txid','tx_status','date_time', 'msg','uid','in_sign_uid'])
 				
 				table={}
 				table['tx_history']=[{'Category':"outindex"+init_table['outindex'] # "outindex" not to miss some amounts!
@@ -298,7 +299,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 										,'block':init_table["block"] 
 										, 'timestamp':init_table["timestamp"]
 										, 'date_time':init_table["date_time"]
-										,'from_str':table_msg['msgs_inout'][0]['msg']
+										,'from_str':from_str
 										,'to_str':aa
 										,'amount':init_table["amount"]
 										, 'uid':'auto'
@@ -314,8 +315,10 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 					tmpjson='Amount: '+str(init_table["amount"])+toalias
 					tmpopname='received'
 					
-					if table_msg['msgs_inout'][0]['msg'][:14] =='PaymentRequest':
-						tmpjson+=';'+table_msg['msgs_inout'][0]['msg']
+					if len(from_str)>13 and from_str[:14] =='PaymentRequest':
+					# if table_msg['msgs_inout'][0]['msg'][:14] =='PaymentRequest':
+						# tmpjson+=';'+g['msgs_inout'][0]['msg']
+						tmpjson+=';'+from_str
 						tmpopname='payment request'
 					
 					table['notifications']=[{'opname':tmpopname,'datetime':init_table['dt'],'status':'Confirmed','details':txid,'closed':'False','orig_json':tmpjson
