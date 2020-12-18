@@ -1,6 +1,8 @@
 # zundernet
 Python3 wallet gui for Pirate Chain
 
+Python version >=3.7 required.
+
 Before you start - backup your wallet.dat file just in case.
 
 Zundernet is new proof of concept wallet, with features not available in other wallets.
