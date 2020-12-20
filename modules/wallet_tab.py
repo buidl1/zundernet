@@ -24,6 +24,8 @@ from modules.frame_settings import Settings
 from modules.notifications import Notifications
 import modules.addr_book as addr_book
 
+
+
 def update_paths(eldeamon,eldata,elchain,db,frame):
 
 	komodod_ok=False
@@ -48,7 +50,14 @@ def update_paths(eldeamon,eldata,elchain,db,frame):
 
 		path=''
 		while path==None or path=='':
-			path=filedialog.askdirectory(initialdir=os.getcwd(), title="Select directory on your USB drive")
+			tmpinitdir=os.getcwd()
+			
+			if sys.platform!='win32':
+				curusr=getpass.getuser()
+				if os.path.exists('/media/'+curusr+'/'):
+					tmpinitdir='/media/'+curusr+'/'
+			
+			path=filedialog.askdirectory(initialdir=tmpinitdir, title="Select directory on your USB drive") # was 
 			if uu.verify_path_is_usb(path):
 				messagebox.showinfo('Starting backup','Please wait untill backup is finished and relevant message is displayed.' )
 				dest=os.path.join(path,'wallet_'+app_fun.now_to_str()+'.dat')  
@@ -108,8 +117,8 @@ def ask_paths(): # read from db if possible
 		
 		if sys.platform=='win32' and os.path.exists(templatepath):
 			preset[1]=templatepath
-		elif os.path.exists('/home/'+curusr+'/komodo/PIRATE'):
-			preset[1]='/home/'+curusr+'/komodo/PIRATE'
+		elif os.path.exists('/home/'+curusr+'/.komodo/PIRATE'):
+			preset[1]='/home/'+curusr+'/.komodo/PIRATE'
 		
 	rootframe = tk.Tk()
 	rootframe.title('Enter zUnderNet')
@@ -117,10 +126,10 @@ def ask_paths(): # read from db if possible
 	frame_settings= ttk.LabelFrame(rootframe,text='Initial settings') 
 	frame_settings.pack()
 	
-	automate_rowids=[ [{'T':'LabelC', 'L':'Set proper paths, otherwise the deamon may freez and you may need to kill the process manually.', 'span':3, 'width':120}, { }, { } ] ,
-					[{'T':'LabelC', 'L':'Select deamon and cli path (komodod and komodo-cli inside)'}, {'T':'Button','L':'Komodo path:','uid':'p1'}, {'T':'LabelV', 'L':preset[0],'uid':'deamon'} ],
-					[{'T':'LabelC', 'L':'Select data directory'}, {'T':'Button','L':'Data dir path:','uid':'p2'}, {'T':'LabelV', 'L':preset[1],'uid':'data'} ] ,
-					[{'T':'LabelC', 'L':'Start blockchain'}, {'T':'Combox','V':['no','yes'],'uid':'cs2' }, {'T':'LabelE'} ],
+	automate_rowids=[ [{'T':'LabelV', 'L':'Set proper paths, otherwise the deamon may freez and you may need to kill the process manually.', 'span':3, 'width':120, 'style':{'bgc':'#eee','fgc':'red'}, 'uid':'none'}, { }, { } ] ,
+					[{'T':'LabelC', 'L':'Select deamon and cli path \n(komodod and komodo-cli inside)', 'width':32}, {'T':'Button','L':'Komodo path:','uid':'p1', 'width':15}, {'T':'LabelV', 'L':preset[0],'uid':'deamon', 'width':60} ],
+					[{'T':'LabelC', 'L':'Select data directory', 'width':32}, {'T':'Button','L':'Data dir path:','uid':'p2', 'width':15}, {'T':'LabelV', 'L':preset[1],'uid':'data', 'width':60} ] ,
+					[{'T':'LabelC', 'L':'Start blockchain', 'width':32}, {'T':'Combox','V':['no','yes'],'uid':'cs2', 'width':15 }, {'T':'LabelE'} ],
 					# [{'T':'LabelC', 'L':'Set password protection'}, {'T':'Combox','V':['no','yes'],'uid':'cs1'}, {} ],
 					[{'T':'Button','L':'Confirm','uid':'conf', 'span':3, 'width':120}, {  }, { } ]	] #, 'width':128
 									
