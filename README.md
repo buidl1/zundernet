@@ -1,8 +1,8 @@
 # zundernet
 _Python3 wallet GUI for Pirate Chain_
 
-Zundernet is new proof of concept wallet, with features not available in other wallets.
-It is an experimental software. Except changes and updates as we progress through the development.
+Zundernet is new proof of concept wallet, with features not available in other wallets.  
+It is an experimental software. Expect changes and updates as we progress through the development.
 
 It should work on Windows and Linux as long as user has python3 installed with following libraries: `tk, ttk, psutil, pycryptodome` and some other standard libraries.
 
