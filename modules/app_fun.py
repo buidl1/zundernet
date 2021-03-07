@@ -92,6 +92,8 @@ def run_process( CLI_STR,cmd):
 	zxc=subprocess.run(CLI_STR+cmd,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
 	
 	return zxc.stdout.decode('utf-8') 
+	
+	
 
 def json_to_str(dd,tt=''):	
 
