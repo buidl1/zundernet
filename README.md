@@ -4,7 +4,7 @@ _Python3 wallet GUI for [Pirate Chain](https://pirate.black/)_
 Zundernet is new proof of concept wallet, with features not available in other wallets.  
 It is an experimental software. Expect changes and updates as we progress through the development.
 
-It should work on Windows and Linux as long as user has python3 installed with following libraries: `tk, ttk, psutil, pycryptodome` and some other standard libraries.
+It should work on Windows and Linux as long as user has python3 installed with following libraries: `pyside2, pycryptodome` and some other standard libraries.
 
 ## Requirements
 
@@ -18,10 +18,9 @@ It should work on Windows and Linux as long as user has python3 installed with f
 ## Dependencies
 Install the following dependencies to run Zundernet properly:
 ```shell
-sudo apt-get install python3-tk 
 sudo apt-get install python3-pip
 pip3 install pycryptodome
-pip3 install psutil
+pip3 install pyside2
 ```
 ## Run Zundernet
 When all above conditions are met you should run:
