@@ -6,6 +6,7 @@ from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad,unpad
 from Crypto.Random import get_random_bytes, random
 from Crypto.Hash import SHA256, SHA224
+import modules.gui as gui
 
 
 
@@ -140,7 +141,8 @@ class Crypto:
 	def aes_decrypt_file(self,path1,path2,password):
 		
 		if os.path.exists(path1):
-			try:
+			# try:
+			if True:
 				ddata=self.read_file( path1)
 				decr_dd=self.aes_decrypt( ddata ,password,False)
 				if path2==None:
@@ -148,8 +150,8 @@ class Crypto:
 				else:
 					self.write_bin_file(path2,decr_dd)
 				return True
-			except:
-				pass
+			# except:
+				# pass
 				
 		return False
 		
@@ -249,14 +251,15 @@ class Crypto:
 		return bytes
 		
 	def write_file(self,path,wstr):
-		with open(path, "w") as f:
-			f.write(wstr)
+		gui.copy_progress(path,'Encrypting to '+path,wstr,path, False)
+		# with open(path, "w") as f:
+			# f.write(wstr)
 			
 			
 	def write_bin_file(self,path,bstr):
-		with open(path, "wb") as f:
-			f.write(bstr)
-			
+		# with open(path, "wb") as f:
+			# f.write(bstr)
+		gui.copy_progress(path,'Decrypting to '+path,bstr,path, False)
 			
 			
 	def init_hash_seed(self):
