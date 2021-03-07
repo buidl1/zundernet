@@ -9,7 +9,7 @@
 
 
 
-import re
+# import re
 import subprocess
 from sys import platform
 
@@ -31,12 +31,14 @@ class USB:
 	def locate_usb(self):
 		if self.os in ['linux','osx'] :
 			self.located_usbs=self.lin_locate_usb()
-			if '' in self.located_usbs:
-				self.located_usbs.remove('')
+			
 			#print('self.located_usbs',self.located_usbs)
 			
 		else:
 			self.located_usbs=self.win10_locate_usb()
+			
+		if '' in self.located_usbs:
+			self.located_usbs.remove('')
 		
 		return self.located_usbs.copy()
 			
