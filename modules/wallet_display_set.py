@@ -1,7 +1,6 @@
+######### LATER
+# show only current categories
 
-
-import tkinter as tk
-from tkinter import filedialog, StringVar, ttk, messagebox, Toplevel 
 import os, sys
 import datetime
 import json
@@ -10,54 +9,39 @@ import modules.localdb as localdb
 import modules.app_fun as app_fun
 import modules.usb as usb
 import operator
-import modules.flexitable as flexitable
-import threading
+
 import modules.aes as aes
-import shutil
-from functools import partial
-import shutil
+
+import modules.gui as gui
 
 WAIT_S=900
 
-class WalDispSet:
+class WalDispSet(gui.QObject):
+	sending_signal = gui.Signal(list)
 
-	def __init__(self,password='',queue_com=None ):
-		self.password=password
+	def __init__(self,password=[''] ):
+	
+		super(WalDispSet, self).__init__()
+		self.password=password[0]
 		self.amount_per_address={}
 		self.while_updating=False
-		self.queue_com=queue_com
-		
-		
-	def display_bills(self,id,msgstr,done):
-		
-		listoftxids=done[0]
-		grid_settings=[]
-		tmpdict={}
-		tmpdict['head']=[{'T':'LabelC', 'L':'Txid' },{'T':'LabelC', 'L':'Amount' }, {'T':'LabelC', 'L':'Confirm.' } ] 
-		grid_settings.append(tmpdict)
-		
-		for ll in listoftxids:
-			ll=json.loads(ll)
-			if ll==[{}]: continue
 			
-			for kk,vv in ll.items():
-				tmpdict={}
-				tmpdict[kk]=[{'T':'LabelC', 'L': kk}, {'T':'LabelC', 'L': str(vv['amount'])}, {'T':'LabelC', 'L': str(vv['conf']) }] 
-				grid_settings.append(tmpdict)
-			
-		rootframe = Toplevel()
-		rootframe.title(msgstr)
-		flexitable.FlexiTable(rootframe,grid_settings)
+		self.addr_cat_map={}
+		self.update_addr_cat_map()
+		self.alias_map={}
+		self.addr_book_data_refresh()
 		
-		def delete_record_done():
-			idb=localdb.DB()
-			idb.delete_where('queue_done',{'id':['=',id]})
-			
-		rootframe.after(2000,delete_record_done)
 		
+	def update_addr_cat_map(self):
+		idb=localdb.DB()
+		addr_cat=idb.select('address_category',['address','category'] )
+		self.addr_cat_map={}
+		for rr in addr_cat:
+			self.addr_cat_map[rr[0]]=rr[1]
+			
+			
 				
-				
-	def show_bills(self,addr):
+	def show_bills(self,btn,addr):
 		table={}
 		ddict={'addr':addr}
 		table['queue_waiting']=[localdb.set_que_waiting('show_bills',jsonstr=json.dumps(ddict) ) ]
@@ -65,157 +49,162 @@ class WalDispSet:
 		idb=localdb.DB()
 		idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 		
-		self.queue_com.put([ table['queue_waiting'][0]['id'],'Bills for '+addr, self.display_bills])
+		# self.queue_com.put([ table['queue_waiting'][0]['id'],'Bills for '+addr, self.display_bills])
 		
-
-	def message_asap_tx_done(self,id,msgstr,done):
-
-		if 'new address' in msgstr:
-			uu=usb.USB()
-			
-			while len(uu.locate_usb())==0:
-				messagebox.showinfo('Please insert USB pendrive','To create new address wallet backup to pendrive is required. ')
-
-			path=''
-			while path==None or path=='':
-				path=filedialog.askdirectory(initialdir=os.getcwd(), title="Select directory on your pendrive")
-				if uu.verify_path_is_usb(path):
-					# print('start copy')
-					messagebox.showinfo('Starting backup','Please wait untill backup is finished and relevant message is displayed' )
-					dest=os.path.join(path,'wallet_'+app_fun.now_to_str()+'.dat')
-					idb=localdb.DB('init.db')
-					tt=idb.select('init_settings',columns=[ "datadir" ])  
-					src=os.path.join(tt[0][0],'wallet.dat')
-					try:
-						shutil.copy(src, dest)
-						messagebox.showinfo('Backup done','Your wallet is safe now at \n'+dest )
-						break
-					except:
-						exit()
-				else:
-					messagebox.showinfo('Wrong path','Selected path is not USB drive, please try again' )
-					path=''
-			
-		done=app_fun.json_to_str(done[0][0])
-		messagebox.showinfo(msgstr,done )
 		
-		# if new addr created: ask path to write to... 
-		# must be usb uu=usb.USB()
 		
-		# while len(uu.locate_usb())==0:
 		
-
-
+		
+		
+	# run after new addr created !
+	def wallet_copy_progress(self ):
 	
+		uu=usb.USB()
+		while len(uu.locate_usb())==0:
+			gui.showinfo('Please insert USB/pendrive','To create new address wallet backup to pendrive is required. ')
 
-
-	# def get_last_addr_from(self): # get_last_addr_from(self) set_last_addr_from(self,addr)
-	
-		# idb=localdb.DB()
-		# rr=idb.select('jsons',['json_content' ],{'json_name':['=',"'last_book_from_addr'"]} )
 		
-		# if len(rr)>0:
-			# disp_dict=json.loads(rr[0][0])
-			# return disp_dict['addr']
-		# else:
-			# return localdb.get_default_addr()
+		pathu=uu.locate_usb()
+		pathu=pathu[0]
+		tmpinitdir=os.getcwd()
 			
+		if sys.platform=='win32':
+			if os.path.exists(pathu):
+				tmpinitdir=pathu
+				
+		elif sys.platform!='win32':
+			curusr=getpass.getuser()
+			if os.path.exists('/media/'+curusr+'/'):
+				tmpinitdir='/media/'+curusr+'/'
+		
+		path=''
+		while path==None or path=='':
+		# if True:
+			path=gui.get_file_dialog('Select directory on your pendrive' ,init_path=tmpinitdir, name_filter='dir') #filedialog.askdirectory(initialdir=os.getcwd(), title="")
+			if uu.verify_path_is_usb(path):
+				
+				dest=os.path.join(path,'wallet_'+app_fun.now_to_str()+'.dat')
+				idb=localdb.DB('init.db')
+				tt=idb.select('init_settings',columns=[ "datadir" ])  
+				src=os.path.join(tt[0][0],'wallet.dat')
+				
+				deftxt='Wallet backup to '+path+'\n'
+				path=gui.copy_progress(path,deftxt,src,dest)
+				
+			else:
+				gui.showinfo('Wrong path','Selected path is not USB drive, please try again' )
+				path=''
+		
+
+		
+
+		
+	def send_to_addr(self,btn,addr,exampleval=0.0001): 
 	
-	# def set_last_addr_from(self,addr): 
-		# if addr=='':
-			# return
-			
-		# idb=localdb.DB()
-		# table={'jsons':[{'json_content':json.dumps({'addr':addr}), 'json_name':'last_book_from_addr'}]}
-		# idb.upsert(table,['json_content','json_name' ],{'json_name':['=',"'last_book_from_addr'"]} )
-
-
-
-
-
-	
-
-	def send_to_addr(self,addr,exampleval=0.0001): 
 		tmpsignature=localdb.get_addr_to_hash(addr)
 		
-		rootframe = Toplevel()
-		rootframe.title('Sending...')
-		# 'InputFloat'
-		automate_rowids=[ [{'T':'LabelC', 'L':'Sending to address\n\n'+addr+'\n\nFrom:', 'span':4 },{},{},{}] ,
-							[{'T':'LabelC', 'L':'Address' },{'T':'LabelC', 'L':'Set max','width':9 },{'T':'LabelC', 'L':'Amount','width':9 },{'T':'LabelC', 'L':'Message (max '+str(int(512-len(tmpsignature)))+' bytes)' },{}] ,
-							[{'T':'Button', 'L':'Select...',  'uid':'z1', 'width':32 },{'T':'Button', 'L':'',  'uid':'setmax1', 'width':32 },{'T':'InputFloat', 'uid':'a1' },{'T':'InputL',   'uid':'m1', 'width':32 },{'T':'LabelV','L':str(int(512-len(tmpsignature)))+' bytes left','uid':'l1'}] 
+		tmpcat=''
+		tmpalia=''
+		if hasattr(self,'addr_book_category_alias'):
+			if addr in self.addr_book_category_alias:
+				tmpcat=self.addr_book_category_alias[addr]['category']
+				tmpalia=self.addr_book_category_alias[addr]['alias']
+			
+		initlabel=gui.Label(None,'Sending to '+tmpcat+', '+tmpalia+'\nAddress: '+addr+'\n')
+		
+		automate_rowids=[ #[{},{},{},{}] ,
+							[{'T':'LabelC', 'L':'From address' },{'T':'LabelC', 'L':'Set max','width':9 },{'T':'LabelC', 'L':'Amount','width':9 },{'T':'LabelC', 'L':'Message (max '+str(int(512-len(tmpsignature)))+' bytes)' },{}] ,
+							[{'T':'Button', 'L':'Select...',  'uid':'z1', 'width':32 },{'T':'Button', 'L':'',  'uid':'setmax1', 'width':32 },{'T':'LineEdit','V':'0.0001', 'uid':'a1' , 'valid':{'ttype':float,'rrange':[0,1000000]}},{'T':'LineEdit',   'uid':'m1', 'width':32 },{'T':'LabelV','L':str(int(512-len(tmpsignature)))+' bytes left','uid':'l1'}] 
 						]
 		
 		grid_settings=[]
 		for ij,ar in enumerate(automate_rowids):
 			tmpdict={}
-			tmpdict[ij]=ar
+			tmpdict['rowk']=str(ij)
+			tmpdict['rowv']=ar
 			grid_settings.append(tmpdict)
+			
 				
-
-		tmpdict={}
-		tmpdict[999]=[{'T':'Button', 'L':'Queue Send', 'uid':'qsend' },{'T':'Button', 'L':'ASAP Send', 'uid':'asend'},{}]
-		grid_settings.append(tmpdict)
-
-				
-		send_from=flexitable.FlexiTable(rootframe,grid_settings)
+		send_from=gui.Table(None,{'dim':[2,4],'updatable':1, 'toContent':1}) #flexitable.FlexiTable(rootframe,grid_settings)
+		send_from.updateTable(grid_settings)
 		
 		last_addr=localdb.get_last_addr_from("'last_book_from_addr'")
 		if last_addr not in ['','...']:
-			send_from.set_textvariable( 'z1',last_addr)
+			send_from.cellWidget(1,0).setText(last_addr) #set_textvariable( 'z1',last_addr)
 			idb=localdb.DB()
-			disp_dict=idb.select('jsons',['json_content','last_update_date_time'],{'json_name':['=',"'display_wallet'"]})
+			disp_dict=self.disp_dict[0][0] #idb.select('jsons',['json_content','last_update_date_time'],{'json_name':['=',"'display_wallet'"]})
 			if len(disp_dict)>0:
-				disp_dict=json.loads(disp_dict[0][0])
+				disp_dict=json.loads(disp_dict )
 				tmpmaxv=disp_dict['addr_amount_dict'][last_addr]['confirmed']+disp_dict['addr_amount_dict'][last_addr]['unconfirmed']-0.0001
-				send_from.set_textvariable('setmax1',round(tmpmaxv,8))
-		
-		for ij,ar in enumerate(automate_rowids):
-			
-			if ij<2: continue
-			send_from.set_valid_input_fun( ar[3]['uid'],[ij,ar[3]['uid'],ar[4]['uid'],int(512-len(tmpsignature))],self.validate_memo)
-		
-		
-		def select_addr():
-			selframe = Toplevel() #tk.Tk()
-			selframe.title('Select address to send from')
-			
-			filter_frame=ttk.LabelFrame(selframe,text='Filter')
-			filter_frame.grid(row=0,column=0)
-			filtbox=ttk.Combobox(filter_frame,textvariable='All',values=self.own_wallet_categories(), state="readonly")
-			filtbox.current(0)
-			filtbox.pack()
-			
-			def refresh_add_list(*eventsargs):
-				filterval=filtbox.get()
-				grid_lol_select=self.prepare_byaddr_frame(True,True,filterval)
-		
-				list_frame=ttk.LabelFrame(selframe,text='Addresses list')
-				list_frame.grid(row=1,column=0)
-				select_table=flexitable.FlexiTable(list_frame,grid_lol_select,600,True) #params=None, grid_lol=None
-		
-				self.prepare_byaddr_button_cmd(grid_lol_select,select_table,True,send_from)
 				
-			refresh_add_list()
+				send_from.cellWidget(1,1).setText( str(round(tmpmaxv,8)))
+				send_from.cellWidget(1,0).setToolTip(last_addr)
+
+				send_from.cellWidget(1,0).setText(self.addr_cat_map[last_addr]+','+self.alias_map[last_addr])
+		
+
+		
+		
+		
+		
+		
+		def select_addr(btn2):
+		
+			def set_values(btn3,selz,categ,alias,total_amount):
+				newtxt= ', '.join([categ,alias])
+				
+				total_amount=float(total_amount)-0.0001
+				send_from.cellWidget(1,0).setText(newtxt)
+				send_from.cellWidget(1,0).setToolTip(selz)
+				send_from.cellWidget(1,1).setText(str(total_amount))
+				# table_frame_tmp.adjustSize()
+				btn3.parent().parent().parent().parent().close()
+				
+			filter_frame=gui.FramedWidgets(None,'Filter')
+			filtbox=gui.Combox(None,self.own_wallet_categories()) # #ttk.LabelFrame(selframe,text='Filter')
+			filter_frame.insertWidget(filtbox)
+
 			
-			filtbox.bind("<<ComboboxSelected>>",  refresh_add_list )
+			addr_list_frame=gui.ContainerWidget(None,layout=gui.QVBoxLayout()) #,'Addresses list')
+			# print('parent3',filtbox.parent())
+			
+			grid_lol_select,colnames=self.prepare_byaddr_frame( True,True)
+			 
+			select_table=gui.Table(None,{'dim':[len(grid_lol_select),len(colnames)], 'toContent':1})
+			select_table.updateTable(grid_lol_select,colnames)
+			for bii in range( select_table.rowCount()):
+				# print('values',select_table.item(bii,7).text())
+				select_table.cellWidget(bii,6).set_fun( False, set_values, select_table.item(bii,7).text(), select_table.item(bii,0).text(), select_table.item(bii,1).text(), select_table.item(bii,2).text()  )
+			
+			addr_list_frame.insertWidget(select_table)
+			
+			def refresh_add_list(btn4,*eventsargs):
+				
+				list_frame_tmp=btn4.parent().parent().widgetAt(1) #listframe
+				tbltmp=list_frame_tmp.widgetAt(0)
+				
+				tbltmp.filtering( 'item',0,btn4.currentText() )
+
+			
+			filtbox.set_fun(refresh_add_list)  
+			gui.CustomDialog(btn2,[filter_frame,addr_list_frame ], title='Select address to send from')
 		
-		send_from.set_cmd( 'z1',[],select_addr)
-		send_from.set_textvariable('a1',str(exampleval))
+		send_from.cellWidget(1,0).set_fun(False,select_addr) #set_cmd( 'z1',[],select_addr)
+		send_from.cellWidget(1,2).setText( str(exampleval))
 		
-		def setmax1(*eventsargs):
-			tmpv=float(send_from.get_value('setmax1')) #-0.0001
-			send_from.set_textvariable('a1',round(tmpv,8))
+		def setmax1(btn,*eventsargs):
+			tmpv=float(send_from.cellWidget(1,1).text())
+			send_from.cellWidget(1,2).setText( str(round(tmpv,8)))
 		
-		send_from.set_cmd( 'setmax1',[],setmax1)
+		send_from.cellWidget(1,1).set_fun(False, setmax1)
 								
-		def send(asap=False):
+		def send(btn,asap=False):
 		
 			tosend=[]
 			
-			z=send_from.get_value('z1' ).strip()
-			a=send_from.get_value('a1').strip()
-			m=send_from.get_value('m1').strip()
+			z=send_from.cellWidget(1,0).toolTip().strip() #get_value('z1' ).strip()
+			a=send_from.cellWidget(1,2).text().strip() #.get_value('a1').strip()
+			m=send_from.cellWidget(1,3).text().strip() #.get_value('m1').strip()
 			
 			if len(z)>0:				
 				if len(a)>0:
@@ -227,8 +216,8 @@ class WalDispSet:
 					tosend.append({'z':addr,'a':a,'m':m})
 						
 			if len(tosend)==0:
-				messagebox.showinfo("Nothing to send!","Nothing to send!")
-				rootframe.lift()
+				gui.showinfo("Nothing to send!","Nothing to send!",btn)
+				# rootframe.lift()
 				return
 		
 			ddict={'fromaddr':z,	'to':tosend	} 
@@ -242,42 +231,54 @@ class WalDispSet:
 			idb=localdb.DB()
 			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 			
-			if table['queue_waiting'][0]['wait_seconds']==0:
-				self.queue_com.put([ table['queue_waiting'][0]['id'],'Sending\n',self.message_asap_tx_done])
-		
-		
 			localdb.set_last_addr_from( z,"'last_book_from_addr'")
-			rootframe.destroy()
+			btn.parent().parent().close() #destroy()
 				
+	 
+		last_buttons=gui.ContainerWidget(None,layout=gui.QHBoxLayout() )
+		# last_buttons.insertWidget(gui.Button(None,'+ More rows +',actionFun=more_rows, args=(send ,)) )
+		last_buttons.insertWidget(gui.Button(None,'Queue Send',actionFun=send, args=(False, ))   )
+		last_buttons.insertWidget(gui.Button(None,'ASAP Send',actionFun=send, args=( True, ) ) )		
+		
+		gui.CustomDialog(btn,[initlabel,send_from,last_buttons ], title='Sending...', wihi=[512+256,256])
 				
-		send_from.set_cmd( 'qsend',[],send)
-		send_from.set_cmd( 'asend',[True],send)		
 		
 		
 		
-	def validate_memo(self,mm_elem,output_elem,initbytes,eargs=''):
+		
+		
+		
+		
+	# initbytes is address element
+	def validate_memo(self,mm_elem,output_elem,initbytes):
+	# def validate_memo(self,mm_elem,output_elem,initbytes,eargs=''):
 	
 		if type(int(1))!=type(initbytes): 
-			tmpaddrto=initbytes.get()
+			tmpaddrto=initbytes.text()
 			initbytes=512-localdb.get_addr_to_hash(tmpaddrto,True)
 	
-	
-		mm=mm_elem.get()
+		mm=mm_elem.text() #get()
 		try:
+		# if True:
 			origbytes=len(mm.encode('utf-8')) 
 		
-			output_elem.set(str(initbytes-origbytes)+' bytes left')
+			output_elem.setText(str(initbytes-origbytes)+' bytes left')
 		except:
 			badc=''
 			for cc in mm:
 				try:
+					# print(cc)
 					cc.encode('utf-8')
 				except:
 					badc=cc
 					break
+			if len(badc)>0:
+				gui.showinfo('Bad character in memo input', 'This input contains bad character ['+badc+']:\n'+mm,mm_elem)
 		
-			messagebox.showinfo('Bad character in memo input', 'This input contains bad character ['+badc+']:\n'+mm)
-		
+	
+	
+	
+	
 	
 	
 	def valid_memo_len(self,mm,initbytes,suggest=False):
@@ -295,187 +296,190 @@ class WalDispSet:
 	
 		return origbytes
 		
-	
-	def send_from_addr(self,addr,addr_total):
 
-		global tmpid, tmprowid
-
-		rootframe = Toplevel()
-		rootframe.title('Sending...')
-		# 'InputFloat'
-		automate_rowids=[ [{'T':'LabelC', 'L':'Sending from address:  '+addr+'  of total amount (minus fee): '+str(round(addr_total,8)), 'span':6 },{},{},{},{},{}] ,
-							[{'T':'LabelC', 'L':'To:'},{'T':'LabelC', 'L':'Address','width':64 },{'T':'LabelC', 'L':'Set max','width':16 },{'T':'LabelC', 'L':'Amount','width':12 },{'T':'LabelC', 'L':'Message (max 512 bytes)', 'width':24},{}] ,
-							[{'T':'Combox','V':['Select','Own address','Address book'],'uid':'b1'},{'T':'InputL',   'uid':'z1' },{'T':'Button', 'L':str(round(addr_total,8)),  'uid':'setmax1', 'width':16 },{'T':'InputFloat', 'uid':'a1'},{'T':'InputL',   'uid':'m1' },{'T':'LabelV','L':'512 bytes left','uid':'l1'}] ,
-							[{'T':'Combox','V':['Select','Own address','Address book'],'uid':'b2'},{'T':'InputL',   'uid':'z2' },{'T':'Button', 'L':str(round(addr_total,8)),  'uid':'setmax2', 'width':16 },{'T':'InputFloat', 'uid':'a2'},{'T':'InputL',   'uid':'m2' },{'T':'LabelV','L':'512 bytes left','uid':'l2'}] ,
-							[{'T':'Combox','V':['Select','Own address','Address book'],'uid':'b3'},{'T':'InputL',   'uid':'z3' },{'T':'Button', 'L':str(round(addr_total,8)),  'uid':'setmax3', 'width':16 },{'T':'InputFloat', 'uid':'a3' },{'T':'InputL',  'uid':'m3' },{'T':'LabelV','L':'512 bytes left','uid':'l3'}] 
+	def addr_book_data_refresh(self):
+		self.addr_book_colnames=['','Usage','Category','Alias','Full address']
+		idb=localdb.DB()
+		sel_addr_book=idb.select('addr_book',[ 'Category','Alias','Address','usage'] ,orderby=[{'usage':'desc'},{'Category':'asc'},{'Alias':'asc' }] )
+		
+		self.grid_lol_select=[]
+		self.addr_book_unique_categories=['All']
+		if len(sel_addr_book)>0:
+			self.addr_book_category_alias={}
+			for ii,rr in enumerate(sel_addr_book):
+			
+				self.addr_book_category_alias[rr[2]]={'category':rr[0], 'alias':rr[1] }
+				if rr[0] not in self.addr_book_unique_categories:
+					self.addr_book_unique_categories.append(rr[0])
+					
+				tmpdict={}
+				tmpdict['rowk']=str(ii)
+				tmpdict['rowv']=[{'T':'Button', 'L':'Select', 'uid':'select'+str(ii)  }, 
+						{'T':'LabelV', 'L':str(rr[3]), 'uid':'Usage'+str(ii)  } , 
+						{'T':'LabelV', 'L':rr[0], 'uid':'Category'+str(ii)  } , 
+						{'T':'LabelV', 'L':rr[1], 'uid':'Alias'+str(ii)  } , 
+						{'T':'LabelV', 'L':rr[2], 'uid':'Address'+str(ii)  }
 						]
+				self.grid_lol_select.append(tmpdict)
 		
-		grid_settings=[]
-		for ij,ar in enumerate(automate_rowids):
-			tmpdict={}
-			tmpdict[ij]=ar
-			grid_settings.append(tmpdict)
-			
-		tmpdict={}
-		tmpdict[999]=[{'T':'Button', 'L':'+ address', 'uid':'addaddr', 'span':2},{},{'T':'Button', 'L':'Queue Send', 'uid':'qsend', 'span':2 },{},{'T':'Button', 'L':'ASAP Send', 'uid':'asend', 'span':2},{}]
-		grid_settings.append(tmpdict)
-										
-		send_from=flexitable.FlexiTable(rootframe,grid_settings)
+	def addr_book_select(self):
 		
-		def select_addr(elemC,elemZ, addram,evargs):
+		return self.grid_lol_select, self.addr_book_colnames
+	
+
+
+	def categories_filter(self):
+		
+		return self.addr_book_unique_categories
+		
 			
-			booktype=elemC.get() # own or adddr book
+	
+	def send_from_addr(self,btn,addr,addr_total):
+		# 
+		addr_total=round(  addr_total -0.0001,8 )
+		
+		tmplbl='Sending from address:\n\n'+addr+'\n\nMax. amount (0.0001 fee discounted) '+str(round(addr_total,8))+'\n'
+		
+		def select_addr(btn2):
+			
+			def set_values(btn3,selz,categ,alias):
+				newtxt= ', '.join([categ,alias])
+
+				table_frame_tmp=btn2.parent().parent()
+				crow=btn2.property("rowii")
+				table_frame_tmp.cellWidget(crow,1).setText(selz)				# addram=table_frame_tmp.cellWidget(crow,3) # amount 
+				# table_frame_tmp.adjustSize()
+				btn3.parent().parent().parent().parent().close()
+				jj=btn2.count()
+				btn2.addItem(newtxt,newtxt)
+				btn2.setItemData(jj, newtxt, gui.Qt.ToolTipRole)
+				btn2.setCurrentIndex(jj)
+			
+			booktype=btn2.currentText() #get() # own or adddr book
 			if booktype=='Select':
 				return
+			# print('select_addr',booktype)
 			
-			selframe = Toplevel() #tk.Tk()
-			selframe.title('Select address to send to')
-			filter_frame=ttk.LabelFrame(selframe,text='Filter')
-			filter_frame.grid(row=0,column=0)
+			filter_frame=gui.FramedWidgets(None ,'Filter') #ttk.LabelFrame(selframe,text='Filter') ,layout=gui.QHBoxLayout()
+			
 				
 			if booktype=='Own address':
 				
-				filtbox=ttk.Combobox(filter_frame,textvariable='All',values=self.own_wallet_categories(), state="readonly")
-				filtbox.current(0)
-				filtbox.pack()
+				filtbox=gui.Combox(None,self.own_wallet_categories()) #ttk.Combobox(filter_frame,textvariable='All',values=self.own_wallet_categories(), state="readonly")
+				# print('parent1',filtbox.parent())
+				filter_frame.insertWidget(filtbox)
+				# print('parent2',filtbox.parent())
 				
-				def refresh_add_list(*eventsargs):
-					filterval=filtbox.get()
-					grid_lol_select=self.prepare_byaddr_frame(True,True,filterval,True)
-			
-					list_frame=ttk.LabelFrame(selframe,text='Addresses list')
-					list_frame.grid(row=1,column=0)
-					select_table=flexitable.FlexiTable(list_frame,grid_lol_select,600,True) #params=None, grid_lol=None
-			
-					self.prepare_byaddr_button_cmd(grid_lol_select,select_table,True,send_from,addram )
+				addr_list_frame=gui.ContainerWidget(None,layout=gui.QVBoxLayout()) #,'Addresses list')
+				# print('parent3',filtbox.parent())
+				
+				grid_lol_select,colnames=self.prepare_byaddr_frame( True,True, True)
+				 
+				select_table=gui.Table(None,{'dim':[len(grid_lol_select),len(colnames)], 'toContent':1})
+				select_table.updateTable(grid_lol_select,colnames)
+				for bii in range( select_table.rowCount()):
+					# print('values',select_table.item(bii,7).text())
+					select_table.cellWidget(bii,6).set_fun( False, set_values, select_table.item(bii,7).text(), select_table.item(bii,0).text(), select_table.item(bii,1).text())
+				 
+				addr_list_frame.insertWidget(select_table)
+				
+				def refresh_add_list(btn4,*eventsargs):
 					
-				refresh_add_list()
+					list_frame_tmp=btn4.parent().parent().widgetAt(1) #listframe
+					tbltmp=list_frame_tmp.widgetAt(0)
+					
+					tbltmp.filtering( 'item',0,btn4.currentText() )
+
 				
-				filtbox.bind("<<ComboboxSelected>>",  refresh_add_list )
+				filtbox.set_fun(refresh_add_list)  
+				gui.CustomDialog(btn2,[filter_frame,addr_list_frame ], title='Select address to send to')
+				# del filter_frame
+				# print('parent4',filtbox.parent())
+				
 			else:
 				# address book  categories_filter
-				filtbox=ttk.Combobox(filter_frame,textvariable='All',values=self.categories_filter(), state="readonly")
-				filtbox.current(0)
-				filtbox.pack()
-				global grid_lol_select
-				grid_lol_select=[]
-				tmpdict={}
-				tmpdict['head']=[{ } , {'T':'LabelC', 'L':'Usage' } , {'T':'LabelC', 'L':'Category' } , {'T':'LabelC', 'L':'Alias' } , {'T':'LabelC', 'L':'Full address' }]
-				grid_lol_select.append(tmpdict)
-
-				def update_grid(*argsevnts):
-					global grid_lol_select
+				filtbox=gui.Combox(None,self.categories_filter()) #ttk.Combobox(filter_frame,textvariable='All',values=self.categories_filter(), state="readonly")
+				filter_frame.insertWidget(filtbox)
+				
+				# tmpdict={}
+				# colnames=['','Usage','Category','Alias','Full address']	
+				
+				list_frame=gui.FramedWidgets(None,'Addresses list') #ttk.LabelFrame(selframe,text='Addresses list')
+				
+				
+				grid_lol_select,colnames=self.addr_book_select()
+				
+				select_table=gui.Table(None,{'dim':[len(grid_lol_select),5], 'toContent':1} ) #flexitable.FlexiTable(list_frame,grid_lol_select)
+				select_table.updateTable(grid_lol_select,colnames)
+				for bii in range( select_table.rowCount()):
+					select_table.cellWidget(bii,0).set_fun( False, set_values, select_table.item(bii,4).text(),select_table.item(bii,2).text(),select_table.item(bii,3).text())
 					
-					tmplen=len(grid_lol_select)
-					if tmplen>1:
-						del grid_lol_select[1:tmplen]
-						
-					idb=localdb.DB()
-					sel_addr_book=idb.select('addr_book',[ 'Category','Alias','Address','usage'] ,orderby=[{'usage':'desc'},{'Category':'asc'},{'Alias':'asc' }] )
+				list_frame.insertWidget(select_table)
+				 
+				def update_filter(btn5,*someargs):
 					
-					if len(sel_addr_book)>0:
+					list_frame_tmp=btn5.parent().parent().widgetAt(1) #listframe
+					tbltmp=list_frame_tmp.widgetAt(0)
 					
-						filterv=filtbox.get()
+					tbltmp.filtering( 'item',2,btn5.currentText() )
 					
-						for ii,rr in enumerate(sel_addr_book):
-							tmpdict={}
-							visible=False
-							if filterv in [rr[0],'All']:
-								visible=True
-							
-							tmpdict[ii]=[{'T':'Button', 'L':'Select', 'uid':'select'+str(ii) , 'visible':visible}, 
-									{'T':'LabelV', 'L':str(rr[3]), 'uid':'Usage'+str(ii) , 'visible':visible} , 
-									{'T':'LabelV', 'L':rr[0], 'uid':'Category'+str(ii) , 'visible':visible} , 
-									{'T':'LabelV', 'L':rr[1], 'uid':'Alias'+str(ii) , 'visible':visible} , 
-									{'T':'LabelV', 'L':rr[2], 'uid':'Address'+str(ii) , 'visible':visible}
-									]
-							grid_lol_select.append(tmpdict)
-
-				update_grid()
-				list_frame=ttk.LabelFrame(selframe,text='Addresses list')
-				list_frame.grid(row=1,column=0)
-				select_table=flexitable.FlexiTable(list_frame,grid_lol_select)
+				filtbox.set_fun(update_filter )
 				
-				
-				def set_and_destroy(addr,elemZ ): # here also get signature!
-					 
-					elemZ.set(addr)
-					 
-					selframe.destroy()
-						
-				for ij,ar in enumerate(grid_lol_select):
-					if ij<1: continue
-						
-					for ki,vi in ar.items():
-						select_table.set_cmd( vi[0]['uid'],[vi[4]['L'],elemZ ],set_and_destroy) # print to master and destroy ?
-				
-				def update_filter(*someargs):
-					global grid_lol_select
-					update_grid()	
-					select_table.update_frame(grid_lol_select)
-					
-				filtbox.bind("<<ComboboxSelected>>",  update_filter )
-				
-		def setmax( inpout,*evargs):
-			inpout.set(str(  addr_total  ))
+				gui.CustomDialog(btn2,[filter_frame,list_frame], title='Select address to send to')
 			
-		
-		for ij,ar in enumerate(automate_rowids):
-			if ij<2: continue
+		#
+		# TOTO SENDING 
+		#		
 			
-			send_from.set_valid_input_fun( ar[4]['uid'],[ij,ar[4]['uid'],ar[5]['uid'],ar[1]['uid']],self.validate_memo)
-			# add command for buttons - open select form 
-			send_from.bind_combox_cmd( ar[0]['uid'],[ ar[0]['uid'],ar[1]['uid'] , [ ar[1]['uid'], ar[3]['uid'] ] ],select_addr)
+		def setmin(btn2):
+			rowii=btn2.property('rowii')
+			tbl=btn2.parent().parent()
+			tbl.cellWidget(rowii,3).setText(str( 0.0001))	
 			
-			send_from.set_cmd( ar[2]['uid'],[ ar[3]['uid']],setmax )
 			
-		tmpid=4
-		tmprowid=5
-		
-		def addaddr():
-			global tmpid, tmprowid 
 			
-			rr=[{'T':'Combox','V':['Select','Own address','From address book'],'uid':'b'+str(tmpid)},{'T':'InputL',   'uid':'z'+str(tmpid) },{'T':'Button', 'L':str(round(addr_total,8)),  'uid':'setmax'+str(tmpid), 'width':16 },{'T':'InputFloat', 'uid':'a'+str(tmpid) },{'T':'InputL',  'uid':'m'+str(tmpid) },{'T':'LabelV','L':'512 bytes left','uid':'l'+str(tmpid)}]
 			
-			for jj,vv in enumerate(rr): # column by column
-				send_from.add_new_element(vv,tmprowid,jj,tmprowid)
-				
-			send_from.set_valid_input_fun( rr[4]['uid'],[tmprowid,rr[4]['uid'],rr[5]['uid'],rr[1]['uid']],self.validate_memo)
-			send_from.bind_combox_cmd( rr[0]['uid'],[rr[0]['uid'],rr[1]['uid'] , [ rr[1]['uid'], rr[3]['uid'] ]  ],select_addr)
 			
-			send_from.set_cmd( rr[2]['uid'],[ rr[3]['uid']],setmax )
+		def setmax(btn2):
+			rowii=btn2.property('rowii')
+			tbl=btn2.parent().parent()
+			# print('setmax',tbl,tmprr)
+			tbl.cellWidget(rowii,3).setText(str(  addr_total  ))
 			
-			tmprowid+=1
-			tmpid+=1
-		
-		send_from.set_cmd( 'addaddr',[],addaddr)
-				
-				
-		
-		def send(asap=False):
-			global tmpid, tmprowid #, send_from
+			
+			
+			
+		def send(btn2,asap=False,send_from=None):
+			# print('send')
+			# global tmpid, tmprowid #, send_from
 			tosend=[]
-			
-			for ii in range(tmpid-1):
-				tmpstr=str(ii+1)
+			sending_amount=0
+			for ii in range(send_from.rowCount()):
+				# tmpstr=str(ii+1)
 				
-				z=send_from.get_value('z'+tmpstr).strip()
-				a=send_from.get_value('a'+tmpstr).strip()
-				m=send_from.get_value('m'+tmpstr).strip()
+				z=send_from.cellWidget(ii ,1).text().strip()  #get_value('z'+tmpstr).strip()
+				a=send_from.cellWidget(ii ,3).text().strip()  #.get_value('a'+tmpstr).strip()
+				m=send_from.cellWidget(ii ,4).text().strip()  #.get_value('m'+tmpstr).strip()
+				
 				
 				
 				if len(z)>0:				
 					if len(a)>0:
+						sending_amount+=float(a)
 						m+=' @zUnderNet'
 						tmpsignature=localdb.get_addr_to_hash(z)
 						origlen,m=self.valid_memo_len(m,512-len(tmpsignature),suggest=True)
 						m+=tmpsignature
 						tosend.append({'z':z,'a':a,'m':m})
 						
+			if sending_amount>addr_total:
+				gui.showinfo("Wrong total amount!","Total amount to send is exceeding address balance: "+str(sending_amount)+' > '+str(addr_total)+'\nPlease correct!',send_from)
+				return
+						
 			if len(tosend)==0:
 				
-				messagebox.showinfo("Nothing to send!","Nothing to send!")
-				rootframe.lift()
+				gui.showinfo("Nothing to send!","Nothing to send!",send_from)
+				btn2.parent().parent().close() 
 				return
 		
 			ddict={'fromaddr':addr,	'to':tosend	}
@@ -488,86 +492,125 @@ class WalDispSet:
 			idb=localdb.DB()
 			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 			
-			if table['queue_waiting'][0]['wait_seconds']==0:
-				
-				self.queue_com.put([ table['queue_waiting'][0]['id'],'Sending\n',self.message_asap_tx_done])
+			btn2.parent().parent().close()  
+			self.sending_signal.emit(['cmd_queue'])
 			
-			rootframe.destroy()
-				
-				
-		send_from.set_cmd( 'qsend',[],send)
-		send_from.set_cmd( 'asend',[True],send)
-				
-				
-				
-	def export_wallet(self): # export encrypted wallet or encrypted priv keys and addresses
-			
-		rootframe = Toplevel()
-		rootframe.title('Exporting wallet')
-				
-		automate_rowids=[ [{'T':'Button', 'L':'Select folder', 'uid':'seldir' }, {'T':'LabelV', 'L':str(os.getcwd()), 'uid':'selected' } ] ,
-							[{'T':'LabelC', 'L':'Export type: ' } , {'T':'Combox', 'V':['wallet.dat','priv.keys and addresses','local_storage.db'],'uid':'opt', 'width':23 } ] ,
-							[{'T':'Button', 'L':'Enter', 'uid':'enter', 'span':2  }, {}] 
+		colnames=['Book type','Address to','Set max/min','Amount','Message (max 512 bytes)','Bytes left (with signature)']
+	
+		automate_rowids=[ 
+							{'rowk':'from0', 'rowv':[{'T':'Combox','V':['Select','Own address','Address book'],'uid':'b1', 'fun':select_addr,'every_click':1 },{'T':'LineEdit',   'uid':'z1' },{'T':'Button', 'L':str(round(addr_total,8)), 'fun':setmax, 'width':16 },{'T':'LineEdit','L':'Amount', 'valid':{'ttype':float,'rrange':[0,addr_total]} },{'T':'LineEdit', 'L':'Message','valid':{'ttype':'custom','rrange':[self.validate_memo,5,1]} },{'T':'LabelV','L':'473 bytes left','uid':'l1'}] } ,
+							
+							{'rowk':'from1', 'rowv':[{'T':'Combox','V':['Select','Own address','Address book'],'uid':'b2', 'fun':select_addr,'every_click':1 },{'T':'LineEdit',   'uid':'z2' },{'T':'Button', 'L':str(0.0001), 'fun':setmin, 'width':16 },{'T':'LineEdit','L':'Amount', 'valid':{'ttype':float,'rrange':[0,addr_total]} },{'T':'LineEdit', 'L':'Message','valid':{'ttype':'custom','rrange':[self.validate_memo,5,1]} },{'T':'LabelV','L':'473 bytes left','uid':'l2'}] } ,
+							{'rowk':'from2', 'rowv':[{'T':'Combox','V':['Select','Own address','Address book'],'uid':'b3', 'fun':select_addr,'every_click':1 },{'T':'LineEdit',   'uid':'z3' },{'T':'Button', 'L':str(0.0001), 'fun':setmin, 'width':16 },{'T':'LineEdit','L':'Amount', 'valid':{'ttype':float,'rrange':[0,addr_total]}  },{'T':'LineEdit','L':'Message', 'valid':{'ttype':'custom','rrange':[self.validate_memo,5,1]} },{'T':'LabelV','L':'473 bytes left','uid':'l3'}] } ,
+							
 						]
-										
-		grid_settings=[]
-		for ij,ar in enumerate(automate_rowids):
-			tmpdict={}
-			tmpdict[ij]=ar
-			grid_settings.append(tmpdict)
-										
-		expo=flexitable.FlexiTable(rootframe,grid_settings)
+						
+		send_from=gui.Table(None,{'dim':[3,6],'updatable':1, 'toContent':1}) #flexitable.FlexiTable(rootframe,grid_settings)
+		send_from.updateTable(automate_rowids,colnames)
 		
-		def setdir_and_lift(arg):
+		def more_rows(btn2,send_from):
+			widgets_dict=[]
+			tmpcc=send_from.rowCount()
+			defrr={'rowk':'fromii', 'rowv':[{'T':'Combox','V':['Select','Own address','Address book'], 'fun':select_addr,'every_click':1 },{'T':'LineEdit' },{'T':'Button', 'L':str(0.0001), 'fun':setmin, 'width':16 },{'T':'LineEdit','L':'Amount', 'valid':{'ttype':float,'rrange':[0,addr_total]} },{'T':'LineEdit', 'L':'Message','valid':{'ttype':'custom','rrange':[self.validate_memo,5,1]} },{'T':'LabelV','L':'473 bytes left' }] }
+			for ii in range(5):
+				defrr['rowk']='from'+str(ii+tmpcc)
+				widgets_dict.append(defrr.copy())
+		
+			# print()
+			send_from.updateTable( widgets_dict, insert_only=True)
+	 
+		last_buttons=gui.ContainerWidget(None,layout=gui.QHBoxLayout() )
+		last_buttons.insertWidget(gui.Button(None,'+ More rows +',actionFun=more_rows, args=(send_from,)) )
+		last_buttons.insertWidget(gui.Button(None,'Queue Send',actionFun=send, args=(False, send_from ))   )
+		last_buttons.insertWidget(gui.Button(None,'ASAP Send',actionFun=send, args=( True,  send_from ) ) )
+		
+		
+		rootframe =gui.CustomDialog(btn,[gui.Label(None,tmplbl) , send_from, last_buttons ], title='Sending...', wihi=[1024,512])
+		
+				
+				
+				
+				
+				
+				
+				
+				
+	def export_wallet(self,btn): # export encrypted wallet or encrypted priv keys and addresses
 			
-			flexitable.setdir(arg)
-			rootframe.lift()
+		automate_rowids=[ [{'T':'Button', 'L':'Select folder' }, {'T':'LabelV', 'L':str(os.getcwd()) } ] ,
+							[{'T':'LabelC', 'L':'Export type: ' } , {'T':'Combox', 'V':['wallet.dat','local_storage.db','priv.keys and addresses'], 'width':23 } ] , # 
+							[{'T':'Button', 'L':'Enter',  'span':2  }, {}] 
+						]
+						
+		expo=gui.Table(None,{'dim':[3,2]}) #flexitable.FlexiTable(rootframe,grid_settings)
+		expo.updateTable(automate_rowids)
+		# rootframe.insertWidget(expo)
 		
-		expo.set_cmd( 'seldir',['selected'], setdir_and_lift)
+		def setdir_and_lift(btn2,arg):
+			
+			gui.set_file( arg , dir=True,parent=btn2 , title="Select folder to export wallet")
+			
+		expo.cellWidget(0,0).set_fun(False,setdir_and_lift,expo.cellWidget(0,1))
 		
-		def enter():
-		
-			ddict={'path':expo.get_value('selected'),
-					'opt':expo.get_value('opt')
+		def enter(btn3):
+			expo=btn3.parent().parent()
+			ddict={'path':expo.item(0,1).text( ), #get_value('selected'),
+					'opt':expo.cellWidget(1,1).currentText( ) #expo.get_value('opt')
 					}
-					
-			if ddict['opt']=='wallet.dat' or ddict['opt']=='local_storage.db':
+				
+			# print(ddict)	
+			if ddict['opt']=='wallet.dat' or ddict['opt']=='local_storage.db' :
+			
 				idb=localdb.DB('init.db')
 				ppath=idb.select('init_settings',['datadir'] )
-				pfrom=ppath[0][0]+'/wallet.dat'
+				
+					
+				pfrom=os.path.join(ppath[0][0],'wallet.dat')
+				
+				if ddict['opt']=='local_storage.db':				
+					pfrom=os.path.join(os.getcwd(),'local_storage.db') #'/wallet.dat'
+					if not os.path.exists(pfrom):
+						gui.messagebox_showinfo('Error - file missing ...','Failed! File missing - local_storage.db',expo)
+						expo.parent().close()
+						return 
+					
+				if not os.path.exists(pfrom):
+					
+					ddict['opt']='wallet.encr'
+					pfrom=os.path.join(ppath[0][0],'wallet.encr')
+				
 				pto=ddict['path']
 				
-				if ddict['opt']=='local_storage.db':
-					
-					pfrom=os.path.join(os.getcwd(),'local_storage.db') #'/wallet.dat'
-					
 				cc=aes.Crypto()
 
-				if self.password==None:
-					if flexitable.msg_yes_no("Encrypt exported file with new password?", "Encrypt exported file with new password? Only hit 'no' if you really do not need encryption for this export."):
-						tmppass=cc.rand_password(32)
-						pto=pto+'/'+ddict['opt'].replace('.dat','.encr').replace('.db','.encr')
-						cc.aes_encrypt_file( pfrom ,pto  ,tmppass ) #ppath[0][0]+'/wallet.dat' ddict['path']+'/wallet.encr'
-						flexitable.output_copy_input('Password for file exported to '+ddict['path']+'/wallet.encr',tmppass)
-					else:
-						pto=pto+'/'+ddict['opt']
-						shutil.copyfile(pfrom, pto) # ddict['path']+'/wallet.dat'
+				if ddict['opt']=='wallet.encr' or gui.msg_yes_no("Encrypt exported file with your password?", "If you make a backup for yourself 'yes' is good option. If you share or sell the file better select 'no' since sharing personal passwords is not a good practice.",btn3):
+					pto=os.path.join(pto,ddict['opt'].replace('.dat','.encr').replace('.db','.encr') ).replace('.','_'+app_fun.now_to_str(True)+'.')
+					cc.aes_encrypt_file( pfrom, pto  , self.password) #ddict['path']+'/wallet.encr'
+					gui.messagebox_showinfo('File exported to ',pto,expo)
+				
+				elif gui.msg_yes_no("Encrypt exported file with new password?", "Encrypt exported file with new password? Only hit 'no' if you really do not need encryption for this export.",btn3):
+					tmppass=cc.rand_password(32)
+					pto=os.path.join(pto, ddict['opt'].replace('.dat','.encr').replace('.db','.encr') ).replace('.','_'+app_fun.now_to_str(True)+'.')
+					cc.aes_encrypt_file( pfrom,pto  , tmppass) #ddict['path']+'/wallet.encr'
+					gui.output_copy_input(btn3,'Password for file exported to \n'+pto,(tmppass,))
 				else:
-					if flexitable.msg_yes_no("Encrypt exported file with your password?", "If you make a backup for yourself 'yes' is good option. If you share or sell the file better select 'no' since sharing personal passwords is not a good practice."):
-						pto=pto+'/'+ddict['opt'].replace('.dat','.encr').replace('.db','.encr')
-						cc.aes_encrypt_file( pfrom, pto  , self.password) #ddict['path']+'/wallet.encr'
-					
-					elif flexitable.msg_yes_no("Encrypt exported file with new password?", "Encrypt exported file with new password? Only hit 'no' if you really do not need encryption for this export."):
-						tmppass=cc.rand_password(32)
-						pto=pto+'/'+ddict['opt'].replace('.dat','.encr').replace('.db','.encr')
-						cc.aes_encrypt_file( pfrom,pto  , tmppass) #ddict['path']+'/wallet.encr'
-						flexitable.output_copy_input('Password for file exported to '+ddict['path']+'/wallet.encr',tmppass)
-					else:
-						pto=pto+'/'+ddict['opt']
-						shutil.copyfile(pfrom, pto ) #ddict['path']+'/wallet.dat'
+					pto=os.path.join(pto,ddict['opt']).replace('.','_'+app_fun.now_to_str(True)+'.')
+					# shutil.copyfile(pfrom, pto ) #ddict['path']+'/wallet.dat'
+					gui.copy_progress(pfrom,'Exporting file to '+pto,pfrom,pto)
+					# gui.messagebox_showinfo('File exported to ',pto,expo)
 						
-				rootframe.destroy()
+				expo.parent().close()
 				return
+			else: #export priv keys 
+
+				if gui.msg_yes_no("Encrypt private keys with your password?", "If you make a backup for yourself 'yes' is good option. If you share or sell the wallet better select 'no' since sharing personal passwords is not good practice."):
+					ddict['password']='current'
+					
+				elif gui.msg_yes_no("Encrypt private keys with new random password?", "Encrypt private keys with new random password? Only hit 'no' if you really do not need security for this export."):
+					ddict['password']='random'
+					
+				else:
+					ddict['password']='no'
 					
 					
 			table={}
@@ -576,89 +619,91 @@ class WalDispSet:
 			idb=localdb.DB()
 			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 			
-			rootframe.destroy()
+			# rootframe.destroy()
+			expo.parent().close() #.destroy()
 		
-		expo.set_cmd( 'enter',[],enter)
+		# expo.set_cmd( 'enter',[],enter)
+		expo.cellWidget(2,0).set_fun(False,enter )
+		rootframe =gui.CustomDialog(btn,expo, title='Exporting wallet')
 		
-	def export_addr(self,addr):
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+	def export_addr(self,btn,addr):
 	
-		rootframe = Toplevel()
-		rootframe.title('Exporting address')
-				
 		automate_rowids=[ 
-							[{'T':'LabelC', 'L':'Export type: ' } , {'T':'Combox', 'V':['encrypted file','display on screen'],'uid':'opt', 'width':23 } ] ,
-							[{'T':'Button', 'L':'Enter', 'uid':'enter', 'span':2  }, {}] 
+							[{'T':'LabelC', 'L':'Export type: ' } , {'T':'Combox', 'V':['display on screen','encrypted file'],'width':23 } ] ,
+							[{'T':'Button', 'L':'Enter','span':2  }, {}] 
 						]
+
 										
-		grid_settings=[]
-		for ij,ar in enumerate(automate_rowids):
-			tmpdict={}
-			tmpdict[ij]=ar
-			grid_settings.append(tmpdict)
-										
-		expo=flexitable.FlexiTable(rootframe,grid_settings)
+		expo=gui.Table(None,{'dim':[2,2]}) #flexitable.FlexiTable(rootframe,grid_settings)
+		expo.updateTable(automate_rowids)
+		# rootframe.insertWidget(expo)
 		
-		
-		def enter():
+		def enter(btn2):
 			# global rootframe, expo
-					
-			rootframe.destroy()
-			if expo.get_value('opt')=='display on screen':
-				flexitable.output_copy_input('Address' ,addr)
+			expo=btn2.parent().parent()
+			# print(btn2.parent(),btn2.parent().parent())
+			if expo.cellWidget(0,1).currentText()=='display on screen': #expo.get_value('opt')=='display on screen':
+				gui.output_copy_input(btn2,'Address' ,(addr,))
 			
 			else: # to file 
 			
-				path=filedialog.askdirectory(initialdir=os.getcwd(), title="Select directory to write to")
+				# path=filedialog.askdirectory(initialdir=os.getcwd(), title="Select directory to write to")
+				path=gui.set_file( None,validation_fun=None,dir=True,parent=btn2,init_path=os.getcwd(),title="Select directory to write to")
 				if path==None:
 					return 
 
 				cc=aes.Crypto()
 
 				tmppass=cc.rand_password(32)
-				pto=path+'/addr_'+app_fun.now_to_str()+'.txt'
+				pto=os.path.join(path,'addr_'+app_fun.now_to_str()+'.txt') #path+'/addr_'+app_fun.now_to_str()+'.txt'
 				# json.dumps({'addr':addr })
 				cc.aes_encrypt_file( json.dumps({'addr':addr }), pto  , tmppass) #ddict['path']+'/wallet.encr'
-				flexitable.output_copy_input('Password for file exported to '+pto,tmppass)
+				gui.output_copy_input(btn2,'Password for file exported to '+pto,(tmppass,) )
+				
+			expo.parent().close() #.destroy()
 
 		
-		expo.set_cmd( 'enter',[],enter)
+		expo.cellWidget(1,0).set_fun(False,enter) #set_cmd( 'enter',[],enter)
+		
+		rootframe =gui.CustomDialog(btn,expo, title='Exporting address')
 		
 		
 		
 	# encrypt with random password and present the password , save the pass in db 
 	# ask where t odrop the file 
-	def export_viewkey(self,addr):
-		# print('enter',addr)
-		rootframe = Toplevel()
-		rootframe.title('Exporting view key')
-				
+	def export_viewkey(self,btn,addr):
+		
 		automate_rowids=[ 
-							[{'T':'LabelC', 'L':'Export type: ' } , {'T':'Combox', 'V':['encrypted file','display on screen'],'uid':'opt', 'width':23 } ] ,
+							[{'T':'LabelC', 'L':'Export type: ' } , {'T':'Combox', 'V':['encrypted file','display on screen']  } ] ,
 							[{'T':'Button', 'L':'Enter', 'uid':'enter', 'span':2  }, {}] 
 						]
-										
-		grid_settings=[]
-		for ij,ar in enumerate(automate_rowids):
-			tmpdict={}
-			tmpdict[ij]=ar
-			grid_settings.append(tmpdict)
-										
-		expo=flexitable.FlexiTable(rootframe,grid_settings)
+	
+		expo=gui.Table(None,{'dim':[2,2]}) #flexitable.FlexiTable(rootframe,grid_settings)
+		expo.updateTable(automate_rowids)
+		# rootframe.insertWidget(expo)
 		
-		def enter():
+		def enter(btn2):
 			# global rootframe, expo
+			expo=btn2.parent().parent()
 			table={}
-			rootframe.destroy()
-			if expo.get_value('opt')=='display on screen':
-				# flexitable.output_copy_input('Address' ,addr)
-				ddict={'addr':addr,
-						'path':'',
-						'password':''
-						}
-			
-			else: # to file 
-			
-				path=filedialog.askdirectory(initialdir=os.getcwd(), title="Select directory to write to")
+			ddict={'addr':addr,
+					'path':'',
+					'password':''
+					}
+				
+			if expo.cellWidget(0,1).currentText()=='encrypted file':
+				# path=filedialog.askdirectory(initialdir=os.getcwd(), title="Select directory to write to")
+				path=gui.set_file( None,validation_fun=None,dir=True,parent=btn2,init_path=os.getcwd(),title="Select directory to write to")
 				if path==None:
 					return 
 					
@@ -672,34 +717,38 @@ class WalDispSet:
 			table['queue_waiting']=[localdb.set_que_waiting('export_viewkey',jsonstr=json.dumps(ddict)) ]
 			idb=localdb.DB()
 			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
+			expo.parent().close() #.destroy()
 			
 					
-		expo.set_cmd( 'enter',[],enter)
-	
+		# expo.set_cmd( 'enter',[],enter)
+		expo.cellWidget(1,0).set_fun(False,enter) #set_cmd( 'enter',[],enter)
+		rootframe =gui.CustomDialog(btn,expo, title='Exporting view key')
+		
 	
 	
 		
 		
 		
-	def new_addr(self):
+	def new_addr(self,btn):
 	
 		# first ask to enter usb pendrive
 		uu=usb.USB()
 		
 		while len(uu.locate_usb())==0:
-			if not flexitable.msg_yes_no('Please insert USB pendrive','To create new address wallet backup to pendrive is required. Click [yes] when you are read or [no] co cancell.'):
+			if not gui.msg_yes_no('Please insert USB pendrive','To create new address wallet backup to pendrive is required. Click [yes] when you are read or [no] co cancel.',btn):
 				return
 		# if correct - create new addr
 		# after which - ask to select path to backup wallet 
 	
-	
+		
 		table={}
 		table['queue_waiting']=[localdb.set_que_waiting('new_addr' ) ]
 
 		idb=localdb.DB()
 		idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
-		
-		self.queue_com.put([ table['queue_waiting'][0]['id'],'Creating new address\n',self.message_asap_tx_done ])
+		self.wallet_copy_progress(table['queue_waiting'][0]['id'])
+		# return 
+		# self.queue_com.put([ ,'Creating new address\n',self.message_asap_tx_done ])
 
 		
 	
@@ -708,28 +757,52 @@ class WalDispSet:
 		idb=localdb.DB()
 		grid_lol3=[]
 		tmpdict2={}
-		if init:
-			tmpdict2['head']=[{'T':'LabelC', 'L':'Task'}, #, 'tooltip':'Command'
-									{'T':'LabelC', 'L': 'Created time'},
-									{'T':'LabelC', 'L': 'Status' },
-									{'T':'LabelC', 'L': 'Wait[s]' },
-									{'T':'LabelC', 'L': 'Cancell' }									
-									]
+		colnames=['Task','Created time','Status','Wait[s]','Cancel']
 		
-			grid_lol3.append(tmpdict2)
 		
 		disp_dict=idb.select('queue_waiting', ["command","created_time","status","wait_seconds","json","id"],orderby=[{'created_time':'desc' }])
+		# print(disp_dict)
+		
+		
+		def cancell(btn,id):
+		
+			# print(btn,id)
+			try:
+				disp_dict=idb.select('queue_waiting', ["type","command","created_time","status","wait_seconds","json","id"],{'id':['=',id]})
+				# print('disp_dict',disp_dict)
+				table={}	
+				if disp_dict[0][3]!='done':
+					
+					table['queue_done']=[{"type":disp_dict[0][0]
+									, "wait_seconds":disp_dict[0][4]
+									, "created_time":disp_dict[0][2]
+									, "command":disp_dict[0][1]
+									, "json":disp_dict[0][5]
+									, "id":disp_dict[0][6]
+									, "result":'canceled'
+									, 'end_time':app_fun.now_to_str(False)
+									} ]
+					idb.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
+				
+				# print('before delete',idb.select('queue_waiting'))
+				idb.delete_where('queue_waiting',{'id':['=',id]})
+				self.sending_signal.emit(['cmd_queue'])
+				
+			except:
+				print(792,'cancel exception')
+				pass # double click cancell error
+		
 		# to have result check second table for status done 
 		if len(disp_dict)>0:		
 		
 			for ii,rr in enumerate(disp_dict):
 				tmpid=rr[5] #ii #rr[5]
-				status_label={'T':'LabelV', 'L': rr[2], 'uid':"status"+str(tmpid) }
+				status_label={'T':'LabelV', 'L': rr[2] }
 				
 				if rr[2]=='awaiting_balance':
-					status_label={'T':'LabelV', 'L': rr[2], 'uid':"status"+str(tmpid), 'style':{'bgc':'yellow','fgc':'brown'} }
+					status_label={'T':'LabelV', 'L': rr[2] , 'style':{'bgc':'yellow','fgc':'brown'} }
 				elif rr[2]=='processing':
-					status_label={'T':'LabelV', 'L': rr[2], 'uid':"status"+str(tmpid), 'style':{'bgc':'blue','fgc':'white'} }
+					status_label={'T':'LabelV', 'L': rr[2] , 'style':{'bgc':'blue','fgc':'white'} }
 				elif rr[2]=='done':
 					sstyle={'bgc':'white','fgc':'#aaa'}
 					task_done=idb.select('queue_done', ['result'],{'id':['=',tmpid]})
@@ -745,7 +818,7 @@ class WalDispSet:
 							tmpres='Success/True'
 							
 				
-					status_label={'T':'LabelV', 'L': rr[2], 'uid':"status"+str(tmpid), 'style':sstyle, 'tooltip':tmpres }
+					status_label={'T':'LabelV', 'L': rr[2] , 'style':sstyle, 'tooltip':tmpres }
 				
 				tmpdict2={}
 				tmptooltip='' 
@@ -756,59 +829,20 @@ class WalDispSet:
 					for ss in ttmp['to']:
 						tmptooltip+=ss['z']+' amount '+str(ss['a'])+'\n'
 				else:
-					tmptooltip=app_fun.json_to_str(rr[4])
+					tmptooltip=app_fun.json_to_str( rr[4] )
 				
-				tmpdict2[tmpid]=[ {'T':'LabelV', 'L':rr[0], 'tooltip':tmptooltip, 'uid':"command"+str(tmpid)},
-									{'T':'LabelV', 'L': rr[1].replace(' ','\n'), 'uid':"created_time"+str(tmpid), 'width':12},
+				tmpdict2['rowk']=str(tmpid)
+				tmpdict2['rowv']=[ {'T':'LabelV', 'L':rr[0], 'tooltip':tmptooltip },
+									{'T':'LabelV', 'L': rr[1].replace(' ','\n') , 'width':12},
 									status_label,
-									{'T':'LabelV', 'L':str(int( int(rr[3])-(datetime.datetime.now()-app_fun.datetime_from_str(rr[1]) ).total_seconds() )), 'uid':"wait_seconds"+str(tmpid) },
-									{'T':'Button', 'L': 'Cancell', 'uid':"Cancell"+str(tmpid) }	
+									{'T':'LabelV', 'L':str(int( int(rr[3])-(datetime.datetime.now()-app_fun.datetime_from_str(rr[1]) ).total_seconds() ))  },
+									{'T':'Button', 'L': 'Cancel', 'fun':cancell, 'args':(str(tmpid),) }	
+									# , 'fun':self.edit_category, 'args':(tmpalias,tmpaddr)
 								]
 				grid_lol3.append(tmpdict2)
 				
-		return grid_lol3
+		return grid_lol3,colnames
 
-
-	def queue_frame_buttons(self,grid,frame_table):
-		idb=localdb.DB()
-		
-		def cancell(id):
-			try:
-				disp_dict=idb.select('queue_waiting', ["type","command","created_time","status","wait_seconds","json","id"],{'id':['=',id]})
-				table={}	
-				if disp_dict[0][3]!='done':
-					
-					table['queue_done']=[{"type":disp_dict[0][0]
-									, "wait_seconds":disp_dict[0][4]
-									, "created_time":disp_dict[0][2]
-									, "command":disp_dict[0][1]
-									, "json":disp_dict[0][5]
-									, "id":disp_dict[0][6]
-									, "result":'cancelled'
-									, 'end_time':app_fun.now_to_str(False)
-									} ]
-					idb.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
-				
-				idb.delete_where('queue_waiting',{'id':['=',id]})
-				time.sleep(1)
-				frame_table.update_frame(self.prepare_queue_frame())
-			except:
-				pass # double click cancell error
-		
-		for x1 in grid:
-		
-			for kk,vv in x1.items(): # kk= head or alias 
-				if kk=='head' :
-					continue
-					
-				if type(kk)==type('asd'):
-					if '_nextline' in kk:
-						continue
-			
-				bpush_uid='Cancell'+str(kk)
-				
-				frame_table.set_cmd(bpush_uid,[str(kk)], cancell)
-				
 
 	def set_rounding_str(self,rstr):
 		format_str=",.0f"
@@ -825,8 +859,12 @@ class WalDispSet:
 			
 		return format_str
 
-	def get_rounding_str(self,strval=False):
+	def get_rounding_str(self,strval=False,direct_value=''): # if direct value dont take from db 
 		format_str=",.0f"
+		
+		if direct_value!='':
+			# print('get_rounding_str',self.set_rounding_str(direct_value))
+			return self.set_rounding_str(direct_value)
 		
 		idb=localdb.DB()
 		if idb.check_table_exist('wallet_display'):
@@ -874,32 +912,15 @@ class WalDispSet:
 		return 'All'
 		
 	
-	def categories_filter(self):
-		all_cat_unique=[]
-		
-		idb=localdb.DB()
-		sel_addr_book=idb.select('addr_book',[ 'Category'] )
-		
-		for kk in sel_addr_book:
-			if kk[0] not in all_cat_unique:
-				all_cat_unique.append(kk[0])
-		
-		if 'All' not in all_cat_unique:
-			all_cat_unique=['All']+all_cat_unique 
-			
-		return all_cat_unique
-		
+
 		
 
 	def own_wallet_categories(self):
 	
 		all_cat_unique=[]
-		idb=localdb.DB()
-		all_cat=idb.select('address_category',['category'] )
-		for rr in all_cat: #sorted(enumerate(self.amounts), key=lambda x:x[1], reverse=True):
-			
-			if rr[0] not in all_cat_unique:
-				all_cat_unique.append(rr[0])
+		all_cat=self.addr_cat_map.values() 
+		for rr in all_cat: 
+			all_cat_unique.append(rr[0])
 			
 		if 'Excluded' not in all_cat_unique:
 			all_cat_unique=['Excluded']+all_cat_unique 
@@ -932,43 +953,38 @@ class WalDispSet:
 		
 		
 		
-	def prepare_summary_frame(self,init=False):	
+	def set_disp_dict(self):
+		idb=localdb.DB()
+		self.disp_dict=idb.select('jsons',['json_content','last_update_date_time'],{'json_name':['=',"'display_wallet'"]})
+		
+		
+		
+	def set_format(self,format_str_value=''):
+		self.format_str=self.get_rounding_str(direct_value=format_str_value)
+	
+		
+		
+		
+	def prepare_summary_frame(self ):	
 		
 		idb=localdb.DB()
-		# print(idb.select('queue_waiting' ))
 		
 		grid_lol_wallet_sum=[]
+		col_names=['Total','Confirmed','Pending','Round','Filter','New address','Wallet']
 		
-		if init:
-			tmpdict={}
-			tmpdict['head']=[{'T':'LabelC', 'L':'Total', 'tooltip':'Wallet total of confirmed + pending balance'}  
-										, {'T':'LabelC', 'L':'Confirmed'}
-										, {'T':'LabelC', 'L':'Pending'}
-										, {'T':'LabelC', 'L':' '}
-										, {'T':'LabelC', 'L':'Sort'}
-										, {'T':'LabelC', 'L':'Round'}
-										, {'T':'LabelC', 'L':'Filter'}	
-										, {'T':'LabelC', 'L':'New address'}	
-										, {'T':'LabelC', 'L':'Wallet'}	]
-																			
-			grid_lol_wallet_sum.append(tmpdict )
-			
-		
-		disp_dict=idb.select('jsons',['json_content','last_update_date_time'],{'json_name':['=',"'display_wallet'"]})
-		
-			
 		all_cat=self.own_wallet_categories() #all_cat_unique
-		format_str=self.get_rounding_str()
-					
-		if len(disp_dict)>0:
-			disp_dict=json.loads(disp_dict[0][0])
-			# print(format_str)
+				
+		if len(self.disp_dict)>0:
+			disp_dict=json.loads(self.disp_dict[0][0])
+			self.alias_map=disp_dict['aliasmap']
+			
 			tmpdict={}
-			tmpdict['summary']=[{'T':'LabelV', 'L':format(disp_dict['top']['Total'] , format_str).replace(',',"'")  , 'uid':'Total'}  , 
-										{'T':'LabelV', 'L':format(disp_dict['top']['Confirmed'] , format_str).replace(',',"'")  , 'uid':'Confirmed'}, 
-										{'T':'LabelV', 'L':format(disp_dict['top']['Pending'] , format_str).replace(',',"'")  , 'uid':'Pending'},
-										{'T':'LabelV', 'L':' ', 'uid':'space'},
-										{'T':'Combox','V':['amounts','bills','usage'], 'uid':'sort', 'width':7}, # enter this function!
+			tmpdict['rowk']='summary'
+			tmpdict['rowv']=[{'T':'LabelV', 'L':format(disp_dict['top']['Total'] , self.format_str).replace(',',"'")  , 'uid':'Total'}  , 
+										{'T':'LabelV', 'L':format(disp_dict['top']['Confirmed'] , self.format_str).replace(',',"'")  , 'uid':'Confirmed'}, 
+										{'T':'LabelV', 'L':format(disp_dict['top']['Pending'] , self.format_str).replace(',',"'")  , 'uid':'Pending'},
+										# {'T':'LabelV', 'L':' ', 'uid':'space'},
+										# {'T':'Combox','V':['amounts','bills','usage'], 'uid':'sort', 'width':7}, # enter this function!
 										{'T':'Combox', 'uid':'round', 'V':['1','0.1','0.01','0.001','0.0001','off'], 'width':6},
 										{'T':'Combox', 'uid':'filter', 'V':all_cat, 'width':6, 'tooltip':'Special categories:\nHidden - allows to hide address on the list,\n Excluded - allows to exclude address from UTXO/bills auto maintenance when it is ON.'},
 										{'T':'Button', 'L':'+', 'uid':'addaddr', 'tooltip':'Create new address'},
@@ -978,11 +994,12 @@ class WalDispSet:
 			
 		else:
 			tmpdict={}
-			tmpdict['summary']=[{'T':'LabelV', 'L':'', 'uid':'Total'}  , 
+			tmpdict['rowk']='summary'
+			tmpdict['rowv']=[{'T':'LabelV', 'L':'', 'uid':'Total'}  , 
 										{'T':'LabelV', 'L':'', 'uid':'Confirmed'}, 
 										{'T':'LabelV', 'L':'', 'uid':'Pending'},
-										{'T':'LabelV', 'L':' ', 'uid':'space'},
-										{'T':'Combox','V':['amounts','bills','usage'], 'uid':'sort', 'width':7}, # enter this function!
+										# {'T':'LabelV', 'L':' ', 'uid':'space'},
+										# {'T':'Combox','V':['amounts','bills','usage'], 'uid':'sort', 'width':7}, # enter this function!
 										{'T':'Combox', 'uid':'round', 'V':['1','0.1','0.01','0.001','0.0001','off'], 'width':6},
 										{'T':'Combox', 'uid':'filter', 'V':all_cat, 'width':6},
 										{'T':'Button', 'L':'+', 'uid':'addaddr', 'tooltip':'Create new address'},
@@ -993,82 +1010,46 @@ class WalDispSet:
 			
 					
 			
-		return grid_lol_wallet_sum
+		return grid_lol_wallet_sum, col_names
 		
 		
 		
 		
 	def get_header(self,selecting):
-		grid_lol3=[]
-		tmpdict2={}
-
+		
 		if selecting:
-		
-			tmpdict2['head']=[{'T':'LabelC', 'L':'Category', 'tooltip':'May be useful for filtering addresses in big wallets' }  , 
-								{'T':'LabelC', 'L': 'Alias', 'tooltip':'Short unique address referrence', 'width':7 },
-								{'T':'LabelC', 'L': 'Total' },
-								{'T':'LabelC', 'L': 'Confirmed' },
-								{'T':'LabelC', 'L': 'Pending' },
-								{'T':'LabelC', 'L': 'Usage' },
-								{'T':'LabelC', 'L': 'Select' }
-								]
+			return ['Category','Alias','Total','Confirmed','Pending','Usage','Select','Full address']
 		else:
-	
-			tmpdict2['head']=[{'T':'LabelC', 'L':'Category', 'tooltip':'May be useful for filtering addresses in big wallets' }  , 
-								{'T':'LabelC', 'L': 'Alias', 'tooltip':'Short unique address referrence', 'width':7 },
-								{'T':'LabelC', 'L': 'Total' },
-								{'T':'LabelC', 'L': 'Confirmed' },
-								{'T':'LabelC', 'L': 'Pending' },
-								{'T':'LabelC', 'L': 'Bills', 'tooltip':'Tota/Pending You may have the same amount in 1 bill or many bills. In cryptocurrency bill is called UTXO. It is good to have few bills at hand, because getting change make take few minutes and during changing transaction on the working address is not allowed (temporary balance is zero).' },
-								{'T':'LabelC', 'L': 'Usg.', 'tooltip':'Historical incoming transactions. May be usefull to distinguish from fresh unused addresses.' },
-								{'T':'LabelC', 'L': 'Addr.', 'tooltip':'Address export column' },
-								{'T':'LabelC', 'L': 'V.Key' , 'tooltip':'Viewing key export column'}
-								]
-	
-		grid_lol3.append(tmpdict2)
-		
-		return grid_lol3
+			return  ['Category','Alias','Total','Confirmed','Pending','Bills','Usage','Addr.','V.Key']
 		
 		
-	def prepare_byaddr_frame(self,init=False,selecting=False,selecting_filter='All',selecting_to=False):	
-		
+	def prepare_byaddr_frame(self,init=False,selecting=False,selecting_to=False):	
+		colnames=self.get_header(selecting)
 		grid_lol3=[]
 		tmpdict2={}
-		if init:
-		
-			tmphead=self.get_header(selecting)
-			grid_lol3.append(tmphead[0])
-		
-		idb=localdb.DB()
-		disp_dict=idb.select('jsons',['json_content','last_update_date_time'],{'json_name':['=',"'display_wallet'"]})
 		
 		opt=self.get_options()
-		format_str=opt['rounding'] #self.get_rounding_str()
+		
 		sorting=opt['sorting'] #self.get_sorting()
-		filtering=opt['filtering'] #self.get_filtering()
 		
 		if selecting:
 			sorting='usage'
-			filtering=selecting_filter
-		
-		if len(disp_dict)>0:
-		
-			ddict=json.loads(disp_dict[0][0])
-			sorting_lol=ddict['lol']
 			
-			if sorting=='amounts': 
-				sorting_lol=sorted(sorting_lol, key = operator.itemgetter(1, 2, 3), reverse=True )
-			elif sorting=='bills':
-				sorting_lol=sorted(sorting_lol, key = operator.itemgetter(2, 1, 3), reverse=True )
-			elif sorting=='usage':
-				sorting_lol=sorted(sorting_lol, key = operator.itemgetter(3, 1, 2), reverse=True )
-				
-			adr_cat=idb.select('address_category',['address','category'] )
+		if len(self.disp_dict)>0:
+		
+			ddict=json.loads(self.disp_dict[0][0])
+			sorting_lol=ddict['lol'] # not needed with qt
 			
-			addr_cat={}
-			for ac in adr_cat:
-				addr_cat[ac[0]]=ac[1]
-				
+			sorting_lol=sorted(sorting_lol, key = operator.itemgetter(1, 2, 3), reverse=True )
+			
+			# if sorting=='amounts': 
+				# sorting_lol=sorted(sorting_lol, key = operator.itemgetter(1, 2, 3), reverse=True )
+			# elif sorting=='bills':
+				# sorting_lol=sorted(sorting_lol, key = operator.itemgetter(2, 1, 3), reverse=True )
+			# elif sorting=='usage':
+				# sorting_lol=sorted(sorting_lol, key = operator.itemgetter(3, 1, 2), reverse=True )
+			
+			addr_cat=self.addr_cat_map 
 					
 			for i in sorting_lol: 
 			
@@ -1080,168 +1061,104 @@ class WalDispSet:
 				if ddict['wl'][ii]['addr'] in addr_cat:
 					tmpcurcat=addr_cat[ddict['wl'][ii]['addr']]
 				
-				visible=False
-				
-				if filtering in ['All',tmpcurcat]:
-					visible=True
-					
-				if filtering=='Not hidden' and  tmpcurcat!='Hidden':
-					visible=True
 					
 				tmp_confirmed=ddict['wl'][ii]['confirmed']
 				tmp_unconfirmed=ddict['wl'][ii]['unconfirmed']
 				tmp_total=tmp_confirmed+tmp_unconfirmed
 				
-				if selecting_to:
-					visible=True
-				elif selecting and tmp_total<=0.0001:
-					visible=False
 				
-				send_state='normal'
-				if tmp_total<=0:
-					send_state='disabled'
-					
+				b_enabled=True
 				
 				bills=int(ddict['wl'][ii]['#conf']+ddict['wl'][ii]['#unconf'])
 				billsc=int(ddict['wl'][ii]['#conf'] )
 				billsunc=int( ddict['wl'][ii]['#unconf'])
 				
-				bill_state='normal'
+				bill_state=True
 				if bills<=0:
-					bill_state='disabled'
+					bill_state=False
 				
 					
 				tmpalias=ddict['aliasmap'][ddict['wl'][ii]['addr']]	
 				tmpaddr=ddict['wl'][ii]['addr']
 				
 				tmpdict2={}
+				tmpdict2['rowk']=tmpalias
 				
 				if selecting:
-					tmpdict2[tmpalias]=[ 
-									{'T':'LabelV', 'L':tmpcurcat, 'visible':visible}, 
-									{'T':'LabelV', 'L':tmpalias,  'visible':visible},
-									{'T':'LabelV', 'L':format(tmp_total , format_str).replace(',',"'") , 'visible':visible, 'uid':'Total'+tmpalias},
-									{'T':'LabelV', 'L':format(tmp_confirmed , format_str).replace(',',"'")  , 'visible':visible },
-									{'T':'LabelV', 'L':format(tmp_unconfirmed , format_str).replace(',',"'") , 'visible':visible},
+				
+					if tmp_total<=0.0001:
+						b_enabled=False	
+						
+					if selecting_to:
+						b_enabled=True
+						
+					tmpdict2['rowv']=[ 
+									{'T':'LabelV', 'L':tmpcurcat }, 
+									{'T':'LabelV', 'L':tmpalias },
+									{'T':'LabelV', 'L':format(tmp_total , self.format_str).replace(',',"'")  , 'uid':'Total'+tmpalias},
+									{'T':'LabelV', 'L':format(tmp_confirmed , self.format_str).replace(',',"'")    },
+									{'T':'LabelV', 'L':format(tmp_unconfirmed , self.format_str).replace(',',"'")  },
 									
-									{'T':'LabelV', 'L':str( ddict['lol'][ii][3] ),  'visible':visible},
-									{'T':'Button', 'L':'Select' , 'uid':'select'+tmpalias, 'visible':visible, 'tooltip': tmpaddr }
+									{'T':'LabelV', 'L':str( ddict['lol'][ii][3] ) },
+									{'T':'Button', 'L':'Select' , 'uid':'select'+tmpalias , 'tooltip': tmpaddr , 'IS':b_enabled},
+									{'T':'LabelV', 'L':tmpaddr  }
 									]
 					
 				else:
-					tmpdict2[tmpalias]=[ 
-									{'T':'Button', 'L':tmpcurcat, 'uid':'Category'+tmpalias, 'tooltip':'Edit category for address '+tmpaddr, 'visible':visible}, 
-									{'T':'LabelV', 'L':tmpalias, 'uid':'Alias'+tmpalias, 'tooltip':'Alias of address '+tmpaddr, 'visible':visible},
-									{'T':'LabelV', 'L':format(tmp_total , format_str).replace(',',"'") , 'uid':'Total'+tmpalias, 'visible':visible},
-									{'T':'Button', 'L':format(tmp_confirmed , format_str).replace(',',"'")  , 'uid':'Send'+tmpalias, 'tooltip':'Send from this address', 'visible':visible, 'IS':send_state},
-									{'T':'LabelV', 'L':format(tmp_unconfirmed , format_str).replace(',',"'") , 'uid':'Pending'+tmpalias, 'visible':visible},
-									{'T':'Button', 'L':str(bills)+'/'+str(billsunc), 'uid':'Bills'+tmpalias, 'tooltip':'Show bills / UTXOs', 'visible':visible, 'IS':bill_state},
+					if tmp_total<=0:
+						b_enabled=False
+				
+					tmpdict2['rowv']=[ 
+									{'T':'Button', 'L':tmpcurcat,  'tooltip':'Edit category for address '+tmpaddr, 'fun':self.edit_category, 'args':(tmpalias,tmpaddr) }, 
+									{'T':'LabelV', 'L':tmpalias,  'tooltip':'Alias of address '+tmpaddr },
+									{'T':'LabelV', 'L':format(tmp_total , self.format_str).replace(',',"'")  },
+									{'T':'Button', 'L':format(tmp_confirmed , self.format_str).replace(',',"'")   , 'tooltip':'Send from this address' , 'IS':b_enabled, 'fun':self.send_from_addr, 'args':(tmpaddr, tmp_total)},
+									{'T':'LabelV', 'L':format(tmp_unconfirmed , self.format_str).replace(',',"'")  },
+									{'T':'Button', 'L':str(bills)+'/'+str(billsunc) , 'tooltip':'Show bills / UTXOs' , 'IS':bill_state, 'fun':self.show_bills, 'args':(tmpaddr,) },
 									
-									{'T':'LabelV', 'L':str( ddict['lol'][ii][3] ), 'uid':'Usage'+tmpalias, 'visible':visible},
+									{'T':'LabelV', 'L':str( ddict['lol'][ii][3] ) },
 
-									{'T':'Button', 'L':'XA' , 'uid':'addrexp'+tmpalias, 'visible':visible, 'tooltip': 'Export address '+tmpaddr},
-									{'T':'Button', 'L':'XVK' , 'uid':'viewkey'+tmpalias, 'visible':visible, 'tooltip': 'Export Viewing Key of '+tmpaddr}
+									{'T':'Button', 'L':'XA' , 'tooltip': 'Export address '+tmpaddr, 'fun':self.export_addr, 'args':(tmpaddr,) },
+									{'T':'Button', 'L':'XVK' , 'tooltip': 'Export Viewing Key of '+tmpaddr, 'fun':self.export_viewkey, 'args':(tmpaddr,) }
 									]
-				grid_lol3.append(tmpdict2)
+				grid_lol3.append(tmpdict2) 
 
-		return grid_lol3
+		return grid_lol3, colnames
 		
 		
 		
-		
-		
-	def prepare_byaddr_button_cmd(self,grid_lol3,wallet_details,selecting=False,send_from=None,addram=[]): # copy addr and edit category 
+	def edit_category(self,btn,alias,addr  ): #, json_to_update='wallet_byaddr'):
 
-		def update_frame_display(tmpgrid):
-			wallet_details.update_frame(tmpgrid)
+		# global rootframe, tmpvar
+		curv= btn.text()
 		
-		for x1 in grid_lol3:
+		automate_rowids=[ [{'T':'LabelV', 'L':'Edit category for \n\n '+addr+' \n', 'span':3, 'width':120, 'style':{'bgc':'#eee','fgc':'red'}, 'uid':'none'},{  }, {  } ] ,
+						[{'T':'LineEdit', 'V':curv.replace('Edit',''), 'width':32, 'span':3}, { }, { } ],
+						[{'T':'Button', 'L':'Set Main', 'width':32},{'T':'Button', 'L':'Set Exclude', 'width':32},{'T':'Button', 'L':'Set Hidden', 'width':32} ] ,
+						[{'T':'Button', 'L':'Enter', 'width':32},{ },{ }  ] ,
+						]
 		
-			
-			for kk,vv in x1.items(): # kk= head or alias 
-				if kk=='head':
-					continue
-			
-				addr=''
-				addr_total=round(float(wallet_details.get_value('Total'+kk).replace("'",'')) -0.0001,8)
-				
-				if selecting:
-					bsel_uid='select'+kk
-					if 'tooltip' in vv[6] and send_from!=None:
-						addr=vv[6]['tooltip']
-						
-						def set_and_destroy(addr,alias):
-							# global addram
-							amount_uid='Total'+alias
-							loc_addram=addram.copy()
-							if loc_addram==[]:
-								loc_addram=['z1','setmax1']
-								send_from.set_textvariable(loc_addram[0], addr)
-								tmpv=float(wallet_details.get_value(amount_uid) )-0.0001
-								send_from.set_textvariable(loc_addram[1], tmpv )
-							else:
-								send_from.set_textvariable(addram[0], addr)
-								
-							wallet_details.master.master.destroy()
-						
-						wallet_details.set_cmd(bsel_uid,[addr,kk],set_and_destroy)
-						
-				else:
-					
-					if 'tooltip' in vv[1]:
-						addr=vv[1]['tooltip'].replace('Alias of address ','')
-						
-					# edit category
-					bedit_uid='Category'+kk # open edit window
-					curv=wallet_details.get_value(bedit_uid)
-					wallet_details.set_cmd(bedit_uid,[kk,addr,curv,wallet_details], self.edit_category)
-					
-					# send - from this addr 
-					# print('send',addr,kk)
-					bsend='Send'+kk
-					wallet_details.set_cmd(bsend,[addr,addr_total], self.send_from_addr) # 2h open form
-					
-					# bills
-					bbills='Bills'+kk
-					wallet_details.set_cmd(bbills,[addr], self.show_bills) # 1h open view, mark with timestamp, stays same/ not refreshed with wallet 
-				
-					# addrexp
-					bpriv='addrexp'+kk
-					wallet_details.set_cmd(bpriv,[addr], self.export_addr) # 2h open form, options: to encrypted file, to unencrypted file, just display,
-
-					# bills
-					bview='viewkey'+kk
-					
-					wallet_details.set_cmd(bview,[addr], self.export_viewkey) # 1h open view
-
-
-	def edit_category(self,alias,addr , curv, wallet_details, json_to_update='wallet_byaddr'):
-
-		global rootframe, tmpvar
+		tw=gui.Table( params={'dim':[4,3],"show_grid":False, 'colSizeMod':[256,'toContent','stretch'], 'rowSizeMod':['toContent','toContent','toContent' ]})		
+		tw.updateTable(automate_rowids)
 		
-		rootframe = Toplevel() #tk.Tk()
-		rootframe.title('Edit category')
-		ttk.Label(rootframe,text='Edit category for \n\n '+addr+' \n').grid(row=0,column=0,columnspan=3,sticky="nsew") #pack(fill='x')
-		tmpvar=StringVar()
-		tmpvar.set(curv.replace('Edit',''))
+		def setV(le,vv):
+			le.setText(vv)
+			le.setFocus(gui.Qt.PopupFocusReason)
 		
-		def setmain(): tmpvar.set('Main')
-		def setexcl(): tmpvar.set('Exclude')
-		def sethide(): tmpvar.set('Hidden')
+		tw.cellWidget(2,0).set_fun(True,setV,tw.cellWidget(1,0),'Main')
+		tw.cellWidget(2,1).set_fun(True,setV,tw.cellWidget(1,0),'Exclude') 
+		tw.cellWidget(2,2).set_fun(True,setV,tw.cellWidget(1,0),'Hidden') 
 		
-		ttk.Button(rootframe,text='Set Main',command=setmain  ).grid(row=1,column=0,columnspan=1,sticky="nsew") #pack(fill='x')
-		ttk.Button(rootframe,text='Set Exclude',command=setexcl ).grid(row=1,column=1,columnspan=1,sticky="nsew") #pack(fill='x')
-		ttk.Button(rootframe,text='Set Hidden',command=sethide ).grid(row=1,column=2,columnspan=1,sticky="nsew") #pack(fill='x')
-		ttk.Entry(rootframe,textvariable=tmpvar).grid(row=2,column=0,columnspan=3,sticky="nsew") #pack(fill='x') #, show='*'
 		
-		def retv():
+		def retv(btn,tmpvar):
 		
-			global rootframe, tmpvar
-			tmp=tmpvar.get().strip()
+			# global rootframe, tmpvar
+			tmp= tmpvar.text().strip()
+			wallet_details=btn.parent().parent()
 			
 			if tmp=='':
 				
-				rootframe.destroy()
+				btn.parent().close()
 				return
 				
 			idb=localdb.DB()
@@ -1252,9 +1169,13 @@ class WalDispSet:
 			table['address_category']=[{'address':addr, 'category':tmp, 'last_update_date_time':date_str}]
 			idb.upsert(table,['address','category','last_update_date_time'],{'address':['=',"'"+addr+"'"]})
 			
-			wallet_details.update_frame(self.prepare_summary_frame()) # update categories
-			wallet_details.update_frame(self.prepare_byaddr_frame())
-			rootframe.destroy()
+			# wallet_details.update_frame(self.prepare_summary_frame()) # update categories
+			grid1,col1=self.prepare_byaddr_frame()
 			
-		ttk.Button(rootframe,text='Enter',command=retv ).grid(row=3,column=0,columnspan=3,sticky="nsew") #pack(fill='x')
+			wallet_details.updateTable(grid1)
+			tmpvar.parent().parent().close() #.destroy()
+			self.update_addr_cat_map()
 			
+		tw.cellWidget(3,0).set_fun(True,retv,btn,tw.cellWidget(1,0)) 
+		
+		gui.CustomDialog(btn,tw, title='Edit category', defaultij=[3,0])
