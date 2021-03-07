@@ -1,434 +1,391 @@
-# wallet main tab
 
-
-import tkinter as tk
-from tkinter import filedialog, StringVar, ttk, messagebox,Scrollbar,Toplevel,simpledialog
 import os
 import sys
-# from tkcalendar import Calendar, DateEntry
-import datetime, time
+
+import time
 import json
-import shutil
-from functools import partial
-import modules.flexitable as flexitable
-import random
+
 import modules.deamon as deamon
 import modules.localdb as localdb
-import getpass
-import modules.app_fun as app_fun
-from modules.wallet_display_set import WalDispSet
-import modules.usb as usb
+
 from modules.tasks_history import TasksHistory
 from modules.tx_history import TransactionsHistory
 from modules.frame_settings import Settings
 from modules.notifications import Notifications
 import modules.addr_book as addr_book
 
+import modules.gui as gui
 
 
-def update_paths(eldeamon,eldata,elchain,db,frame):
-
-	komodod_ok=False
-	if os.path.exists(eldeamon.get()+'/komodod.exe') or os.path.exists(eldeamon.get()+'/komodod'):
-		komodod_ok=True
-		
-	komodo_cli_ok=False
-	if os.path.exists(eldeamon.get()+'/komodo-cli.exe') or os.path.exists(eldeamon.get()+'/komodo-cli'):
-		komodo_cli_ok=True
-		
-	blockchain_data_ok=False
-	decr_wal_exist=os.path.exists(eldata.get()+'/wallet.dat')
-	if decr_wal_exist or os.path.exists(eldata.get()+'/wallet.encr'):
-		blockchain_data_ok=True
-		
-	if decr_wal_exist: # backup!
+class Worker(gui.QObject):
+	finished = gui.Signal()
+	refreshed = gui.Signal(list)
 	
-		uu=usb.USB()
-		
-		while len(uu.locate_usb())==0:
-			messagebox.showinfo('Please insert USB pendrive','Please insert USB pendrive. Unencrypted wallet.dat file detected - needs to be backed up to external memory.')
+	
+	def __init__(self,init_app,queue_start_stop,dmn): #init_app,wallet_display_set,queue_com,queue_start_stop,dmn,queue_status):
+		super(Worker,self).__init__()
 
-		path=''
-		while path==None or path=='':
-			tmpinitdir=os.getcwd()
+		self.queue_start_stop=queue_start_stop
+		self.dmn=dmn
+		self.init_app=init_app
+		self.block_closing=True
+		# self.queue_status=queue_status
+
+	@gui.Slot()
+	def run(self):
+		"""Long-running task."""
+		# print('run?',self.init_app.close_thread)
+		xx=0
+		while not self.init_app.close_thread:
+
+			# if xx % 19 ==1:
+				# print('thread working',xx,self.init_app.close_thread,flush=True)
 			
-			if sys.platform!='win32':
-				curusr=getpass.getuser()
-				if os.path.exists('/media/'+curusr+'/'):
-					tmpinitdir='/media/'+curusr+'/'
-			
-			path=filedialog.askdirectory(initialdir=tmpinitdir, title="Select directory on your USB drive") # was 
-			if uu.verify_path_is_usb(path):
-				messagebox.showinfo('Starting backup','Please wait untill backup is finished and relevant message is displayed.' )
-				dest=os.path.join(path,'wallet_'+app_fun.now_to_str()+'.dat')  
-				src=eldata.get()+'/wallet.dat'
-				
+			if self.queue_start_stop.qsize(): # start stop blockchain ON/OFF
 				try:
-					shutil.copy(src, dest)
-					path=''
-					messagebox.showinfo('Backup done','Your wallet is safe now at \n'+dest )
-					break
-				except:
-					exit()
-			else:
-				messagebox.showinfo('Wrong path','Selected path is not USB drive, please try again.' )
-				path=''
-	
-	
-	if komodod_ok and komodo_cli_ok and blockchain_data_ok: #os.path.exists(eldeamon.get()) and os.path.exists(eldata.get()):
-
-		dict_set={}
-		dict_set['init_settings']=[]
-		dict_set['init_settings'].append({
-											"komodo": eldeamon.get(),
-											"datadir":eldata.get(),
-											# "password_on":elpas.get(),
-											"start_chain":elchain.get()
-										})
-		
-		db.delete_where('init_settings')
-		db.insert(dict_set,["komodo","datadir","start_chain"]) #,"password_on"
-		frame.destroy()
-	elif not komodod_ok:
-		flexitable.messagebox_showinfo('Path for komodo deamon is wrong',eldeamon.get()+'\n - no komodod file !')
-	elif  not komodo_cli_ok:
-		flexitable.messagebox_showinfo('Path for komodo-cli is wrong',eldata.get()+'\n - no komodo-cli file !')
-	else:
-		flexitable.messagebox_showinfo('Path for blockchain data is wrong',eldata.get()+'\n - no wallet file !')
-		
-		
-def ask_paths(): # read from db if possible
-
-	idb=localdb.DB('init.db')
-	
-	preset=[]
-	tt=idb.select('init_settings',columns=["komodo","datadir","start_chain"]) #,"password_on"
-	if len(tt)>0: #idb.check_table_exist('init_settings'):
-
-		for t in tt[0]: # single row only
-			preset.append(t)
-	else:
-
-		preset=['','', 'no']
-		# preset win path
-		curusr=getpass.getuser()
-		curpath=os.getcwd().split('\\') #C:\Users\zxcv\AppData\Roaming\Komodo\PIRATE
-		templatepath=curpath[0]+'/'+'/'.join(['Users',curusr,'AppData','Roaming','Komodo','PIRATE'])
-		
-		if sys.platform=='win32' and os.path.exists(templatepath):
-			preset[1]=templatepath
-		elif os.path.exists('/home/'+curusr+'/.komodo/PIRATE'):
-			preset[1]='/home/'+curusr+'/.komodo/PIRATE'
-		
-	rootframe = tk.Tk()
-	rootframe.title('Enter zUnderNet')
-	
-	frame_settings= ttk.LabelFrame(rootframe,text='Initial settings') 
-	frame_settings.pack()
-	
-	automate_rowids=[ [{'T':'LabelV', 'L':'Set proper paths, otherwise the deamon may freez and you may need to kill the process manually.', 'span':3, 'width':120, 'style':{'bgc':'#eee','fgc':'red'}, 'uid':'none'}, { }, { } ] ,
-					[{'T':'LabelC', 'L':'Select deamon and cli path \n(komodod and komodo-cli inside)', 'width':32}, {'T':'Button','L':'Komodo path:','uid':'p1', 'width':15}, {'T':'LabelV', 'L':preset[0],'uid':'deamon', 'width':60} ],
-					[{'T':'LabelC', 'L':'Select data directory', 'width':32}, {'T':'Button','L':'Data dir path:','uid':'p2', 'width':15}, {'T':'LabelV', 'L':preset[1],'uid':'data', 'width':60} ] ,
-					[{'T':'LabelC', 'L':'Start blockchain', 'width':32}, {'T':'Combox','V':['no','yes'],'uid':'cs2', 'width':15 }, {'T':'LabelE'} ],
-					# [{'T':'LabelC', 'L':'Set password protection'}, {'T':'Combox','V':['no','yes'],'uid':'cs1'}, {} ],
-					[{'T':'Button','L':'Confirm','uid':'conf', 'span':3, 'width':120}, {  }, { } ]	] #, 'width':128
-									
-	grid_settings=[]
-	for ij,ar in enumerate(automate_rowids):
-		tmpdict={}
-		tmpdict[ij]=ar
-		grid_settings.append(tmpdict)
-					
-					
-	settings=flexitable.FlexiTable(frame_settings,grid_settings)#, scale_width=False
-	
-	settings.set_cmd( 'p1',['deamon'],flexitable.setdir )
-	settings.set_cmd( 'p2',['data'],flexitable.setdir )
-	settings.set_cmd( 'conf',['deamon','data','cs2', idb, rootframe], update_paths ) # save to db
-	# settings.set_textvariable('cs1',preset[2])
-	settings.set_textvariable('cs2',preset[2])
-	# print('zxc')
-	
-	def on_closing():
-		rootframe.destroy()
-		exit()
-	
-	rootframe.protocol("WM_DELETE_WINDOW", on_closing)
-	rootframe.mainloop()
-	
-	
-	
-
-def ask_password(tmpval):
-	
-	rootframe = tk.Tk()
-	rootframe.title('Enter zUnderNet')
-	ttk.Label(rootframe,text='Enter password to decrypt wallet.dat and local DB').pack(fill='x')
-	tmpvar=StringVar()
-	entr=ttk.Entry(rootframe,textvariable=tmpvar, show='*')
-	entr.pack(fill='x')
-	tmpvar.set('')
-	
-	
-	def get_pass(*args):
-		
-		if len(entr.get().strip())>0:
-			tmpvar.set(entr.get().strip())
-		
-		if len(tmpvar.get().strip())>0:
-			tmpval.append(tmpvar.get().strip())
-			rootframe.destroy()
+					cmd = self.queue_start_stop.get(0)
+					if cmd['cmd']=='stop_deamon':
+						self.dmn.stop_deamon()
+					elif cmd['cmd']=='start_deamon':
+						self.dmn.start_deamon(cmd['addrescan'] )
+				except : #Queue.Empty:
+					print('Queue.Empty?')
+					pass
 			
-	
-	ttk.Button(rootframe,text='Enter',command=get_pass ).pack(fill='x')
-	entr.bind('<Return>', get_pass)
-	entr.focus()
-	
-	def on_closing():
-		
-		rootframe.destroy()
-		
-	
-	rootframe.protocol("WM_DELETE_WINDOW", on_closing)
-		
-	rootframe.mainloop()
-
-
-
-	
-	
-	
-	
-	
-
-def setwallet(tabs0,app_password,autostart,queue_start_stop, queue_com, addit_frames ): 
-	tabs1=ttk.Notebook(tabs0)
-	tabs1.pack(fill='both')
-	tabs0.add( tabs1, text = 'Wallet')
-
-
-	#########
-	######### SUBTAB 1 - Balance
-	#########
-	frame01=ttk.Frame(tabs1, width=200,height=200) 
-	frame01.pack() #fill='both'
-	tabs1.add( frame01, text = 'Balance')
-	
-	frame01.columnconfigure(0, weight=1)
-	frame01.columnconfigure(1, weight=1)
-	
-	###
-	### FRAME 1 - blockchain status
-	###
-	stat = ttk.LabelFrame(frame01,text='Blockchain status')
-	stat.grid(row=0,column=1,sticky='nswe',padx=10,pady=5)
-	
-	stat_lab=StringVar()
-	stat_lab.set('Blockchain off')
-	ttk.Label(stat,textvariable=stat_lab).pack(side='left' )
-	
-	
-	startstop=StringVar()
-		
-	bstartstop=ttk.Button(stat,textvariable=startstop)
-	bstartstop.pack(side='right',padx=10,pady=5 )
-	
-	if autostart=='yes':
-		startstop.set('Stop blockchain')
-		bstartstop.configure(state='disabled')
-	else:
-		startstop.set('Start blockchain')
-
-	def togglestartstop(elem):
-		if elem.get()=='Stop blockchain':
-			elem.set('Start blockchain')
-			queue_start_stop.put({'cmd':'stop_deamon'})
-			
-		else:
-			elem.set('Stop blockchain')
-			 
-			def restart(addrescan):
-				if addrescan=='No':
-					addrescan=False
+			# print(87,flush=True)
+			vemit=[]
+			if self.dmn.started:
+				vemit=self.dmn.update_status(xx)
+				if 'CONNECTED' not in vemit:
+					self.block_closing=True
 				else:
-					addrescan=True
-				
-				queue_start_stop.put({'cmd':'start_deamon','addrescan':addrescan})
-				
-			flexitable.simple_opt_box( "Rescan wallet?",['No','Yes'],restart)
-				
-	bstartstop.configure(command=partial(togglestartstop,startstop))
+					self.block_closing=False
+			else:
+				vemit.append('cmd_queue')
+				self.block_closing=False
+				if self.init_app.autostart!='no':
+					self.init_app.autostart='no'
+					self.dmn.start_deamon( )
+			
+			
+			self.refreshed.emit(vemit)
+			# print('before sleep')
+			time.sleep(0.3) # change to 0.3
+			xx+=1
+			# print('after sleep')
+			
+			
+			
+		self.finished.emit()
 
-	
-	
-	###
-	### FRAME 2 - summary
-	### todo: save to db, add refresh, 
-	
 
-	summary = ttk.LabelFrame(frame01,text='Summary')
-	summary.grid(row=0,column=0,sticky='nsew',padx=10,pady=5)
-	summary.columnconfigure(0, weight=1)
-	
-	global wds 
-	wds=WalDispSet(app_password,queue_com)
-	
-	
-	grid_lol_wallet_sum= wds.prepare_summary_frame(True)
 
-	
-	
-	wallet_summary_frame=flexitable.FlexiTable(summary,grid_lol_wallet_sum)
-	
-	
-	###
-	### FRAME 3 - wallet balances
-	###
 
-	
-	table = ttk.LabelFrame(frame01,text='Balance by address') #, style='new.TLabelframe'
-	table.grid(row=1,column=0,sticky='nsew',padx=10,pady=5)
-	table.columnconfigure(0, weight=1)
 
-	grid_lol3=wds.get_header(False)
+# props:
+# self.queue_status
+# self.tabs1
+# bstartstop
+# self.stat_lab
+# orig needed: stat_lab,bstartstop,wallet_summary_frame,wallet_details,wds,addrb
+class WalletTab:
+
+	# self.summary_colnames self.details_colnames
+	# self.wallet_summary_frame
+	# self.wallet_details
 	
-	wallet_details=flexitable.FlexiTable(table,grid_lol3,600,True) #params=None, grid_lol=None
-	
-	
-	def save_wallet_display(opt,*evnt):
-		global wds
-		idb=localdb.DB()
-		table={}
+	@gui.Slot(str,list,list )
+	def display_list(self,strtitle,colnames,listoftxids):
+		grid_settings=[]
+		for ll in listoftxids:
+			# ll=json.loads(ll)
+			if ll==[{}]: continue
+			
+			for kk,vv in ll.items(): 
+				tmpdict=[{'T':'LabelC', 'L': str(vv['amount'])}, {'T':'LabelC', 'L': str(vv['conf']) },{'T':'LabelC', 'L': kk}]
+				grid_settings.append(tmpdict)
+			
+		tmpgt=gui.Table(None,{'dim':[len(listoftxids),len(colnames)],'sortable':1,'toContent':1 })
+		tmpgt.updateTable(grid_settings,colnames) 
+		rootframe =  gui.CustomDialog(self.tabs1,tmpgt, strtitle ) #Toplevel()
 		
-		vv=wallet_summary_frame.get_value(opt.replace('ing','')) # name similar to uid hence hack 
-		table['wallet_display']=[{'option':opt, 'value':vv  }]
-		idb.upsert(table,['option','value'],{'option':['=',"'"+opt+"'"]})
 		
-		while wds.is_locked():
+		
+	
+	@gui.Slot(str,str,str )
+	def display_message(self,title,content,to_copy):
+		# print('display_message')
+		if to_copy!='':
+			gui.output_copy_input(self.tabs1,title,(to_copy,))
+	
+		else:
+			strtitle_split=title.split('.')
+			tmptitle=title  
+			tmpcont=content
+			
+			if len(strtitle_split)>1:
+				tmptitle= strtitle_split[0]
+				tmpcont='.'.join(strtitle_split[1:])
+			
+			gui.messagebox_showinfo(tmptitle,tmpcont,self.tabs1)
+			
+			if title=='New address created':
+				self.wds.wallet_copy_progress()
+				self.wds.update_addr_cat_map()
+	
+	
+	@gui.Slot(list)
+	def updateStatus(self,ll):
+		# print('waiting update status')
+		while self.update_status_locked:
 			time.sleep(1)
 			
-		wds.lock_basic_frames()
-		
-		grid_lol_wallet_sum=wds.prepare_summary_frame()
-		wallet_summary_frame.update_frame(grid_lol_wallet_sum)
-		
-		grid_lol3=wds.prepare_byaddr_frame()
-		wallet_details.update_frame(grid_lol3)
-		wds.prepare_byaddr_button_cmd(grid_lol3,wallet_details)
-		
-		wds.unlock_basic_frames()
-		
-		
-		
-	wallet_summary_frame.bind_combox_cmd('sort',[ 'sorting'],save_wallet_display)
-	wallet_summary_frame.bind_combox_cmd('round',[ 'rounding'],save_wallet_display)
-	wallet_summary_frame.bind_combox_cmd('filter',[ 'filtering'],save_wallet_display)
-	wallet_summary_frame.set_cmd('addaddr',[],wds.new_addr) #'addaddr'
-	wallet_summary_frame.set_cmd('export',[],wds.export_wallet) #'addaddr'
+		self.update_status_locked=True
 	
-	opt=wds.get_options(True)
-	tmprounding=opt['rounding'] #self.get_rounding_str()
-	tmpsorting=opt['sorting'] #self.get_sorting()
-	tmpfiltering=opt['filtering'] #self.get_filtering()
-	wallet_summary_frame.set_textvariable('round',tmprounding)
-	wallet_summary_frame.set_textvariable('sort',tmpsorting)
-	wallet_summary_frame.set_textvariable('filter',tmpfiltering)
-	save_wallet_display('sorting' )
-	wallet_details.after(500,save_wallet_display, 'sorting' )
-	
-	###
-	### FRAME 4 - manual queue
-	###
-	
-	queue = ttk.LabelFrame(frame01,text='Tasks queue') #, style='new.TLabelframe'
-	queue.grid(row=1,column=1,sticky='nswe',padx=10,pady=5)
-	queue.columnconfigure(0, weight=1)
-	
-	# grid_lol4=wds.queue_header()
-	# queue_status=None #flexitable.FlexiTable(queue,grid_lol4,400,True)
-	
-	def set_queue():
-		global wds #, queue_status
-		grid_lol4=wds.prepare_queue_frame(True)
-		queue_status=flexitable.FlexiTable(queue,grid_lol4,400,True) #params=None, grid_lol=None
-		wds.queue_frame_buttons( grid_lol4,queue_status)
-		addit_frames['queue_status']=queue_status
-	
-	queue.after(1000,set_queue)
-	
-	#########
-	######### SUBTAB 2 - Notifications
-	#########
-	frame_notif=ttk.Frame(tabs1, width=200,height=200) 
-	frame_notif.pack(fill='both',expand=True)
-	tabs1.add( frame_notif, text = 'Notifications')
-	global addrb
-	addrb=addr_book.AddressBook(wds)
-	
-	def set_notif():
-		global notif,addrb
-		notif=Notifications(frame_notif,tabs1,addrb )
-		addit_frames['notif']=notif
-	
-	frame_notif.after(2000,set_notif)
-	
-	#########
-	######### SUBTAB 2 - History of transactions
-	#########
-	frame02=ttk.Frame(tabs1, width=200,height=200) 
-	frame02.pack(fill='both',expand=True)
-	tabs1.add( frame02, text = 'TX history')
-	# filter type, command, dates: last 24h default, last week, last month, last 12 months, all
-
-	def set_history():
-		global txhi
-		txhi=TransactionsHistory(frame02)
-		addit_frames['txhi']=txhi
-	
-	frame02.after(2000,set_history)
-	
-	
-	#########
-	######### SUBTAB 2 - History of tasks 
-	#########
-	tt11=time.time()
-	frame03=ttk.Frame(tabs1, width=200,height=200) 
-	frame03.pack(fill='both',expand=True)
-	tabs1.add( frame03, text = 'Tasks history')
-
-	def set_tasks():
-		global tahi
-		# tahi=TransactionsHistory(frame03)
-		tahi=TasksHistory(frame03)
-		
-		addit_frames['tahi']=tahi
-		
-		def _on_resize(event):
-		
-			sx=float(event.width)/frame01.winfo_reqwidth()
-			sy=float(event.height)/frame01.winfo_reqheight()
-			wallet_details.resize_canvas(sx,sy)
+		# print(' update status')
+		if len(ll)==2:
+			if ll[0]=='append':
+				self.stat_lab.setText(self.stat_lab.text()+ll[1]) 
 			
-			tahi.main_table.resize_canvas(sx,sy)
+			elif ll[0]=='set':
+				self.stat_lab.setText(ll[1])
 		
-		frame01.bind("<Configure>", _on_resize)
+		self.update_status_locked=False
+		# print('done update status')
+				
+				
+	@gui.Slot(bool)
+	def enableStartStop(self,bl):
+		self.bstartstop.setEnabled(bl)
+		
+		
+	@gui.Slot(list)
+	def updateWalletDisplay(self,wallet_part=[]):
 	
-	frame03.after(3000,set_tasks)
+		# print('updateWalletDisplay',wallet_part)
+		while self.locked:
+			# print('waiting, locked')
+			time.sleep(2)
+		
+		self.locked=True
+		try:
+		
+		
+			if  'wallet'  in wallet_part :
+				self.wds.set_disp_dict()
+				
+				gridS,cols=self.wds.prepare_summary_frame()
+				gridD,col3=self.wds.prepare_byaddr_frame()
+				self.wallet_summary_frame.updateTable( gridS )
+				if len(gridD)>0:
+					self.wallet_details.updateTable(gridD)
+					
+			if 'cmd_queue' in wallet_part :	
+				
+				grid_lol4,col4=self.wds.prepare_queue_frame()
+				# print(grid_lol4)
+				self.queue_status.updateTable(grid_lol4)
+				# self.wds.queue_frame_buttons( grid_lol4,self.queue_status)
+				
+			if 'task_done' in wallet_part :	
+				if hasattr(self,'tahi'):
+					self.tahi.update_history_frame()
+					
+			if 'notif_update' in wallet_part :	
+				if hasattr(self,'notif'):
+					self.notif.update_notif_frame()
+					
+			if 'tx_history_update' in wallet_part :	
+				if hasattr(self,'txhi'):
+					self.txhi.update_history_frame()
+					
+			# if 'tx_history_update' in wallet_part  or 'notif_update' in wallet_part:
+				
+				
+			self.locked=False
+			# print('updateWalletDisplay done')
+		
+		except:
+			print('wallet locked')
+			self.locked=False
+			
+			
+			
+			
+	def __init__(self,autostart,queue_start_stop,wds=None):
 	
+		self.locked=False
+		self.update_status_locked=False
+		self.wds=wds
+		self.wds.set_disp_dict()
+		self.wds.set_format()
+		
+		self.tabs1=gui.Tabs(None)
+		frame01=gui.ContainerWidget(self.tabs1,gui.QGridLayout())
+		self.tabs1.insertTab(tab_dict={'My Balance':frame01}  )
+		
+		
+		#
+		# Blockchain status 
+		#
+		stat = gui.FramedWidgets(frame01,'Blockchain status',layout=gui.QHBoxLayout())
+		frame01.insertWidget(stat,0,1 ) 
+		
+		self.stat_lab=gui.Label( stat, 'Blockchain off' )
+		stat.insertWidget(self.stat_lab)			
+		self.bstartstop=gui.Button(frame01) 
+		self.bstartstop.setMaximumWidth(128)
+		stat.insertWidget(self.bstartstop)
+		# print('autostart',autostart)
+		if autostart=='yes':
+			self.bstartstop.setText('Stop blockchain')
+			self.bstartstop.setEnabled(False) #configure(state='disabled')
+		else:
+			self.bstartstop.setText('Start blockchain')
 
-	###
-	### START DEAMON
-	###
+		def togglestartstop(elem):
+			if elem.text()=='Stop blockchain':
+				elem.setText('Start blockchain')
+				elem.setEnabled(False)
+				queue_start_stop.put({'cmd':'stop_deamon'})				
+			else:
+				elem.setText('Stop blockchain')	
+				elem.setEnabled(False)			 
+				def restart(addrescan):
+					if addrescan=='No':
+						addrescan=False
+					else:
+						addrescan=True
+					
+					queue_start_stop.put({'cmd':'start_deamon','addrescan':addrescan})
+					
+				gui.CmdYesNoDialog(elem,"Rescan wallet?",['No','Yes'],restart)
+				
+		self.bstartstop.set_fun(False,togglestartstop)
 	
-	#########
-	######### SUBTAB 3 - Settings
-	#########
-	frame_settings=ttk.Frame(tabs1) 
-	frame_settings.pack(fill='both',expand=True)
-	tabs1.add( frame_settings, text = 'Settings')
+		###
+		### Manual QUEUE 
+		###
+		queue = gui.FramedWidgets(None,'Tasks queue',layout=gui.QHBoxLayout())  
+		frame01.insertWidget(queue,1,1 ) 
+		
+		grid_lol4, col4=wds.prepare_queue_frame(True)
+		self.queue_status=gui.Table(None,params={'dim':[0,5],'sortable':1,'updatable':1,'toContent':1})
+		self.queue_status.updateTable( grid_lol4, col4 ) 
+		queue.insertWidget(self.queue_status)
+
+		# wds.queue_frame_buttons( grid_lol4,self.queue_status)
 	
-	sett=Settings(frame_settings,wds)
+	
+		###
+		### FRAME 2 - summary
+		### 
+		summary = gui.FramedWidgets(frame01,'Summary',layout=gui.QHBoxLayout())  
+		
+		summary.setMaximumHeight(128)
+		frame01.insertWidget(summary,0,0 )  
+		grid_lol_wallet_sum,col_names= wds.prepare_summary_frame( )
+		self.summary_colnames=col_names
+		self.wallet_summary_frame=gui.Table(summary,params={'dim':[1,7],'sortable':1,'updatable':1,'toContent':1}) 
+		self.wallet_summary_frame.updateTable( grid_lol_wallet_sum, col_names )
+		summary.insertWidget(self.wallet_summary_frame)
+
 	
 	
-	return stat_lab,bstartstop,wallet_summary_frame,wallet_details,wds,addrb  #,queue_status,tahi,txhi,notif
+		
+		###
+		### FRAME 3 - wallet balances
+		###
+		table = gui.FramedWidgets(frame01,'Balance by address',layout=gui.QHBoxLayout())  
+		frame01.insertWidget(table,1,0 ) 
+		
+		grid_lol3, colnames=wds.prepare_byaddr_frame()
+		self.details_colnames=col_names
+		self.wallet_details=gui.Table(summary,params={'dim':[len(grid_lol3),9],'sortable':1 ,'updatable':1,'toContent':1 }) #flexitable.FlexiTable(summary,grid_lol_wallet_sum)
+
+		self.wallet_details.updateTable( grid_lol3,colnames ) #update_frame(grid_lol3)
+		table.insertWidget(self.wallet_details)
+		
+		# def set_summary_cmd():
+		
+			# opt=self.wds.get_options(True)
+			# self.wallet_summary_frame.cellWidget(0,3).setIndexForText(opt['rounding'] )
+			# self.wallet_summary_frame.cellWidget(0,3).set_fun(save_wallet_display,'rounding')
+			
+		
+		
+		
+		def save_wallet_display(btn,opt,*evnt):
+			 
+			idb=localdb.DB()
+			table={}
+			
+			# vv=wallet_summary_frame.get_value(opt.replace('ing','')) # name similar to uid hence hack 
+			vv=btn.currentText()
+			# print(opt,vv)
+			table['wallet_display']=[{'option':opt, 'value':vv  }]
+			idb.upsert(table,['option','value'],{'option':['=',"'"+opt+"'"]})
+			
+			while self.wds.is_locked():
+				# print('locked')
+				time.sleep(1)
+				
+			self.wds.lock_basic_frames()
+			
+			if opt=='rounding':
+				self.wds.set_format( format_str_value=vv)
+				# print('rround',rround)
+			
+			grid_lol_wallet_sum,col_names=self.wds.prepare_summary_frame( )
+			self.wallet_summary_frame.updateTable( grid_lol_wallet_sum,col_names ) #update_frame(grid_lol_wallet_sum)
+			# set_summary_cmd()
+			
+			if opt=='filtering':
+				# print('filtering ',vv)
+				self.wallet_details.filtering( 'widget',0,vv )
+			else:
+				grid_lol3, colnames=self.wds.prepare_byaddr_frame( )
+				new_rows=self.wallet_details.updateTable( grid_lol3,colnames ) #update_frame(grid_lol3)
+				# print('save_wallet_display: prepare_byaddr_button_cmd',opt)
+				# self.wds.prepare_byaddr_button_cmd(grid_lol3,self.wallet_details)
+			
+			self.wds.unlock_basic_frames()
+			
+			
+		opt=self.wds.get_options(True)
+		self.wallet_summary_frame.cellWidget(0,4).setIndexForText(opt['filtering'] )
+		self.wallet_summary_frame.cellWidget(0,4).set_fun(save_wallet_display,'filtering') # only for summary to sum displayed !!! 
+		
+		self.wallet_summary_frame.cellWidget(0,5).set_fun(False,self.wds.new_addr)
+		self.wallet_summary_frame.cellWidget(0,6).set_fun(False,self.wds.export_wallet)
+		# set_summary_cmd()
+		
+		opt=self.wds.get_options(True)
+		self.wallet_summary_frame.cellWidget(0,3).setIndexForText(opt['rounding'] )
+		self.wallet_summary_frame.cellWidget(0,3).set_fun(save_wallet_display,'rounding')
+		
+		save_wallet_display(self.wallet_summary_frame.cellWidget(0,4),'filtering' )
+		
+		
+		
+	
+	
+	def init_additional_tabs(self,addr_book):
+		
+		self.notif=Notifications(addr_book)
+		self.tabs1.insertTab(tab_dict={'Notifications': self.notif.parent_frame}  )
+		
+		# transaction history 
+		self.txhi=TransactionsHistory()
+		self.tabs1.insertTab(tab_dict={'TX History': self.txhi.parent_frame}  )
+		
+		# tasks history
+		self.tahi=TasksHistory()
+		self.tabs1.insertTab(tab_dict={'Tasks History': self.tahi.parent_frame}  )
+		
+		# SETTINGS
+		self.settings=Settings( self.wds)
+		self.tabs1.insertTab(tab_dict={'Settings': self.settings.parent_frame}  )
+		
+		# notifications, tasks history, transaction history 
 	
