@@ -15,7 +15,7 @@ def init_init():
 	table['busy']={"fun_name":'text','ts':'real' }
 	table['block_time_logs']={'uid':'int', 'ttime':'real','block':'int' }
 	
-	idb.create_table(table)
+	idb.create_table(table) # creates if not exist 
 	
 	indexes={}
 	indexes['busy']={'idx_name':'busy_idx','cname':['ts','fun_name']}
