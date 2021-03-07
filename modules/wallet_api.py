@@ -4,13 +4,13 @@ import time
 import sys
 import datetime
 
-import subprocess
+# import subprocess
 import json
 # import modules.deamon as deamon
-import re
+# import re
 import modules.localdb as localdb
 import modules.app_fun as app_fun
-import modules.aes as aes
+# import modules.aes as aes
 # save in db last block nr, last time loaded, last loading time
 
 class Wallet: # should store last values in DB for faster preview - on preview wallt commands frozen/not active
@@ -527,18 +527,21 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 
 	
 	def address_aliases(self ): # address_aliases(get_wallet(True))
-		self.alias_map={}
-		sorted_addr=sorted(self.addr_list)
+		# self.alias_map={}
+		sorted_addr=sorted(self.addr_list) #self.addr_list
 		for aa in sorted_addr:
-			tmpa=aa[3:6].upper() #+aa[-3:].upper()
+		
+			if aa not in self.alias_map: # new addr:
 			
-			iter=1
-			while tmpa in self.alias_map.values():
-				tmpa=aa[3:(6+iter)].upper()
+				tmpa=aa[3:6].upper() #+aa[-3:].upper()
 				
-				iter+=1
-			
-			self.alias_map[aa]=tmpa
+				iter=1
+				while tmpa in self.alias_map.values():
+					tmpa=aa[3:(6+iter)].upper()
+					
+					iter+=1
+				
+				self.alias_map[aa]=tmpa
 			
 		
 	def z_viewtransaction(self,txid):
@@ -609,7 +612,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 		
 	def exp_view_key(self,zaddr): # 'False' 'cannot export'
 		try:
-			# print('zaddr',zaddr)
+			print('zaddr',zaddr)
 			return str(app_fun.run_process(self.cli_cmd,"z_exportviewingkey "+zaddr)) 
 		except:
 			return 'cannot export'
@@ -619,16 +622,20 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 
 		# print('Importing viewing key may take a while (rescan) from height '+str(startHeight) ) hex
 		
-		tmpnewaddr=deamon.run_subprocess(self.cli_cmd,["z_importviewingkey",vkey,rescan,str(startHeight),zaddr], 64 ) 
+		tmpnewaddr=app_fun.run_process(self.cli_cmd,["z_importviewingkey",vkey,rescan,str(startHeight),zaddr])
+		# deamon.run_subprocess(self.cli_cmd,["z_importviewingkey",vkey,rescan,str(startHeight),zaddr], 64 ) 
 		self.refresh_wallet()
-		return tmpnewaddr
+		return json.loads(tmpnewaddr) 
 		# print('Done')	
 		
 		
 	def export_wallet(self):
 		retv={}
 		for aa in self.addr_list:
+			# print('fetching priv key for',aa)
 			retv[aa]=self.exp_prv_key(aa)
+			# print('   ',retv[aa])
+			
 			
 		return retv
 			
@@ -641,12 +648,14 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 			return 'cannot export'
 
 		
-	def imp_prv_key(self,zkey,rescan=" whenkeyisnew ",startHeight=996000):
+	def imp_prv_key(self,zkey,rescan="whenkeyisnew",startHeight=996000):
 
 		# print('Importing private key may take a while (rescan) from height '+str(startHeight) )
 		
-		tmpnewaddr=deamon.run_subprocess(self.cli_cmd,"z_importkey "+zkey+rescan+str(startHeight), 64 ) 
+		tmpnewaddr=app_fun.run_process(self.cli_cmd,["z_importkey",zkey,rescan,str(startHeight) ])
+		# deamon.run_subprocess(self.cli_cmd,"z_importkey "+zkey+rescan+str(startHeight), 64 ) 
 		self.refresh_wallet()
+		return json.loads(tmpnewaddr) 
 		# print('Done')
 
 
