@@ -183,16 +183,32 @@ class DeamonInit(gui.QObject):
 				count_task_done+=1
 				
 				
-			elif rr[3]=='import_priv_key': #json.dumps({'addr':tmpaddr,'viewkey':tmpvk})
+			elif rr[3]=='import_priv_keys': #json.dumps({'addr':tmpaddr,'viewkey':tmpvk})
 			
 			
 				tmpjs=json.loads(rr[4])
-				tmpresult=self.the_wallet.imp_prv_key( tmpjs['privkey'] )
+				ll=len(tmpjs['keys'])
+				added_addr=[]
+				
+				for ii,kk in enumerate(tmpjs['keys']):
+					# print(ii,kk)
+					table={}
+					table['queue_waiting']=[{'status':'processing '+str(ii+1)+'/'+str(ll)}]
+					idb.update( table,['status'],{'id':[ '=',rr[5] ]})
+					self.sending_signal.emit(['cmd_queue'])
+					# print(199,tmpresult['address'])
+					tmpresult=self.the_wallet.imp_prv_key( kk )
+					added_addr.append(tmpresult['address'])
+					# print(202,added_addr)
+					# self.msg_signal.emit('New address added','Address added from private key. New address:\n\n' ,'')
+					# self.msg_signal.emit('New address added','Address added from private key. New address:\n\n'+tmpresult['address'],'')
+					# time.sleep(1)
+					
 				table={}
-				table['queue_done']=[{"type":rr[0],"wait_seconds":rr[1],"created_time":rr[2],"command":rr[3],"json":rr[4],"id":rr[5],"result":tmpresult,'end_time':app_fun.now_to_str(False)}]
+				table['queue_done']=[{"type":rr[0],"wait_seconds":rr[1],"created_time":rr[2],"command":rr[3],"json":rr[4],"id":rr[5],"result":'new addresses: '+str(added_addr),'end_time':app_fun.now_to_str(False)}]
 				
 				idb.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
-				self.update_addr_book.emit()
+				 
 				count_task_done+=1
 				
 				
