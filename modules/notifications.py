@@ -90,7 +90,7 @@ class Notifications:
 				idb.update(table,['closed'],where={'uid':['=',int(struid)]})
 				self.update_notif_frame()
 			except:
-				
+				print('notifications set_actions')
 				pass
 			
 				
@@ -123,7 +123,7 @@ class Notifications:
 					# print('id',id)
 					idb.update(table,['opname','closed'],{'uid':['=',id]} )
 				except:
-					# print('bad id?? 141 notif')
+					print('bad id?? 141 notif')
 					pass
 					
 				formframe.destroy()
