@@ -556,6 +556,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 					
 			return tmp
 		except:
+			print('wallet api not valid txid')
 			return 'not valid txid'
 		
 			
@@ -569,6 +570,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 			
 			return { "name":gi["name"],"errors":gi["errors"],"KMDversion":gi["KMDversion"],"synced":gi["synced"],"notarized":gi["notarized"],"blocks":gi["blocks"],"longestchain":gi["longestchain"],"tiptime":gi["tiptime"],"connections":gi["connections"]}
 		except:
+			print('wallet api getinfo')
 			return { "name":'exception',"errors":'',"KMDversion":'',"synced":'',"notarized":'',"blocks":'',"longestchain":'',"tiptime":'',"connections":''}
 
 		
@@ -586,6 +588,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 			for aa in a2:
 				self.addr_list.append(aa)
 		except:
+			print('wallet api update_all_addr')
 			return
 		
 		
@@ -597,6 +600,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 			self.refresh_wallet()
 			return str(tmpnewaddr) 
 		except:
+			print('wallet api no addr exception')
 			return 'no addr exception'
 		
 		
@@ -607,14 +611,16 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 					
 			return tmpj['isvalid']
 		except:
+			print('wallet api not valid exception')
 			return 'not valid exception'
 		
 		
 	def exp_view_key(self,zaddr): # 'False' 'cannot export'
 		try:
-			print('zaddr',zaddr)
+			# print('zaddr',zaddr)
 			return str(app_fun.run_process(self.cli_cmd,"z_exportviewingkey "+zaddr)) 
 		except:
+			print('wallet api cannot export')
 			return 'cannot export'
 		
 		
@@ -645,6 +651,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 		try:
 			return str(app_fun.run_process(self.cli_cmd,"z_exportkey "+zaddr)) 
 		except:
+			print('wallet api cannot export exp_prv_key')
 			return 'cannot export'
 
 		
