@@ -513,6 +513,10 @@ class AddressBook:
 			
 				try:
 					decr_val=cc.aes_decrypt_file(path1=zpath,path2=None,password=tmpval2 ) #
+					
+					if decr_val==False:
+						1/0
+					
 					ddi=json.loads(decr_val)
 								
 			
