@@ -274,6 +274,8 @@ class WalDispSet(gui.QObject):
 					break
 			if len(badc)>0:
 				gui.showinfo('Bad character in memo input', 'This input contains bad character ['+badc+']:\n'+mm,mm_elem)
+			else:
+				print('memo validation error?')
 		
 	
 	
@@ -527,12 +529,134 @@ class WalDispSet(gui.QObject):
 		
 		rootframe =gui.CustomDialog(btn,[gui.Label(None,tmplbl) , send_from, last_buttons ], title='Sending...', wihi=[1024,512])
 		
+		
+		
+		
+		
+		
+	# from def exported file / might be encrypted
+	# from other source file
+	# manual entry - text area 
+	def import_priv_keys(self,btn):
+		# [{'T':'Button', 'L':'Load from file' }, {'T':'LabelV', 'L':''  } ] ,
+							# [{'T':'LineEdit', 'span':2 } , { } ] , # 
+		w0=gui.Button(None,'Load from file')
+		w0.setMaximumWidth(128)
+		w1=gui.Label(None,'...')
+		w2=gui.LineEdit(None)
+		w2.setMaximumWidth(256)
+		
+		w3=gui.Table(None,{'dim':[1,1],'toContent':1 })
+		w3.updateTable([[{'T':'LabelV' }]])
+		# w3.setMaximumWidth(512)
+		# w3=gui.Label(None,'')
+		w4=gui.Button(None,'Import')
+		w4.setMaximumWidth(128)
+							
+		# automate_rowids=[ 
+							# [{'T':'LabelV' }  ] 
+							
+						# ]
+						# [{'T':'Button', 'L':'Import'  }, {}] 
 				
+		# impo=gui.Table(None,{'dim':[1,1],'toContent':1}) #flexitable.FlexiTable(rootframe,grid_settings)
+		# impo.updateTable(automate_rowids)
+		
+		def setfile(btn2,lbl,lblk):	
+			gui.set_file( lbl , dir=False,parent=btn2 , title="Select file with private keys")
+			
+			def trysplit(tmpstr):
+				try:
+					tmpstr2=json.loads(tmpstr)
+					retv=''
+					for kk,vv in tmpstr2.items():
+						retv+=vv.replace('\r','').replace('\\n','').replace('\\r','')
+					# print(retv)
+					return retv
+				except:
+					pass
+			
+				c=[',',';','\r'] #separators
+				best=1
+				ci='\n'
+				for cc in c:
+					tmp=tmpstr.split(cc)
+					if len(tmp)>best:
+						best=len(tmp)
+						ci=cc
+				if ci!='\n':
+					return tmpstr.replace(ci,'\n')
+				else:
+					return tmpstr
+			
+			# try to unpack or read
+			# 1. encrypted - aks password json.dumps({'iv':iv, 'ct':ct})
+			path1=lbl.text()
+			if len(path1)>1:
+				if os.path.exists(path1):
+					rstr=''
+					with open(path1, "r") as f:
+						rstr = f.read()
+					keys=''	
+					if 'iv' in rstr and 'ct' in rstr:
+						# print('decrypt')
+						
+						try:
+							# print('set LabelV')
+							tmpval=[]
+							gui.PassForm(tmpval, first_time=False, parent = btn2,  title="Enter password to decrypt file")
+							if len(tmpval)>0:
+								cc=aes.Crypto()
+								keys=cc.aes_decrypt_file( path1,None,tmpval[0])
+								if keys==False:
+									1/0
+									
+								keys=trysplit(keys)
+								lblk.setText(keys)		
+								# lblk.setToolTip(keys)	
+							else:
+								1/0
+						except:
+							gui.showinfo('Could not decrypt file','File '+path1+' does not contain encrypted address or view key or you have wrong password!', btn2)
+							lblk.setText('')		
+							lbl.setText('')
+					else:
+						keys=trysplit(rstr)
+						lblk.setText(keys)
+			
+		w0.set_fun(False,setfile,w1,w3.item(0,0))
 				
+		w2.setEventFilter(w3.item(0,0))
 				
+		# \n \r problem 		
 				
+		def import_keys(btn3,lbl):
+			tmpstr=lbl.text().split('\n')
+			keys=[]
+			for kk in tmpstr:
+				if len(kk)>50:
+					keys.append(kk)
+					
+			# print('importing',keys)		
+			ddict={'keys': keys	}
+			table={}
+			table['queue_waiting']=[localdb.set_que_waiting('import_priv_keys',jsonstr=json.dumps(ddict) ) ]
+			
+			idb=localdb.DB()
+			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
+			
+			expo=btn3.parent().parent()
+			expo.close() #.parent()
 				
-				
+		w4.set_fun(False,import_keys,w3.item(0,0))
+		
+		gui.CustomDialog(btn,[w0,w1,w2,w3,w4], title='Import Private keys',wihi=[512,256])
+		# todo:
+		# 1. check real encrypted priv keys loads
+		# 2. check real decrypted loads
+		# 3. add deamon command 
+		
+		
 				
 				
 	def export_wallet(self,btn): # export encrypted wallet or encrypted priv keys and addresses
@@ -970,7 +1094,8 @@ class WalDispSet(gui.QObject):
 		idb=localdb.DB()
 		
 		grid_lol_wallet_sum=[]
-		col_names=['Total','Confirmed','Pending','Round','Filter','New address','Wallet']
+		col_names=['Total','Confirmed','Pending','Round','Filter','Wallet']
+		# col_names=['Total','Confirmed','Pending','Round','Filter','New address','Wallet']
 		
 		all_cat=self.own_wallet_categories() #all_cat_unique
 				
@@ -987,8 +1112,9 @@ class WalDispSet(gui.QObject):
 										# {'T':'Combox','V':['amounts','bills','usage'], 'uid':'sort', 'width':7}, # enter this function!
 										{'T':'Combox', 'uid':'round', 'V':['1','0.1','0.01','0.001','0.0001','off'], 'width':6},
 										{'T':'Combox', 'uid':'filter', 'V':all_cat, 'width':6, 'tooltip':'Special categories:\nHidden - allows to hide address on the list,\n Excluded - allows to exclude address from UTXO/bills auto maintenance when it is ON.'},
-										{'T':'Button', 'L':'+', 'uid':'addaddr', 'tooltip':'Create new address'},
-										{'T':'Button', 'L':'Export', 'uid':'export' }
+										{'T':'Combox', 'V':['Select:','New address','Export','Import priv. keys']}
+										#{'T':'Button', 'L':'+', 'uid':'addaddr', 'tooltip':'Create new address'}
+										# ,{'T':'Button', 'L':'Export', 'uid':'export' }
 										]
 			grid_lol_wallet_sum.append(tmpdict )	
 			
@@ -1002,8 +1128,9 @@ class WalDispSet(gui.QObject):
 										# {'T':'Combox','V':['amounts','bills','usage'], 'uid':'sort', 'width':7}, # enter this function!
 										{'T':'Combox', 'uid':'round', 'V':['1','0.1','0.01','0.001','0.0001','off'], 'width':6},
 										{'T':'Combox', 'uid':'filter', 'V':all_cat, 'width':6},
-										{'T':'Button', 'L':'+', 'uid':'addaddr', 'tooltip':'Create new address'},
-										{'T':'Button', 'L':'Export', 'uid':'export' }
+										{'T':'Combox', 'V':['Select:','New address','Export','Import priv. keys']}
+										#{'T':'Button', 'L':'+', 'uid':'addaddr', 'tooltip':'Create new address'}
+										#,{'T':'Button', 'L':'Export', 'uid':'export' }
 										]
 			grid_lol_wallet_sum.append(tmpdict )	
 			
@@ -1020,7 +1147,7 @@ class WalDispSet(gui.QObject):
 		if selecting:
 			return ['Category','Alias','Total','Confirmed','Pending','Usage','Select','Full address']
 		else:
-			return  ['Category','Alias','Total','Confirmed','Pending','Bills','Usage','Addr.','V.Key']
+			return  ['Category','Alias','Total','Confirmed',' ','Pending','Bills','Usage','Addr.','V.Key']
 		
 		
 	def prepare_byaddr_frame(self,init=False,selecting=False,selecting_to=False):	
@@ -1036,6 +1163,12 @@ class WalDispSet(gui.QObject):
 			sorting='usage'
 			
 		if len(self.disp_dict)>0:
+		
+			uu=usb.USB()
+			
+			send_style='padding:-6px;font-size:28px;'
+			if uu.os!='windows':
+				send_style='padding-top:-4px;padding-bottom:0px;font-size:28px;'
 		
 			ddict=json.loads(self.disp_dict[0][0])
 			sorting_lol=ddict['lol'] # not needed with qt
@@ -1112,14 +1245,15 @@ class WalDispSet(gui.QObject):
 									{'T':'Button', 'L':tmpcurcat,  'tooltip':'Edit category for address '+tmpaddr, 'fun':self.edit_category, 'args':(tmpalias,tmpaddr) }, 
 									{'T':'LabelV', 'L':tmpalias,  'tooltip':'Alias of address '+tmpaddr },
 									{'T':'LabelV', 'L':format(tmp_total , self.format_str).replace(',',"'")  },
-									{'T':'Button', 'L':format(tmp_confirmed , self.format_str).replace(',',"'")   , 'tooltip':'Send from this address' , 'IS':b_enabled, 'fun':self.send_from_addr, 'args':(tmpaddr, tmp_total)},
+									{'T':'LabelV', 'L':format(tmp_confirmed , self.format_str).replace(',',"'") },
+									{'T':'Button', 'L':u"\u25B6"   , 'tooltip':'Send from this address' , 'IS':b_enabled, 'fun':self.send_from_addr, 'args':(tmpaddr, tmp_total), 'style':send_style},
 									{'T':'LabelV', 'L':format(tmp_unconfirmed , self.format_str).replace(',',"'")  },
 									{'T':'Button', 'L':str(bills)+'/'+str(billsunc) , 'tooltip':'Show bills / UTXOs' , 'IS':bill_state, 'fun':self.show_bills, 'args':(tmpaddr,) },
 									
 									{'T':'LabelV', 'L':str( ddict['lol'][ii][3] ) },
 
-									{'T':'Button', 'L':'XA' , 'tooltip': 'Export address '+tmpaddr, 'fun':self.export_addr, 'args':(tmpaddr,) },
-									{'T':'Button', 'L':'XVK' , 'tooltip': 'Export Viewing Key of '+tmpaddr, 'fun':self.export_viewkey, 'args':(tmpaddr,) }
+									{'T':'Button', 'L':u"\u2398" , 'tooltip': 'Export address '+tmpaddr, 'fun':self.export_addr, 'args':(tmpaddr,), 'style':'padding:-4px;font-size:24px; ' },
+									{'T':'Button', 'L':u"\u2398" , 'tooltip': 'Export Viewing Key of '+tmpaddr, 'fun':self.export_viewkey, 'args':(tmpaddr,), 'style':'padding:-4px;font-size:24px;' }
 									]
 				grid_lol3.append(tmpdict2) 
 
