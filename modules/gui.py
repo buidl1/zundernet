@@ -13,7 +13,8 @@ from PySide2.QtCore import (
 	QObject,
 	Signal,
 	QTimer,
-	QDateTime
+	QDateTime,
+	QEvent
 	
 )
 from PySide2.QtGui import (
@@ -212,7 +213,9 @@ def set_file( widget,validation_fun=None,dir=False,parent=None,init_path=os.getc
 			if widget==None:
 				return path
 		
-			widget.setText(path)
+			# print(path)
+			widget.setText(path[0])
+			widget.setToolTip(path[0])
 			parent.parent().adjustSize()
 			break
 			
@@ -583,8 +586,7 @@ class Combox(QComboBox):
 		self.setCurrentIndex( fid )
 		
 	
-	def set_fun(self,actionFun,*args ):
-	
+	def set_fun(self,actionFun,*args ):	
 	
 		if hasattr(self,'fun'):
 			return
@@ -656,6 +658,24 @@ class LineEdit(QLineEdit):
 			self.setToolTip(tooltip)
 			
 		self.setStyleSheet(" QLineEdit {background-color:white; border-style: solid;  border-width: 1px; border-color: #aaa;}" )
+		
+		
+		
+	def eventFilter(self, source, event):
+		# print('EVENT',source)
+		if (event.type() == QEvent.KeyPress and source is self):
+			if event.key() in [int(Qt.Key_Enter),int(Qt.Key_Return) ]:
+				# print('key press:', (event.key(), event.text()),int(Qt.Key_Enter),int(Qt.Key_Return))
+				self.label_to_set_on_enter.setText(self.text().strip())
+
+		return super(LineEdit, self).eventFilter(source, event)		
+		
+		
+		
+	def setEventFilter(self,lbl2set):
+		self.installEventFilter(self ) #.parent().parent().parent()
+		self.label_to_set_on_enter=lbl2set
+		
 		
 		
 	def addValidator(self,vtype,rrange=[]): #vtype=int,float
@@ -850,6 +870,7 @@ class Table(QTableWidget):
 					QTableWidget QPushButton:hover {background-color:#eee;   border-width: 1px; border-color: green;}
 					QTableWidget QPushButton:pressed {background-color:lightgreen;   border-width: 1px; border-color: green;}
 					QTableWidget QComboBox {background-color:white; border-style: solid;  border-width: 1px; border-color: #aaa;}
+					QTableWidget QComboBox QAbstractItemView {selection-background-color: lightgray;border-style: solid;  border-width: 1px; }
 					QTableWidget QLineEdit {background-color:white; border-style: solid;  border-width: 1px; border-color: #aaa;}
 					QTableWidget {margin:2px;padding:2px;font-size:13px; font-family:'DejaVu' }
 					QHeaderView { font-size: 13px; padding:0px; margin:0px;font-family:'DejaVu'  }
@@ -1181,7 +1202,7 @@ class Table(QTableWidget):
 				bbb.setStyleSheet("QPushButton {font-size:13px;padding:3px;}" )
 				# print("QPushButton {%s}" % w['style'])
 				# print(bbb.styleSheet() )
-				
+			
 			# print(bbb,ii,jj,self.rowCount(),self.columnCount())
 			self.setCellWidget( ii,jj, bbb )
 			# print(self.cellWidget(ii,jj))
@@ -1331,6 +1352,7 @@ class MainWindow(QMainWindow):
 					 QPushButton:hover {background-color:#eee;   border-width: 1px; border-color: green;}
 					 QPushButton:pressed {background-color:lightgreen;   border-width: 1px; border-color: green;}
 					 QComboBox {background-color:white; border-style: solid;  border-width: 1px; border-color: #aaa; padding:3px; margin:3px;}
+					 QComboBox QAbstractItemView {background-color:white;selection-background-color: lightgray;border-style: solid;  border-width: 1px; }
 					 QLineEdit {background-color:white; border-style: solid;  border-width: 1px; border-color: #aaa; padding:3px; margin:3px;}
 					""" 
 					# % (
