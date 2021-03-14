@@ -206,7 +206,7 @@ class WalletTab:
 			# print('updateWalletDisplay done')
 		
 		except:
-			print('wallet locked')
+			print('wallet locked?')
 			self.locked=False
 			
 			
@@ -286,7 +286,7 @@ class WalletTab:
 		frame01.insertWidget(summary,0,0 )  
 		grid_lol_wallet_sum,col_names= wds.prepare_summary_frame( )
 		self.summary_colnames=col_names
-		self.wallet_summary_frame=gui.Table(summary,params={'dim':[1,7],'sortable':1,'updatable':1,'toContent':1}) 
+		self.wallet_summary_frame=gui.Table(summary,params={'dim':[1,6],'updatable':1,'toContent':1})  #'sortable':1,
 		self.wallet_summary_frame.updateTable( grid_lol_wallet_sum, col_names )
 		summary.insertWidget(self.wallet_summary_frame)
 
@@ -300,9 +300,10 @@ class WalletTab:
 		frame01.insertWidget(table,1,0 ) 
 		
 		grid_lol3, colnames=wds.prepare_byaddr_frame()
-		self.details_colnames=col_names
-		self.wallet_details=gui.Table(summary,params={'dim':[len(grid_lol3),9],'sortable':1 ,'updatable':1,'toContent':1 }) #flexitable.FlexiTable(summary,grid_lol_wallet_sum)
-
+		self.details_colnames=colnames
+		self.wallet_details=gui.Table(summary,params={'dim':[len(grid_lol3),len(colnames)],'sortable':1 ,'updatable':1,'toContent':1 }) #flexitable.FlexiTable(summary,grid_lol_wallet_sum)
+		# print(len(grid_lol3) )
+		# print(len(colnames),colnames)
 		self.wallet_details.updateTable( grid_lol3,colnames ) #update_frame(grid_lol3)
 		table.insertWidget(self.wallet_details)
 		
@@ -356,8 +357,21 @@ class WalletTab:
 		self.wallet_summary_frame.cellWidget(0,4).setIndexForText(opt['filtering'] )
 		self.wallet_summary_frame.cellWidget(0,4).set_fun(save_wallet_display,'filtering') # only for summary to sum displayed !!! 
 		
-		self.wallet_summary_frame.cellWidget(0,5).set_fun(False,self.wds.new_addr)
-		self.wallet_summary_frame.cellWidget(0,6).set_fun(False,self.wds.export_wallet)
+		def walletActions(cbtn):
+			if cbtn.currentText()=='New address':
+				self.wds.new_addr(cbtn)
+			elif cbtn.currentText()=='Export':
+				self.wds.export_wallet(cbtn)
+			elif cbtn.currentText()=='Import priv. keys':
+				print('Import priv. keys')
+				self.wds.import_priv_keys(cbtn)
+				
+			cbtn.setCurrentIndex( 0 )
+		
+		self.wallet_summary_frame.cellWidget(0,5).set_fun( walletActions)
+		
+		# self.wallet_summary_frame.cellWidget(0,5).set_fun(False,self.wds.new_addr)
+		# self.wallet_summary_frame.cellWidget(0,6).set_fun(False,self.wds.export_wallet)
 		# set_summary_cmd()
 		
 		opt=self.wds.get_options(True)
