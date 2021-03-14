@@ -141,8 +141,8 @@ class Crypto:
 	def aes_decrypt_file(self,path1,path2,password):
 		
 		if os.path.exists(path1):
-			# try:
-			if True:
+			try:
+			# if True:
 				ddata=self.read_file( path1)
 				decr_dd=self.aes_decrypt( ddata ,password,False)
 				if path2==None:
@@ -150,8 +150,8 @@ class Crypto:
 				else:
 					self.write_bin_file(path2,decr_dd)
 				return True
-			# except:
-				# pass
+			except:
+				pass
 				
 		return False
 		
