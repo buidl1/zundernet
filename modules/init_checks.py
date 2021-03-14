@@ -327,8 +327,8 @@ class InitApp:
 		tryii=3
 		while tryii>0:
 			tryii=tryii-1
-			# try:
-			if True:
+			try:
+			# if True:
 				self.cc.aes_encrypt_file( os.path.join(ppath ,'local_storage.db'), os.path.join(ppath ,'local_storage.encr') , self.app_password)
 				
 				if os.path.exists(os.path.join(ppath ,'local_storage.encr')):
@@ -338,7 +338,7 @@ class InitApp:
 					gui.messagebox_showinfo("local_storage.db encrypted", "DB secure: local_storage.db -> local_storage.encr ",parent)
 			
 					break
-			# except:
+			except:
 				print('Exception in delete local_storage.db', tryii)
 			
 			time.sleep(1)
