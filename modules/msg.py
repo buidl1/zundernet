@@ -492,6 +492,7 @@ class Msg:
 			self.updating_threads=False
 			# when assigning - should refresh messages too !
 		except:
+			print('msg update_tread_frame')
 			self.updating_threads=False
 		
 	
@@ -534,6 +535,7 @@ class Msg:
 				
 			self.updating_chat=False
 		except:
+			print('update_msg_frame')
 			self.updating_chat=False
 	
 	
