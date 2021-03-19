@@ -1,4 +1,8 @@
 
+# add solution to easy update columns in db 
+# check if table exist
+# check if columns exist 
+
 import sqlite3 as sql
 import modules.app_fun as app_fun
 import modules.aes as aes
@@ -10,7 +14,7 @@ def init_init():
 	idb=DB('init.db')	
 	
 	table={}
-	table['init_settings']={"komodo":'text', "datadir":'text',  "start_chain":'text'}
+	table['init_settings']={"komodo":'text', "datadir":'text',  "start_chain":'text', "data_files":'text'}
 	table['lock_db_threads']={"lock":'text' }
 	table['busy']={"fun_name":'text','ts':'real' }
 	table['block_time_logs']={'uid':'int', 'ttime':'real','block':'int' }
@@ -88,9 +92,9 @@ def is_busy():
 	
 	
 	
-def init_tables(): #localdb.init_tables()
+def init_tables(dbfname): #localdb.init_tables()
 	
-	idb=DB()
+	idb=DB(dbfname)
 	
 	table={}
 	table['address_category']={'address':'text', 'category':'text', 'last_update_date_time':'text' }
@@ -178,14 +182,18 @@ def init_tables(): #localdb.init_tables()
 
 class DB:
 
-	def get_table_columns(self,tname): 
+	def get_table_columns(self,tname,add_quotes=True): 
 		fname='get_table_columns'
 		curs,conn,ts=self.getcursor(fname)
 		cc=curs.execute("PRAGMA table_info(__replace__)".replace('__replace__',tname) )
 		cc=cc.fetchall()
 		retv=[]
 		for c in cc:
-			retv.append('"'+c[1]+'"')
+			if add_quotes:
+				retv.append('"'+c[1]+'"')
+			else:
+				retv.append( c[1] )
+				
 		
 		self.close_connection(curs,conn,fname,ts)
 		
@@ -291,11 +299,11 @@ class DB:
 			else:
 				self.db_encrypted=True
 			
-		if dbname=='local_storage.db':
+		if dbname[:13]=='local_storage' and dbname[-3:]=='.db':
 			if not check_local_storage_not_encrypted():
 				self.db_encrypted=True
 
-	def __init__(self,dbname='local_storage.db'):
+	def __init__(self,dbname): #='local_storage.db'
 		
 		self.db_encrypted=False
 		self.check_encrypted(dbname)
@@ -320,7 +328,9 @@ class DB:
 	
 		conn=sql.connect(self.dbname)
 		ts=0
-		if self.dbname=='local_storage.db':
+		# if self.dbname=='local_storage.db':
+		# print(self.dbname,self.dbname[:13],self.dbname[-3:])
+		if self.dbname[:13]=='local_storage' and self.dbname[-3:]=='.db':
 			ts=set_busy(fname)
 			return conn.cursor(), conn, ts
 		# else:
@@ -329,7 +339,8 @@ class DB:
 		
 		
 	def close_connection(self,curs,conn,fname='',ts=0): # self.close_connection(curs)
-		if self.dbname=='local_storage.db':
+		if self.dbname[:13]=='local_storage' and self.dbname[-3:]=='.db':
+		# if self.dbname=='local_storage.db':
 			del_busy(fname,ts)
 			
 		conn.commit()	
@@ -417,6 +428,16 @@ class DB:
 			sql_str="CREATE TABLE IF NOT EXISTS "+k+' ('+','.join(tmparr)+')'
 
 			curs.execute(sql_str)
+				
+			# verify all columns 
+			colnames=self.get_table_columns( k,False)
+			
+			for vi,vii in v.items():
+				if vi not in colnames:
+					sql_str="ALTER TABLE "+k+' ADD COLUMN '+vi+' '+vii
+					# print('adding',sql_str)
+					curs.execute(sql_str)
+		
 			
 		self.close_connection(curs,conn,fname,ts)
 		
@@ -607,11 +628,16 @@ class DB:
 		return retv
 		
 	def select_max_val(self,table_name,column,where={},groupby=[]):
+		# print('select_max_val',self.dbname)
+		# print(self.all_tables())
+	
 		self.check_encrypted()
 		if self.db_encrypted:
 			return []
 		fname='select_max_val'
 		curs,conn,ts=self.getcursor(fname)
+		
+		
 		
 		sqlstr=''
 		
@@ -751,8 +777,15 @@ def blocks_to_datetime(blknr):
 
 
 def set_que_waiting( command,jsonstr='', wait_seconds=0):
+	initdb= DB('init.db')
+	tt= initdb.select('init_settings',columns=["data_files"]) 
+	# print(tt)
+	# print(tt[0])
+	dbname=json.loads(tt[0][0])
+	dbname=dbname['db']+'.db'
+	print(dbname)
  
-	idb=DB()
+	idb=DB(dbname)
 	tmparr=[0]
 	latestid1=idb.select_max_val( 'queue_done','id' )
 	if len(latestid1)>0: 
@@ -779,8 +812,12 @@ def set_que_waiting( command,jsonstr='', wait_seconds=0):
 
 
 def get_addr_to_hash(addrto,onlylentest=False):
+	initdb= DB('init.db')
+	tt= initdb.select('init_settings',columns=["data_files"]) 
+	dbname=json.loads(tt[0][0])
+	dbname=dbname['db']+'.db'
 
-	idb= DB()
+	idb= DB(dbname)
 	tmpsign=idb.select( 'out_signatures',['seed','n'], {'addr':['=',"'"+addrto+"'"], 'n':['>',0]}, orderby=[{'n':'asc'}] )
 	
 	if onlylentest:
@@ -828,7 +865,12 @@ def get_addr_to_hash(addrto,onlylentest=False):
 # if only 1 addr >0 disp_dict['wl'] {'addr':aa,'confirmed': amount_init, 'unconfirmed': am_unc,'#conf':cc_conf,'#unconf':cc_unc }
 
 def get_default_addr():	
-	idb= DB()
+	initdb= DB('init.db')
+	tt= initdb.select('init_settings',columns=["data_files"]) 
+	dbname=json.loads(tt[0][0])
+	dbname=dbname['db']+'.db'
+	
+	idb= DB(dbname)
 	disp_dict=idb.select('jsons',['json_content','last_update_date_time'],{'json_name':['=',"'display_wallet'"]})
 	if len(disp_dict)>0:
 		disp_dict=json.loads(disp_dict[0][0])
@@ -850,8 +892,12 @@ def get_default_addr():
 
 
 def get_last_addr_from(ttype):  # ttype "'last_book_from_addr'", "'last_msg_from_addr'"
-
-	idb= DB()
+	initdb= DB('init.db')
+	tt= initdb.select('init_settings',columns=["data_files"]) 
+	dbname=json.loads(tt[0][0])
+	dbname=dbname['db']+'.db'
+	
+	idb= DB(dbname)
 	rr=idb.select('jsons',['json_content' ],{'json_name':['=',ttype]} )
 	
 	if len(rr)>0:
@@ -865,7 +911,12 @@ def set_last_addr_from( addr, ttype):  # ttype "'last_book_from_addr'", "'last_m
 	if addr=='':
 		return
 		
-	idb= DB()
+	initdb= DB('init.db')
+	tt= initdb.select('init_settings',columns=["data_files"]) 
+	dbname=json.loads(tt[0][0])
+	dbname=dbname['db']+'.db'
+		
+	idb= DB(dbname)
 	table={'jsons':[{'json_content':json.dumps({'addr':addr}), 'json_name':ttype.replace("'","")}]}
 	idb.upsert(table,['json_content','json_name' ],{'json_name':['=',ttype]} )
 
