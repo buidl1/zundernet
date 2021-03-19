@@ -23,12 +23,12 @@ class TransactionsHistory:
 			self.update_in_progress=False
 		
 		
-	def __init__(self ):
+	def __init__(self,db ):
 		self.grid_settings=[]
 		self.update_in_progress=False
 		self.parent_frame = gui.ContainerWidget(None,layout=gui.QVBoxLayout() )
-	
-		idb=localdb.DB()
+		self.db=db
+		idb=localdb.DB(self.db)
 		
 		frame0=gui.FramedWidgets(None,'Filter') #ttk.LabelFrame(parent_frame,text='Filter')  
 		frame0.setMaximumHeight(128)
@@ -73,7 +73,7 @@ class TransactionsHistory:
 	
 	def update_list(self):
 	
-		idb=localdb.DB()
+		idb=localdb.DB(self.db)
 		
 			# ['Category','Type','Last','Status']
 		wwhere={}
