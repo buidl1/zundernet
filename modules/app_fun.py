@@ -11,6 +11,63 @@ import psutil
 import threading
 import modules.aes as aes
 
+def listProd(ll):
+	iv=ll[0]
+	for l in ll[1:]:
+		iv=iv*l
+		
+	# print('prod of ',ll,iv)
+	return iv
+
+def listFiles(ppath):
+# from os import listdir
+# from os.path import isfile, join
+	ffiles = [f for f in os.listdir(ppath) if os.path.isfile(os.path.join(ppath, f))]
+	# print('file list',ffiles)
+	return ffiles
+
+	
+def fileExist(ppath,cond={'start':'','end':'','in':''}):
+
+	ff=listFiles(ppath)
+	
+	active_cond=[]
+	cond_param={}
+	for c in cond:
+		if cond[c]!='':
+			active_cond.append(c)
+			if c=='start':
+				cond_param[c]=[0,len(cond[c])] #range(len(cond[c])) #[:len(cond[c])]
+			elif c=='end':
+				cond_param[c]=[-len(cond[c]),0] #range(-len(cond[c]),0) #[-len(cond[c]):]
+			else:
+				cond_param[c]=None
+				
+	
+	for f in ff:
+		# print('testing',f,'for',cond)
+		tmptf=[False for tf in range(len(active_cond))]
+		for ii, c in enumerate(active_cond):
+			if c=='start' :
+				# print(f)
+				# print('checking',c,cond_param[c],cond[c],f[cond_param[c][0]:cond_param[c][1]])
+				if f[cond_param[c][0]:cond_param[c][1]] == cond[c]:
+					tmptf[ii]=True
+			elif c=='end':
+				if f[cond_param[c][0]: ] == cond[c]:
+					tmptf[ii]=True
+			else :# in
+				if cond[c] in f:
+					tmptf[ii]=True
+		
+		if listProd(tmptf):
+			# print(f,'ok for',cond)
+			return True
+			
+	return False
+	
+	
+
 def check_deamon_running():
 
 	is_komodod_running=False
