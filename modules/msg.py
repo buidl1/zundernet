@@ -16,7 +16,7 @@ class Msg:
 		if len(fsign)==0:
 			return -1,''
 		
-		idb=localdb.DB()
+		idb=localdb.DB(self.db)
 		cry=aes.Crypto(224)
 		
 		sign1=cry.utf8_1b2hash(fsign['sign1'])
@@ -187,7 +187,7 @@ class Msg:
 	
 	
 	def proc_inout(self): # goal - set addr_ext and in_sign_uid for incoming msg
-		idb=localdb.DB()
+		idb=localdb.DB(self.db)
 		
 		mio=idb.select('msgs_inout',['type','addr_ext','date_time','msg', 'in_sign_uid','uid','tx_status','txid'],{'proc_json':['=',"'False'"]},orderby=[{'date_time':'asc'}]) #
 		
@@ -310,7 +310,7 @@ class Msg:
 			table['queue_waiting']=[localdb.set_que_waiting('send',jsonstr=json.dumps(ddict) ) ]
 			table['queue_waiting'][0]['type']='message'
 			
-			idb=localdb.DB()
+			idb=localdb.DB(self.db)
 			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 			
 			# self.set_last_addr_from( froma)
@@ -330,6 +330,7 @@ class Msg:
 		
 	def __init__(self,addr_book ): # notebook_parent : in case of new msg - adj tab title 
 		self.update_in_progress=False
+		self.db=addr_book.db
 		
 		self.max_block=0
 		self.proc_inout()
@@ -417,7 +418,7 @@ class Msg:
 			return
 		
 		 
-		idb=localdb.DB()
+		idb=localdb.DB(self.db)
 		if len(idb.select('msgs_inout',['uid','in_sign_uid','addr_ext'],{'addr_ext':['=', "'"+uid+"'"],'type':['=',"'in'"] }))==0:
 			self.warning_info('Nothing to drop!','There is no incoming messages to unassign from this thread.')
 			return
@@ -568,7 +569,7 @@ class Msg:
 	
 	def update_threads(self):
 	
-		idb=localdb.DB()
+		idb=localdb.DB(self.db)
 			
 		thr_filter=self.filter_table.cellWidget(0,1).currentText() #get_value('thr')
 		wwhere={} #'Last 7 days','Last 30 days','All'
@@ -643,7 +644,7 @@ class Msg:
 	
 
 	def update_list(self ):
-		idb=localdb.DB()
+		idb=localdb.DB(self.db)
 		msg_filter=self.filter_table.cellWidget(0,3).currentText() #get_value('msg')
 		llimit=9999
 		
@@ -695,7 +696,7 @@ class Msg:
 	def selecting_addr_from_book_set_and_destroy(self,addr,uid,*evargs ): # here also get signature!,frame_to_destroy
 		
 		if addr!='':
-			idb=localdb.DB()
+			idb=localdb.DB(self.db)
 
 			if 'unknown' in uid:
 				uid=uid.replace('edit_unknown_','')
