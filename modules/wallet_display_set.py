@@ -19,7 +19,12 @@ WAIT_S=900
 class WalDispSet(gui.QObject):
 	sending_signal = gui.Signal(list)
 
-	def __init__(self,password=[''] ):
+	def __init__(self,password=[''], data_files={} ):
+	
+		# self.wallet=wallet
+		self.db=data_files['db']+'.db'
+		self.wallet=data_files['wallet']+'.dat'
+		self.data_files=data_files #self.data_files['db']
 	
 		super(WalDispSet, self).__init__()
 		self.password=password[0]
@@ -33,7 +38,7 @@ class WalDispSet(gui.QObject):
 		
 		
 	def update_addr_cat_map(self):
-		idb=localdb.DB()
+		idb=localdb.DB(self.db)
 		addr_cat=idb.select('address_category',['address','category'] )
 		self.addr_cat_map={}
 		for rr in addr_cat:
@@ -46,7 +51,7 @@ class WalDispSet(gui.QObject):
 		ddict={'addr':addr}
 		table['queue_waiting']=[localdb.set_que_waiting('show_bills',jsonstr=json.dumps(ddict) ) ]
 								
-		idb=localdb.DB()
+		idb=localdb.DB(self.db)
 		idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 		
 		# self.queue_com.put([ table['queue_waiting'][0]['id'],'Bills for '+addr, self.display_bills])
@@ -83,10 +88,10 @@ class WalDispSet(gui.QObject):
 			path=gui.get_file_dialog('Select directory on your pendrive' ,init_path=tmpinitdir, name_filter='dir') #filedialog.askdirectory(initialdir=os.getcwd(), title="")
 			if uu.verify_path_is_usb(path):
 				
-				dest=os.path.join(path,'wallet_'+app_fun.now_to_str()+'.dat')
+				dest=os.path.join(path,self.wallet.replace('.','_'+app_fun.now_to_str()+'.') )   # 'wallet_'+app_fun.now_to_str()+'.dat')
 				idb=localdb.DB('init.db')
 				tt=idb.select('init_settings',columns=[ "datadir" ])  
-				src=os.path.join(tt[0][0],'wallet.dat')
+				src=os.path.join(tt[0][0],self.wallet)
 				
 				deftxt='Wallet backup to '+path+'\n'
 				path=gui.copy_progress(path,deftxt,src,dest)
@@ -131,7 +136,7 @@ class WalDispSet(gui.QObject):
 		last_addr=localdb.get_last_addr_from("'last_book_from_addr'")
 		if last_addr not in ['','...']:
 			send_from.cellWidget(1,0).setText(last_addr) #set_textvariable( 'z1',last_addr)
-			idb=localdb.DB()
+			idb=localdb.DB(self.db)
 			disp_dict=self.disp_dict[0][0] #idb.select('jsons',['json_content','last_update_date_time'],{'json_name':['=',"'display_wallet'"]})
 			if len(disp_dict)>0:
 				disp_dict=json.loads(disp_dict )
@@ -228,7 +233,7 @@ class WalDispSet(gui.QObject):
 			else:
 				table['queue_waiting']=[localdb.set_que_waiting('send',jsonstr=json.dumps(ddict) , wait_seconds=WAIT_S) ]
 				
-			idb=localdb.DB()
+			idb=localdb.DB(self.db)
 			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 			
 			localdb.set_last_addr_from( z,"'last_book_from_addr'")
@@ -301,7 +306,7 @@ class WalDispSet(gui.QObject):
 
 	def addr_book_data_refresh(self):
 		self.addr_book_colnames=['','Usage','Category','Alias','Full address']
-		idb=localdb.DB()
+		idb=localdb.DB(self.db)
 		sel_addr_book=idb.select('addr_book',[ 'Category','Alias','Address','usage'] ,orderby=[{'usage':'desc'},{'Category':'asc'},{'Alias':'asc' }] )
 		
 		self.grid_lol_select=[]
@@ -491,7 +496,7 @@ class WalDispSet(gui.QObject):
 			else:
 				table['queue_waiting']=[localdb.set_que_waiting('send',jsonstr=json.dumps(ddict) , wait_seconds=WAIT_S) ]
 				
-			idb=localdb.DB()
+			idb=localdb.DB(self.db)
 			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 			
 			btn2.parent().parent().close()  
@@ -642,7 +647,7 @@ class WalDispSet(gui.QObject):
 			table={}
 			table['queue_waiting']=[localdb.set_que_waiting('import_priv_keys',jsonstr=json.dumps(ddict) ) ]
 			
-			idb=localdb.DB()
+			idb=localdb.DB(self.db)
 			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 			
 			expo=btn3.parent().parent()
@@ -662,7 +667,7 @@ class WalDispSet(gui.QObject):
 	def export_wallet(self,btn): # export encrypted wallet or encrypted priv keys and addresses
 			
 		automate_rowids=[ [{'T':'Button', 'L':'Select folder' }, {'T':'LabelV', 'L':str(os.getcwd()) } ] ,
-							[{'T':'LabelC', 'L':'Export type: ' } , {'T':'Combox', 'V':['wallet.dat','local_storage.db','priv.keys and addresses'], 'width':23 } ] , # 
+							[{'T':'LabelC', 'L':'Export type: ' } , {'T':'Combox', 'V':['Wallet','Database','Private keys']  } ] , # 
 							[{'T':'Button', 'L':'Enter',  'span':2  }, {}] 
 						]
 						
@@ -674,7 +679,7 @@ class WalDispSet(gui.QObject):
 			
 			gui.set_file( arg , dir=True,parent=btn2 , title="Select folder to export wallet")
 			
-		expo.cellWidget(0,0).set_fun(False,setdir_and_lift,expo.cellWidget(0,1))
+		expo.cellWidget(0,0).set_fun(False,setdir_and_lift,expo.item(0,1))
 		
 		def enter(btn3):
 			expo=btn3.parent().parent()
@@ -682,43 +687,49 @@ class WalDispSet(gui.QObject):
 					'opt':expo.cellWidget(1,1).currentText( ) #expo.get_value('opt')
 					}
 				
-			# print(ddict)	
-			if ddict['opt']=='wallet.dat' or ddict['opt']=='local_storage.db' :
+			print(ddict)	
+			if ddict['opt']=='Wallet' or ddict['opt']=='Database' :
 			
 				idb=localdb.DB('init.db')
 				ppath=idb.select('init_settings',['datadir'] )
 				
 					
-				pfrom=os.path.join(ppath[0][0],'wallet.dat')
+				pfrom=os.path.join(ppath[0][0],self.wallet)
 				
-				if ddict['opt']=='local_storage.db':				
-					pfrom=os.path.join(os.getcwd(),'local_storage.db') #'/wallet.dat'
+				if ddict['opt']=='Database':				
+					pfrom=os.path.join(os.getcwd(),self.db) #'/wallet.dat'
+					ddict['opt']=self.db
 					if not os.path.exists(pfrom):
-						gui.messagebox_showinfo('Error - file missing ...','Failed! File missing - local_storage.db',expo)
+						gui.messagebox_showinfo('Error - file missing ...','Failed! Database file missing - '+self.data_files['db']+'.db',expo)
 						expo.parent().close()
 						return 
+				else:
+					ddict['opt']=self.wallet
 					
-				if not os.path.exists(pfrom):
-					
-					ddict['opt']='wallet.encr'
-					pfrom=os.path.join(ppath[0][0],'wallet.encr')
+					if not os.path.exists(pfrom):
+						
+						ddict['opt']=self.data_files['wallet']+'.encr'
+						pfrom=os.path.join(ppath[0][0],ddict['opt'])
 				
-				pto=ddict['path']
+				
+				tmp_to=ddict['opt'].replace('.dat','.encr').replace('.db','.encr').replace('.','_'+app_fun.now_to_str(True)+'.')
+				pto=os.path.join(ddict['path'], tmp_to)
+				# pto=ddict['path']
 				
 				cc=aes.Crypto()
 
-				if ddict['opt']=='wallet.encr' or gui.msg_yes_no("Encrypt exported file with your password?", "If you make a backup for yourself 'yes' is good option. If you share or sell the file better select 'no' since sharing personal passwords is not a good practice.",btn3):
-					pto=os.path.join(pto,ddict['opt'].replace('.dat','.encr').replace('.db','.encr') ).replace('.','_'+app_fun.now_to_str(True)+'.')
+				if ddict['opt']==self.data_files['wallet']+'.encr' or gui.msg_yes_no("Encrypt exported file with your password?", "If you make a backup for yourself 'yes' is good option. If you share or sell the file better select 'no' since sharing personal passwords is not a good practice.",btn3):
+					# pto=os.path.join(pto, tmp_to)
 					cc.aes_encrypt_file( pfrom, pto  , self.password) #ddict['path']+'/wallet.encr'
 					gui.messagebox_showinfo('File exported to ',pto,expo)
 				
 				elif gui.msg_yes_no("Encrypt exported file with new password?", "Encrypt exported file with new password? Only hit 'no' if you really do not need encryption for this export.",btn3):
 					tmppass=cc.rand_password(32)
-					pto=os.path.join(pto, ddict['opt'].replace('.dat','.encr').replace('.db','.encr') ).replace('.','_'+app_fun.now_to_str(True)+'.')
+					# pto=os.path.join(pto, tmp_to ) #replace('.','_'+app_fun.now_to_str(True)+'.')
 					cc.aes_encrypt_file( pfrom,pto  , tmppass) #ddict['path']+'/wallet.encr'
 					gui.output_copy_input(btn3,'Password for file exported to \n'+pto,(tmppass,))
 				else:
-					pto=os.path.join(pto,ddict['opt']).replace('.','_'+app_fun.now_to_str(True)+'.')
+					# pto=os.path.join(pto,ddict['opt']).replace('.','_'+app_fun.now_to_str(True)+'.')
 					# shutil.copyfile(pfrom, pto ) #ddict['path']+'/wallet.dat'
 					gui.copy_progress(pfrom,'Exporting file to '+pto,pfrom,pto)
 					# gui.messagebox_showinfo('File exported to ',pto,expo)
@@ -740,7 +751,7 @@ class WalDispSet(gui.QObject):
 			table={}
 			table['queue_waiting']=[localdb.set_que_waiting('export_wallet',jsonstr=json.dumps(ddict) ) ]
 			
-			idb=localdb.DB()
+			idb=localdb.DB(self.db)
 			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 			
 			# rootframe.destroy()
@@ -839,7 +850,7 @@ class WalDispSet(gui.QObject):
 						}
 					
 			table['queue_waiting']=[localdb.set_que_waiting('export_viewkey',jsonstr=json.dumps(ddict)) ]
-			idb=localdb.DB()
+			idb=localdb.DB(self.db)
 			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 			expo.parent().close() #.destroy()
 			
@@ -868,9 +879,9 @@ class WalDispSet(gui.QObject):
 		table={}
 		table['queue_waiting']=[localdb.set_que_waiting('new_addr' ) ]
 
-		idb=localdb.DB()
+		idb=localdb.DB(self.db)
 		idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
-		self.wallet_copy_progress(table['queue_waiting'][0]['id'])
+		# self.wallet_copy_progress(table['queue_waiting'][0]['id'])
 		# return 
 		# self.queue_com.put([ ,'Creating new address\n',self.message_asap_tx_done ])
 
@@ -878,7 +889,7 @@ class WalDispSet(gui.QObject):
 	
 	def prepare_queue_frame(self,init=False):	
 
-		idb=localdb.DB()
+		idb=localdb.DB(self.db)
 		grid_lol3=[]
 		tmpdict2={}
 		colnames=['Task','Created time','Status','Wait[s]','Cancel']
@@ -990,7 +1001,7 @@ class WalDispSet(gui.QObject):
 			# print('get_rounding_str',self.set_rounding_str(direct_value))
 			return self.set_rounding_str(direct_value)
 		
-		idb=localdb.DB()
+		idb=localdb.DB(self.db)
 		if idb.check_table_exist('wallet_display'):
 			rounding=idb.select('wallet_display',['value'],{'option':['=',"'rounding'"]})
 				
@@ -1006,7 +1017,7 @@ class WalDispSet(gui.QObject):
 		
 		
 	def get_options(self,strval=False):
-		idb=localdb.DB()
+		idb=localdb.DB(self.db)
 		retdict={'sorting':'amounts','filtering': 'All','rounding':",.0f"}
 		opt=idb.select('wallet_display',['option','value'],{'option':[' in ',"('sorting','filtering','rounding')"]} )
 		for oo in opt:
@@ -1019,7 +1030,7 @@ class WalDispSet(gui.QObject):
 		
 		
 	def get_sorting(self):
-		idb=localdb.DB()
+		idb=localdb.DB(self.db)
 		if idb.check_table_exist('wallet_display'):
 			sorting=idb.select('wallet_display',['value'],{'option':['=',"'sorting'"]})
 			if len(sorting)>0:
@@ -1028,7 +1039,7 @@ class WalDispSet(gui.QObject):
 
 	def get_filtering(self):
 		
-		idb=localdb.DB()
+		idb=localdb.DB(self.db)
 		if idb.check_table_exist('wallet_display'):
 			filtering=idb.select('wallet_display',['value'],{'option':['=',"'filtering'"]})
 			if len(filtering)>0:
@@ -1078,7 +1089,7 @@ class WalDispSet(gui.QObject):
 		
 		
 	def set_disp_dict(self):
-		idb=localdb.DB()
+		idb=localdb.DB(self.db)
 		self.disp_dict=idb.select('jsons',['json_content','last_update_date_time'],{'json_name':['=',"'display_wallet'"]})
 		
 		
@@ -1091,7 +1102,7 @@ class WalDispSet(gui.QObject):
 		
 	def prepare_summary_frame(self ):	
 		
-		idb=localdb.DB()
+		idb=localdb.DB(self.db)
 		
 		grid_lol_wallet_sum=[]
 		col_names=['Total','Confirmed','Pending','Round','Filter','Wallet']
@@ -1292,10 +1303,11 @@ class WalDispSet(gui.QObject):
 			
 			if tmp=='':
 				
-				btn.parent().close()
+				# btn.parent().close()
+				tmpvar.parent().parent().parent().close()
 				return
 				
-			idb=localdb.DB()
+			idb=localdb.DB(self.db)
 			
 			table={}
 			
@@ -1307,8 +1319,9 @@ class WalDispSet(gui.QObject):
 			grid1,col1=self.prepare_byaddr_frame()
 			
 			wallet_details.updateTable(grid1)
-			tmpvar.parent().parent().close() #.destroy()
 			self.update_addr_cat_map()
+			self.sending_signal.emit(['wallet'])
+			tmpvar.parent().parent().parent().close() #.destroy()
 			
 		tw.cellWidget(3,0).set_fun(True,retv,btn,tw.cellWidget(1,0)) 
 		
