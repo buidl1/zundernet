@@ -21,6 +21,7 @@ class AddressBook:
 
 	def __init__(self,wds):
 		self.wds=wds
+		self.db=wds.db
 		
 	def prepare_own_addr_frame(self,  selecting_to=False):
 		return self.wds.prepare_byaddr_frame(False, True,selecting_to )
@@ -128,7 +129,7 @@ class AddressBook:
 		colnames=[ 'Usage','Category','Alias','Full address','Valid','View Key','Valid','','','','','']
 		grid_lol_select=[]
 					
-		idb=localdb.DB()
+		idb=localdb.DB(self.db)
 		
 		sel_addr_book=idb.select('addr_book',[ 'Category','Alias','Address','ViewKey','usage','addr_verif','viewkey_verif'], orderby=[{'usage':'desc'},{'Category':'asc'},{'Alias':'asc' }] )
 		
@@ -210,7 +211,7 @@ class AddressBook:
 			tf=gui.msg_yes_no('Delete from address book?','Please confirm to delete address\n\n'+addr+'\n\nof alias\n\n'+alias+'\n',btn)
 			
 			if tf:
-				idb=localdb.DB()
+				idb=localdb.DB(self.db)
 				idb.delete_where('addr_book',{'Address':['=',"'"+addr+"'"]})
 				grid_settings,colnames,cur_addr=self.addr_book_view()
 				self.main_table.updateTable(grid_settings,colnames)
@@ -307,7 +308,7 @@ class AddressBook:
 				ddict={'fromaddr':tmpfromaddr, 'to':[{'z':addr,'a':0.0001,'m':'PaymentRequest;'+json.dumps(memo_json)+tmpsignature }]	} 
 				table={}
 				table['queue_waiting']=[localdb.set_que_waiting('send',jsonstr=json.dumps(ddict) ) ]
-				idb=localdb.DB()
+				idb=localdb.DB(self.db)
 				idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 				# print(table)
 				tw.parent().close() #.destroy()
@@ -345,7 +346,7 @@ class AddressBook:
 								
 			
 	def increment_usage(self,addr): # when copy or sendto
-		idb=localdb.DB()
+		idb=localdb.DB(self.db)
 		sel_addr_book=idb.select('addr_book',[ 'usage'],{'Address':['=',"'"+addr+"'"]} )
 		table={}
 		table['addr_book']=[{'usage':int(sel_addr_book[0][0])+1}]  
@@ -424,7 +425,7 @@ class AddressBook:
 		def save_new():
 			# global idb, form_grid, grid_settings
 			# table={}
-			idb=localdb.DB()
+			idb=localdb.DB(self.db)
 			tmpaddr=self.form_table.cellWidget(3,1).text() #.get_value('addr').strip()
 			
 			if tmpaddr=='':
