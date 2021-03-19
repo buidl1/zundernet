@@ -48,7 +48,8 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 	
 
 
-	def __init__(self,CLI_STR,last_load): 
+	def __init__(self,CLI_STR,last_load,db):
+		self.db=db
 		self.first_block=None
 		self.min_conf=1
 		self.cli_cmd=CLI_STR
@@ -72,7 +73,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 		self.all_unspent={}
 		self.utxids={}
 		
-		idb=localdb.DB()	
+		idb=localdb.DB(self.db)	
 		 
 		disp_dict=idb.select('jsons',['json_content','last_update_date_time'],{'json_name':['=',"'display_wallet'"]})
 		if len(disp_dict)>0:
@@ -159,7 +160,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 	# later base on list unspent ...
 	
 	def update_historical_txs(self,freshutxo): # max count: 80*tps * 60 =4800 < 5000
-		idb=localdb.DB()	
+		idb=localdb.DB(self.db)	
 		
 		iterat_arr=freshutxo
 		full_check=False
