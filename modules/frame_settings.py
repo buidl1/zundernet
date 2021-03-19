@@ -15,7 +15,7 @@ class Settings:
 
 	def __init__(self, wds):
 		# global idb
-		
+		self.db=wds.db
 		self.grid_settings=[]
 		self.parent_frame = gui.ContainerWidget(None,layout=gui.QVBoxLayout() )
 		
@@ -76,14 +76,14 @@ class Settings:
 		
 		################ DB maintenance / clear old tasks {'total_chars':total_chars, 'total_rows':rowsii, 'older_chars':older_chars, 'old_rows':old_rows}
 		
-		idb=localdb.DB()
+		# idb=localdb.DB(self.db)
 		frame1 = gui.FramedWidgets(None,'DB maintenance',layout=gui.QHBoxLayout())
 		self.parent_frame.insertWidget(frame1)
 		# frame1=ttk.LabelFrame(parent_frame,text='DB maintenance')  
 		# frame1.grid(row=0,column=1, sticky="nsew")
 		
 		def update_db_info():
-			idb=localdb.DB()
+			idb=localdb.DB(self.db)
 			
 			grid_db= []
 			colnames=['Table name','Table size','' ]
@@ -140,7 +140,7 @@ class Settings:
 		
 		
 		def delete_old(tname,datetime_colname,ddays,*evargs):
-			idb=localdb.DB()
+			idb=localdb.DB(self.db)
 			idb.delete_old( tname,datetime_colname,ddays )
 			grid_db, colnames=update_db_info()
 			self.db_table.updateTable(grid_db)
