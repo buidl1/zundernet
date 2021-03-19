@@ -33,7 +33,7 @@ class DeamonInit(gui.QObject):
 
 	def update_wallet(self,*args): # syntetic args passed auto by elem
 		
-		idb=localdb.DB()
+		idb=localdb.DB(self.db)
 		if self.started:
 			utxo_change=self.the_wallet.refresh_wallet()
 			
@@ -52,7 +52,7 @@ class DeamonInit(gui.QObject):
 				
 				
 	def init_clear_queue(self):	
-		idb=localdb.DB()
+		idb=localdb.DB(self.db)
 		waiting=idb.select('queue_waiting', ["type","wait_seconds","created_time","command","json","id","status"])
 		
 		for ii,rr in enumerate(waiting):
@@ -68,7 +68,7 @@ class DeamonInit(gui.QObject):
 	def process_queue(self):
 	
 		# print('process_queue')
-		idb=localdb.DB()
+		idb=localdb.DB(self.db)
 		cc=aes.Crypto()		
 
 		gitmp=app_fun.run_process(self.cli_cmd,'getinfo')
@@ -340,7 +340,7 @@ class DeamonInit(gui.QObject):
 					if type(tmpjson)==type({}):
 						tmpjson=json.dumps(tmpjson)
 				
-					idb=localdb.DB()
+					idb=localdb.DB(self.db)
 					table={}
 					dt,ts=app_fun.now_to_str(False,ret_timestamp=True)
 					table['notifications']=[{'opname':'send','datetime':dt,'status':'Failed','details':details,'closed':'False','orig_json':tmpjson,'uid':'auto'}]
@@ -644,7 +644,7 @@ class DeamonInit(gui.QObject):
 			
 		tmpwhere={'status':[' not in',"('reorged','notarized')"], 'Type':['=',"'in'"],'block':['<=',notar] }
 		
-		idb=localdb.DB()	
+		idb=localdb.DB(self.db)	
 		toupdate=idb.select('tx_history', ["txid",'date_time'],tmpwhere) #
 		
 		if len(toupdate)>0: # check if update required ()
@@ -725,11 +725,14 @@ class DeamonInit(gui.QObject):
 	def set_wallet_widgets(self,wds): #,wata,task_history=None,txhi=None,notif=None,messages=None):
 		
 		self.wallet_display_set=wds
+		# self.db=wds.db
+		
+		
 
-	def __init__(self, deamon_cfg=None): 
+	def __init__(self, deamon_cfg ,db): 
 	
 		super(DeamonInit, self).__init__()
-		
+		self.db=db
 		self.started=False
 		self.insert_block_time=0
 		self.the_wallet=None
@@ -740,12 +743,19 @@ class DeamonInit(gui.QObject):
 		if deamon_cfg==None:
 			return
 			
-		FULL_DEAMON_PARAMS=[ deamon_cfg['deamon-path'] , "-ac_name="+deamon_cfg["ac_name"]]
-		CLI_STR=[deamon_cfg['cli-path'], "-ac_name="+deamon_cfg["ac_name"] ]
+		FULL_DEAMON_PARAMS=[]
+		CLI_STR=[]
+		if "ac_name" in deamon_cfg:
+			FULL_DEAMON_PARAMS=[ deamon_cfg['deamon-path'] ,"-wallet="+deamon_cfg["wallet"] ,"-ac_name="+deamon_cfg["ac_name"]]
+			CLI_STR=[deamon_cfg['cli-path'], "-ac_name="+deamon_cfg["ac_name"] ]
+		else:
+			FULL_DEAMON_PARAMS=[ deamon_cfg['deamon-path'] ,"-wallet="+deamon_cfg["wallet"]  ]
+			CLI_STR=[deamon_cfg['cli-path'] ]
+			
 		ac_params_add_node=''
-		
-		if deamon_cfg["ac_params"].strip()!='':
-			ac_params_add_node=deamon_cfg["ac_params"]
+		if "ac_params" in deamon_cfg:
+			if deamon_cfg["ac_params"].strip()!='':
+				ac_params_add_node=deamon_cfg["ac_params"]
 			
 		if "addnode" in deamon_cfg:
 			if len(deamon_cfg["addnode"])>0:
@@ -763,7 +773,7 @@ class DeamonInit(gui.QObject):
 
 		self.cli_cmd=CLI_STR
 		self.deamon_par=FULL_DEAMON_PARAMS
-		
+		# print(self.deamon_par,self.cli_cmd)
 	
 	
 	
@@ -794,7 +804,7 @@ class DeamonInit(gui.QObject):
 				self.output('Awaiting longest chain')
 				
 			if self.the_wallet==None: #hasattr(self,'the_wallet')==False or :
-				self.the_wallet=wallet_api.Wallet(self.cli_cmd,self.get_last_load())
+				self.the_wallet=wallet_api.Wallet(self.cli_cmd,self.get_last_load(),self.db)
 		
 			y = json.loads(gitmp)
 			if y["synced"]==True:
@@ -822,7 +832,7 @@ class DeamonInit(gui.QObject):
 	
 	def get_last_load(self):
 
-		idb=localdb.DB( )
+		idb=localdb.DB(self.db )
 		last_load=-1
 		if idb.check_table_exist( 'deamon_start_logs'):
 			tt=idb.select_last_val( 'deamon_start_logs','loaded_block')
@@ -864,6 +874,7 @@ class DeamonInit(gui.QObject):
 			cmd=[cmdii for cmdii in cmdtmp]
 			
 		tmplst=deamon_start +cmd 
+		# print(tmplst)
 		
 		pp=subprocess.Popen( tmplst ) 
 		
@@ -955,7 +966,7 @@ class DeamonInit(gui.QObject):
 		 
 		
 		if cmd_orig=='start':		
-			self.the_wallet=wallet_api.Wallet(self.cli_cmd,self.get_last_load())
+			self.the_wallet=wallet_api.Wallet(self.cli_cmd,self.get_last_load(),self.db)
 			
 			tend=time.time()
 			tdiff=int(tend-t0)
@@ -964,7 +975,7 @@ class DeamonInit(gui.QObject):
 			loaded_block=y["blocks"]
 			
 			# save loading time
-			idb=localdb.DB()
+			idb=localdb.DB(self.db)
 			table={}
 			
 			table['deamon_start_logs']=[{'uid':'auto', 'time_sec':tdiff, 'ttime':tend, 'loaded_block':loaded_block }]
@@ -995,37 +1006,53 @@ class DeamonInit(gui.QObject):
 		idb=localdb.DB('init.db')
 		ppath=idb.select('init_settings',['datadir'] )
 		
-		if self.wallet_display_set.password==None:
-			if not os.path.exists(os.path.join(ppath[0][0],'wallet.dat') ):
-				addstr=''
-				if os.path.exists(os.path.join(ppath[0][0],'wallet.encr') ):
-					addstr=' However wallet.encr EXISTS - MAYBE YOU SHOULD RUN WITH PASSWORD OPTION? '
-				
-				if gui.msg_yes_no("Wallet file missing!", 'There is no wallet.dat file in the directory \n\n'+ppath[0][0]+'\n'+addstr+'\n\n ARE YOU SURE YOU WANT TO PROCEEED?? A NEW WALLET WILL BE CREATED!'):
-								
-					return 'New wallet accepted'
-				else:
-					return 'Cancel'
-			else:
-				return 'wallet.dat exists'
+		# print(self.wallet_display_set.password,os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.dat'))
+		
+		# if self.wallet_display_set.password==None:
+			# print(1004)
+		
+		if os.path.exists(os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.dat') ):
+			return self.wallet_display_set.data_files['wallet']+'.dat exists'
 			
-		
-		
-		if os.path.exists(os.path.join(ppath[0][0],'wallet.dat') ):
-			print('Already decrypted')
-		
-		elif os.path.exists(os.path.join(ppath[0][0],'wallet.encr') ):
+		elif os.path.exists(os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.encr') ):
 			cc=aes.Crypto()
-			rv=cc.aes_decrypt_file( os.path.join(ppath[0][0],'wallet.encr'), os.path.join(ppath[0][0],'wallet.dat') , self.wallet_display_set.password)
+			rv=cc.aes_decrypt_file( os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.encr'), os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.dat') , self.wallet_display_set.password)
 			time.sleep(1)
 			# print( rv)
 			# os.remove(ppath[0][0]+'/wallet.encr')
 			if rv!='' and os.path.exists(rv):
-				app_fun.secure_delete(os.path.join(ppath[0][0],'wallet.encr'))
+				app_fun.secure_delete(os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.encr'))
 			time.sleep(1)
-		else:
-			 gui.messagebox_showinfo('Wallet file missing!', 'There is no wallet.encr file in the directory \n\n'+ppath[0][0]+'\n\n Will create new wallet file!')
-			 # return 'Cancell'
+			
+			
+			
+		# if not os.path.exists(os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.dat') ):
+			# addstr=''
+			# if os.path.exists(os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.encr') ):
+				# addstr=' However '+self.wallet_display_set.data_files['wallet']+'.encr EXISTS - MAYBE YOU SHOULD RUN WITH PASSWORD OPTION? '
+			
+			# if gui.msg_yes_no("Wallet file missing!", 'There is no '+self.wallet_display_set.data_files['wallet']+'.dat file in the directory \n\n'+ppath[0][0]+'\n'+addstr+'\n\n ARE YOU SURE YOU WANT TO PROCEEED?? A NEW WALLET WILL BE CREATED!'):
+							
+				# return 'New wallet accepted'
+			# else:
+				# return 'Cancel'
+		# else:
+			# return self.wallet_display_set.data_files['wallet']+'.dat exists'
+			
+		
+		
+		
+		# elif os.path.exists(os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.encr') ):
+			# cc=aes.Crypto()
+			# rv=cc.aes_decrypt_file( os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.encr'), os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.dat') , self.wallet_display_set.password)
+			# time.sleep(1)
+			
+			# if rv!='' and os.path.exists(rv):
+				# app_fun.secure_delete(os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.encr'))
+			# time.sleep(1)
+		# else:
+			# print(1033)
+			# gui.messagebox_showinfo('Wallet file missing!', 'There is no '+self.wallet_display_set.data_files['wallet']+'. file in the directory \n\n'+ppath[0][0]+'\n\n Will create new wallet file!')
 		
 		return 'Decrypted'
 			
@@ -1038,9 +1065,9 @@ class DeamonInit(gui.QObject):
 		ppath=idb.select('init_settings',['datadir'] )
 		
 		cc=aes.Crypto()
-		rv=cc.aes_encrypt_file( os.path.join(ppath[0][0],'wallet.dat'), os.path.join(ppath[0][0],'wallet.encr') , self.wallet_display_set.password)
+		rv=cc.aes_encrypt_file( os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.dat'), os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.encr') , self.wallet_display_set.password)
 		time.sleep(1)
 		if rv!='' and os.path.exists(rv):
-			app_fun.secure_delete(os.path.join(ppath[0][0],'wallet.dat'))
+			app_fun.secure_delete(os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.dat'))
 		time.sleep(1)
 	
