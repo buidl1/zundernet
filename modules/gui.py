@@ -189,7 +189,7 @@ def get_file_dialog(strtitle ,init_path=os.getcwd(),parent=None,name_filter=''):
 		return QFileDialog.getExistingDirectory(parent,strtitle,init_path )
 		
 	else: #if name_filter!='':
-		return QFileDialog.getOpenFileName(parent,strtitle,init_path,'','') #parent,strtitle,init_path,'','',options=QFileDialog.ExistingFile )
+		return QFileDialog.getOpenFileName(parent,strtitle,init_path,name_filter,name_filter) #parent,strtitle,init_path,'','',options=QFileDialog.ExistingFile )
 		
 	
 # setdir
@@ -214,8 +214,13 @@ def set_file( widget,validation_fun=None,dir=False,parent=None,init_path=os.getc
 				return path
 		
 			# print(path)
-			widget.setText(path[0])
-			widget.setToolTip(path[0])
+			if type(path)==type('asdf'):
+				widget.setText(path )
+				widget.setToolTip(path )
+			
+			else:
+				widget.setText(path[0])
+				widget.setToolTip(path[0])
 			parent.parent().adjustSize()
 			break
 			
@@ -886,11 +891,14 @@ class Table(QTableWidget):
 		
 		
 
-
+	# colnames getting zeroed 
 	# update which column currently  sorted in canse of insert to be in correct order 
 	def clickDetected(self):
 		if hasattr(self,'col_names') and self.sender().metaObject().className()==QHeaderView.staticMetaObject.className():
 			tmpsender=self.sender()
+			# print(self.col_names)
+			# print(tmpsender)
+			# print(tmpsender.sortIndicatorSection())
 			self.sort_col=self.col_names[tmpsender.sortIndicatorSection()]
 			# print(tmpsender.sortIndicatorOrder(),self.sort_col)
 		
@@ -944,7 +952,7 @@ class Table(QTableWidget):
 	def updateTable(self,widgets_dict,col_names=[],insert_only=False):
 	
 		# print('\n\n',self,self.updatable,'\n\n')
-	
+		
 		if hasattr(self,'widgets_dict'):
 			if str(widgets_dict)==self.widgets_dict:
 				return
@@ -952,8 +960,9 @@ class Table(QTableWidget):
 				self.widgets_dict=str(widgets_dict)
 	
 		# print('update table col_names',col_names,self.col_names)
-		if col_names==[] and hasattr(self,'col_names')==False: # if first time 
-			self.horizontalHeader().hide()
+		if col_names==[]:
+			if hasattr(self,'col_names')==False: # if first time 
+				self.horizontalHeader().hide()
 		else:
 			self.col_names=col_names
 			self.setHorizontalHeaderLabels(col_names)	
