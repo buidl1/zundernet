@@ -24,7 +24,7 @@ class Notifications:
 			
 	def close_all_notif(self,*eventargs):
 		
-		idb=localdb.DB()
+		idb=localdb.DB(self.db)
 		table={}
 		table['notifications']=[{'closed':'True'}]
 		idb.update(table,['closed'],{} )
@@ -34,7 +34,7 @@ class Notifications:
 	def __init__(self, addr_book  ):
 	
 		self.init=True
-		
+		self.db=addr_book.db
 		self.update_in_progress=False
 		self.addr_book=addr_book
 		self.parent_frame = gui.ContainerWidget(None,layout=gui.QVBoxLayout() )
@@ -82,7 +82,7 @@ class Notifications:
 	def set_actions(self):	
 	
 		def ok_close(struid,*evargs):
-			idb=localdb.DB()
+			idb=localdb.DB(self.db)
 			table={}
 			table['notifications']=[{'closed':'True'}]
 			try:
@@ -114,7 +114,7 @@ class Notifications:
 			
 			def close_request( decis,*evargs):
 				# print('decis',decis)
-				idb=localdb.DB()
+				idb=localdb.DB(self.db)
 				table={}
 				table['notifications']=[ {'opname':'PaymentRequest '+decis,'closed':'True' }]
 				# print(rev_id)
@@ -143,7 +143,7 @@ class Notifications:
 				ddict={'fromaddr':tmpfromaddr, 'to':[{'z':tmpdict['toaddress'],'a':tmpdict['amount'],'m':memotxt }]	} 
 				table={}
 				table['queue_waiting']=[localdb.set_que_waiting('send',jsonstr=json.dumps(ddict) ) ]
-				idb=localdb.DB()
+				idb=localdb.DB(self.db)
 				idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 				
 				# 1. send tx
@@ -186,7 +186,7 @@ class Notifications:
 	def update_list(self):
 	
 		self.grid_notif=[]
-		idb=localdb.DB()
+		idb=localdb.DB(self.db)
 		
 		ff=self.filter_table.cellWidget(0,1).currentText() # get_value('category')
 		wwhere={}
