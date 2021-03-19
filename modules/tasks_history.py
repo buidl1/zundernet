@@ -12,7 +12,7 @@ import modules.gui as gui
 class TasksHistory:
 
 	def update_filter_cmd(self):
-		idb=localdb.DB()
+		idb=localdb.DB(self.db)
 		task_done=idb.select('queue_done', ['command'],distinct=True)
 		tmpcommands=[cc[0] for cc in task_done]
 		colnames=['Category','Command','Last','Result']
@@ -43,7 +43,8 @@ class TasksHistory:
 		
 		
 
-	def __init__(self ):
+	def __init__(self,db ):
+		self.db=db
 		self.grid_settings=[]
 		self.update_in_progress=False
 		self.parent_frame = gui.ContainerWidget(None,layout=gui.QVBoxLayout() )
@@ -79,7 +80,7 @@ class TasksHistory:
 	
 	def update_list(self):
 	
-		idb=localdb.DB()
+		idb=localdb.DB(self.db)
 		
 		wwhere={}
 		llast=self.filter_table.cellWidget(0,2).currentText() #.get_value('last')
