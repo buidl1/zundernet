@@ -132,6 +132,7 @@ class WalletTab:
 			if title=='New address created':
 				self.wds.wallet_copy_progress()
 				self.wds.update_addr_cat_map()
+				self.updateWalletDisplay(['wallet'])
 	
 	
 	@gui.Slot(list)
@@ -318,7 +319,7 @@ class WalletTab:
 		
 		def save_wallet_display(btn,opt,*evnt):
 			 
-			idb=localdb.DB()
+			idb=localdb.DB(self.wds.db)
 			table={}
 			
 			# vv=wallet_summary_frame.get_value(opt.replace('ing','')) # name similar to uid hence hack 
@@ -390,11 +391,11 @@ class WalletTab:
 		self.tabs1.insertTab(tab_dict={'Notifications': self.notif.parent_frame}  )
 		
 		# transaction history 
-		self.txhi=TransactionsHistory()
+		self.txhi=TransactionsHistory(self.wds.db)
 		self.tabs1.insertTab(tab_dict={'TX History': self.txhi.parent_frame}  )
 		
 		# tasks history
-		self.tahi=TasksHistory()
+		self.tahi=TasksHistory(self.wds.db)
 		self.tabs1.insertTab(tab_dict={'Tasks History': self.tahi.parent_frame}  )
 		
 		# SETTINGS
