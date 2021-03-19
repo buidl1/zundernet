@@ -1,4 +1,11 @@
 
+# NEXT:
+# auto maintenance zmerge																						
+# send to addr / zmerge manual maintenance
+
+
+# zs_listreceivedbyaddress it has the rpc interface you are looking for
+# use -wallet=<file>
 # optimize msg update to refresh only the new detected address / thread 
 # block xvk untill connected? task can be scheduled ?
 # create connection sound ?
@@ -7,12 +14,9 @@
 
 # save pass hash to ensure it is correct ? have pass per wallet / db 
 
-# install psutil
 # pycryptodome
 # python -m pip install pywin32
 
-# todo:
-# soft wrap view key export 
 
 import os
 import sys
@@ -48,7 +52,7 @@ new_root.show()
 
 queue_start_stop = queue.Queue()	
 
-wds=WalDispSet([init_app.app_password] )
+wds=WalDispSet([init_app.app_password],init_app.data_files )
 wata=wallet_tab.WalletTab(init_app.autostart,queue_start_stop, wds)
 
 
