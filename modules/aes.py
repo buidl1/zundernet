@@ -75,6 +75,21 @@ class Crypto:
 		
 		
 	
+	def rand_slbls(self,slbls_count):
+		c1=[ "B", "C", "D",  "F", "G", "H",  "J", "K", "L", "M", "N",  "P",  "R", "S", "T",  "V",  "Z"] #17
+		c2=["a",   "e",  "i",   "o",  "u",  "y" ] # 6
+		
+		retv=''
+		for ii in range(slbls_count):
+			ri=random.randint(0,len(c1)-1)
+			retv+=c1[ri]
+			ri=random.randint(0,len(c2)-1)
+			retv+=c2[ri]
+			
+		return retv
+		
+		
+	
 	def rand_abc(self,llen):
 		
 		ascii_chain="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
