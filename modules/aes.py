@@ -138,14 +138,17 @@ class Crypto:
 			try:
 				ddata=self.read_bin_file( path1)
 				encr_dd=self.aes_encrypt( ddata ,password,False)
-				self.write_file(path2,encr_dd)
+				# print('writing to path2',path2)
+				if self.write_file(path2,encr_dd)=='':
+					return False
 				return True
 			except:
 				pass
 		else: # path1 = data
 			try: 
 				encr_dd=self.aes_encrypt( path1 ,password,True)
-				self.write_file(path2,encr_dd)
+				if self.write_file(path2,encr_dd)=='':
+					return False
 				return True
 			except:
 				pass
@@ -266,7 +269,7 @@ class Crypto:
 		return bytes
 		
 	def write_file(self,path,wstr):
-		gui.copy_progress(path,'Encrypting to '+path,wstr,path, False)
+		return gui.copy_progress(path,'Encrypting to '+path,wstr,path, False)
 		# with open(path, "w") as f:
 			# f.write(wstr)
 			
@@ -274,7 +277,7 @@ class Crypto:
 	def write_bin_file(self,path,bstr):
 		# with open(path, "wb") as f:
 			# f.write(bstr)
-		gui.copy_progress(path,'Decrypting to '+path,bstr,path, False)
+		return gui.copy_progress(path,'Decrypting to '+path,bstr,path, False)
 			
 			
 	def init_hash_seed(self):
