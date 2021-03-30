@@ -28,16 +28,23 @@ class InitApp:
 		pirated=False
 		dpath=os.path.join(tt[0][0],'komodod')
 		cpath=os.path.join(tt[0][0],'komodo-cli')
-		if not os.path.exists(dpath):
-			dpath=os.path.join(tt[0][0],'pirated')
-			cpath=os.path.join(tt[0][0],'pirate-cli')
-			pirated=True
-		
-		ddatap=tt[0][1]
 		
 		if sys.platform=='win32':
 			dpath+='.exe'
 			cpath+='.exe'
+			
+		# print(dpath,os.path.exists(dpath))
+		if not os.path.exists(dpath):
+			dpath=os.path.join(tt[0][0],'pirated')
+			cpath=os.path.join(tt[0][0],'pirate-cli')
+			if sys.platform=='win32':
+				dpath+='.exe'
+				cpath+='.exe'
+			pirated=True
+		
+		ddatap=tt[0][1]
+		
+		
 
 		deamon_cfg={
 			"deamon-path":dpath, 
@@ -71,7 +78,7 @@ class InitApp:
 		self.wallet ='tmpwallet.dat'
 		# self.data_files['wallet']
 		self.data_files={'wallet':'wallet','db':'local_storage'} # .dat/.encr or .db/.encr
-		
+		self.was_derypted_warning=False
 		self.close_thread=False
 
 		app_fun.check_already_running(os.path.basename(__file__)) # check app not runnin - else escape !
@@ -152,6 +159,7 @@ class InitApp:
 		self.db = self.data_files['db']+'.db'
 		
 		deamon_cfg=self.deamon_setup(tt)
+		# print(155,deamon_cfg)
 		self.dmn=deamon.DeamonInit(deamon_cfg,self.db)
 		self.dmn.init_clear_queue()	
 		# self.data_files={ 'wallet':tmp['wallet'],'db':tmp['local_storage'] }
@@ -162,7 +170,7 @@ class InitApp:
 		
 		
 	
-	def update_paths(self,deamon,data,str_data_files,parent,new_wallet):
+	def update_paths(self,deamon,data, parent,new_wallet):
 	
 		idb=localdb.DB('init.db')
 		komodod_ok=False
@@ -187,15 +195,20 @@ class InitApp:
 			# komodo_cli_ok=True
 			
 		blockchain_data_ok=False
-		decr_wal_exist=app_fun.fileExist(data,cond={'start':'wallet','end':'.dat' })
-		if decr_wal_exist or app_fun.fileExist(data,cond={'start':'wallet','end':'.encr' }):
+		test_ppath=os.path.join(data,self.data_files['wallet']+'.dat')
+		decr_wal_exist=os.path.exists( test_ppath  ) #app_fun.fileExist(data,cond={'start':self.data_files['wallet'],'end':'.dat' })
+		self.was_derypted_warning=(decr_wal_exist==True)
+		
+		# print('checked ', test_ppath ,decr_wal_exist)
+		# print( decr_wal_exist,app_fun.fileExist(data,cond={'start':self.data_files['wallet'],'end':'.encr' }))
+		if decr_wal_exist or app_fun.fileExist(data,cond={'start':self.data_files['wallet'],'end':'.encr' }):
 			blockchain_data_ok=True
 		
 		# decr_wal_exist=os.path.exists( os.path.join(data,self.data_files['wallet']+'.dat'))
 		# if decr_wal_exist or os.path.exists( os.path.join(data,self.data_files['wallet']+'.encr') ):
 			# blockchain_data_ok=True
 			
-		print('blockchain_data_ok',blockchain_data_ok,new_wallet)
+		# print('blockchain_data_ok',blockchain_data_ok,new_wallet,str_data_files)
 			
 			
 		if decr_wal_exist: # backup!
@@ -249,7 +262,7 @@ class InitApp:
 		
 		
 		
-		
+		# print(254,deamon,data,self.data_files)
 		
 		if komodod_ok and komodo_cli_ok  and (blockchain_data_ok or new_wallet):  
 
@@ -262,7 +275,7 @@ class InitApp:
 			dict_set['init_settings'].append({
 												"komodo":  deamon ,
 												"datadir": data  ,
-												"data_files":str_data_files
+												"data_files":json.dumps(self.data_files)
 											})
 			
 			idb.delete_where('init_settings')
@@ -274,6 +287,7 @@ class InitApp:
 			gui.messagebox_showinfo('Path for komodo-cli is wrong', data +'\n - no komodo-cli file !')
 		elif not new_wallet:
 			gui.messagebox_showinfo('Path for blockchain data is wrong', data +'\n - no wallet file !')
+			exit()
 			
 	
 	
@@ -338,7 +352,7 @@ class InitApp:
 		
 		def combox(cbtn,tw):
 			if cbtn.currentText()=='Select file':
-				sel_file=gui.get_file_dialog('Select wallet file' ,init_path=preset[1],parent=tw,name_filter="Data (*.dat *.encr)")
+				sel_file=gui.get_file_dialog('Select wallet file' ,init_path=tw.item(2,2).text(),parent=tw,name_filter="Data (*.dat *.encr)") #preset[1]
 				sel_file=sel_file[0]
 				if sel_file=='':
 					return
@@ -399,7 +413,7 @@ class InitApp:
 			# print(self.data_files)
 				
 			self.paths_confirmed=True
-			self.update_paths(tmptw.item(1,2).text(),  tmptw.item(2,2).text(), json.dumps(self.data_files), tmptw,newwallet)
+			self.update_paths(tmptw.item(1,2).text(),  tmptw.item(2,2).text(),   tmptw,newwallet)
 			tmptw.parent().close()
 
 		tw.cellWidget(4,0).set_fun(True, getv,tw)
@@ -483,6 +497,9 @@ class InitApp:
 			
 			time.sleep(1)
 			
+		if self.was_derypted_warning and self.dmn.deamon_started_ok==False: #encrypt if started with unencrypted
+			print('exceptional encryption')
+			self.dmn.encrypt_wallet_and_data()
 			
 			
 
@@ -496,6 +513,7 @@ class InitApp:
 			if gui.askokcancel("Quit", "Are you sure you want to quit? Blockchain deamon is still running. If you plan to shut down your computer it is better to STOP blockchain and quit afterwards.",parent):
 			
 				self.encr_db(parent)
+				
 				return True
 			else:
 				return False
