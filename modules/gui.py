@@ -58,7 +58,7 @@ from PySide2.QtWidgets import (
 	QShortcut
 )
 
-
+import traceback
 
 def copy_progress(path,deftxt,src,dest,fromfile=True):
 
@@ -81,7 +81,7 @@ def copy_progress(path,deftxt,src,dest,fromfile=True):
 		# readmode='r'
 		if type(src)!=type(b''):
 			writemode='w'
-	
+	# if True:
 	try:
 		bb1=b''
 		if fromfile:
@@ -130,15 +130,18 @@ def copy_progress(path,deftxt,src,dest,fromfile=True):
 			return ''
 		else:
 			return dest
+	# else:
 	except:
+		traceback.print_exc()
+	
 		if progress>0:
 			showinfo('Backup FAILED ','Please check if there is enough space on your drive and try again!\nFailed at byte '+str(progress)+' out of '+str(src_size)  )
 		else:
 			showinfo('Backup FAILED','Please check if your drive is not locked!\n'  )
 		
 		fo.close()
-		
 		if os.path.exists(dest):
+			print('Exception - remove dest?',dest,os.path.exists(dest))
 			os.remove(dest)
 			
 		return ''
@@ -369,6 +372,7 @@ class PassForm(QDialog):
 	
 	
 	
+	
 # accept table widget inside
 # and "go button" closes it !	
 class CustomDialog(QDialog):
@@ -388,6 +392,23 @@ class CustomDialog(QDialog):
 		# self.widgets=[]
 		# self.setSizeAdjustPolicy(QComboBox.AdjustToContents)
 		
+		# QWidget {font-family:'Open Sans','Helvetica Neue',Helvetica,Arial,DejaVu }	
+				# QFrame { border:none;}
+				# QTabBar {background-color:rgba(255, 255, 255, 1);}
+				 # QPushButton {background-color:#ddd; border-style: solid;   border-width: 1px; border-color: #aaa; padding:3px; margin:3px;min-width:32px;}
+				 # QPushButton:hover {background-color:#eee;   border-width: 1px; border-color: green;}
+				 # QPushButton:pressed {background-color:lightgreen;   border-width: 1px; border-color: green;}
+				 # QComboBox {background-color:white; border-style: solid;  border-width: 1px; border-color: #aaa; padding:3px; margin:3px;}
+				 # QComboBox QAbstractItemView {background-color:white;selection-background-color: lightgray;border-style: solid;  border-width: 1px; }
+				 # QLineEdit {background-color:white; border-style: solid;  border-width: 1px; border-color: #aaa; padding:3px; margin:3px;}
+				 # QAbsractScrollArea {border-style:none}
+		tmp_style = """ 
+		
+				 QTableWidget  {border-color:rgba(255, 255, 255, 1);}
+				 QHeaderView  { border-color:rgba(255, 255, 255, 1); }
+				""" 
+		self.setStyleSheet(tmp_style)	
+			
 		if table_widget!=None:
 			layout = QVBoxLayout() #
 			
@@ -407,7 +428,10 @@ class CustomDialog(QDialog):
 			# print(table_widget.parent())
 			self.setSizePolicy(QSizePolicy.Expanding,QSizePolicy.Expanding)
 			# self.adjustSize()
+			
+			
 			self.exec_()
+			
 		
 	def widgetAt(self,idx):
 		return self.layout().itemAt(idx).widget()
@@ -867,18 +891,18 @@ class Table(QTableWidget):
 		 # QTableWidget::item:edit-focus { background-color:%s; border:none; color:black;}
 		 # QWidget  { background-color:%s; border:none; margin:5px; padding:5px;}
 		tmp_style = """
-					QTableWidget::item { background-color:%s; border:none }
-					QTableWidget::item:selected { background-color:%s; border:none; color:black }
-					QHeaderView::section { background-color:%s; border:none; }
-					QTableCornerButton::section { background-color:%s; border:none; }
+					QTableWidget::item { background-color:%s; border-style:none;}
+					QTableWidget::item:selected { background-color:%s; border-style:none; color:black }
+					QHeaderView::section { background-color:%s; border-style:none; }
+					QTableCornerButton::section { background-color:%s; border-style:none; }
 					QTableWidget QPushButton {background-color:#ddd; border-style: solid;   border-width: 1px; border-color: #aaa; padding:3px; margin:3px;}
 					QTableWidget QPushButton:hover {background-color:#eee;   border-width: 1px; border-color: green;}
 					QTableWidget QPushButton:pressed {background-color:lightgreen;   border-width: 1px; border-color: green;}
 					QTableWidget QComboBox {background-color:white; border-style: solid;  border-width: 1px; border-color: #aaa;}
 					QTableWidget QComboBox QAbstractItemView {selection-background-color: lightgray;border-style: solid;  border-width: 1px; }
 					QTableWidget QLineEdit {background-color:white; border-style: solid;  border-width: 1px; border-color: #aaa;}
-					QTableWidget {margin:2px;padding:2px;font-size:13px; font-family:'DejaVu' }
-					QHeaderView { font-size: 13px; padding:0px; margin:0px;font-family:'DejaVu'  }
+					QTableWidget {margin:2px;padding:2px;font-size:13px; font-family:'DejaVu';border-style:none; }
+					QHeaderView {font-size: 13px; padding:0px; margin:0px;font-family:'DejaVu';border-style:none;  }
 					""" % (
 			
 			tmp_header_bg_color,
@@ -888,6 +912,7 @@ class Table(QTableWidget):
 		)
 # QTableWidget QLineEdit {background-color:white; border:inset;}
 		self.setStyleSheet(tmp_style)
+		# print(tmp_style)
 		
 		
 
@@ -1301,6 +1326,7 @@ class ContainerWidget(QWidget):
 		super(ContainerWidget, self).__init__(parent)
 		if layout==None:
 			layout=QGridLayout()
+			
 		self.setLayout(layout)
 		self.widgets=[]
 		
@@ -1310,7 +1336,11 @@ class ContainerWidget(QWidget):
 				# w.setParent(self)
 				
 		
-		self.setStyleSheet("QWidget {background-color:rgba(245,245,245,1)}")
+		self.setStyleSheet("QWidget {background-color:rgba(245,245,245,1);}")
+		
+		
+		
+		
 
 	def insertWidget(self, wdgt, row=-1, col=-1):
 
@@ -1363,6 +1393,10 @@ class MainWindow(QMainWindow):
 					 QComboBox {background-color:white; border-style: solid;  border-width: 1px; border-color: #aaa; padding:3px; margin:3px;}
 					 QComboBox QAbstractItemView {background-color:white;selection-background-color: lightgray;border-style: solid;  border-width: 1px; }
 					 QLineEdit {background-color:white; border-style: solid;  border-width: 1px; border-color: #aaa; padding:3px; margin:3px;}
+					 QAbsractScrollArea {border-style:none}
+					 QTableView  {border-style:none}
+					 QAbstractItemView {border-style:none}
+					 QHeaderView {border-style:none}
 					""" 
 					# % (
 			# tmp_header_bg_color
