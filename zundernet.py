@@ -56,6 +56,21 @@ wds=WalDispSet([init_app.app_password],init_app.data_files )
 wata=wallet_tab.WalletTab(init_app.autostart,queue_start_stop, wds)
 
 
+# wrk=wallet_tab.Worker(init_app, queue_start_stop, init_app.dmn)
+
+# wrk_thread=gui.QThread(parent=new_root)
+# wrk.moveToThread(wrk_thread)
+# wrk_thread.finished.connect(wrk_thread.deleteLater)
+# wrk.finished.connect(wrk_thread.quit)
+# wrk.finished.connect(wrk.deleteLater)
+# wrk.refreshed.connect(wata.updateWalletDisplay)
+
+# wrk_thread.started.connect(wrk.run)
+# wrk_thread.start()
+# new_root.setWorker(wrk,wrk_thread)
+# time.sleep(1)
+
+
 tabs0.insertTab( tab_dict={'Wallet':wata.tabs1})
 
 wds.sending_signal.connect(wata.updateWalletDisplay)
@@ -99,13 +114,9 @@ def uploadTabs():
 	wrk.finished.connect(wrk_thread.quit)
 	wrk.finished.connect(wrk.deleteLater)
 	wrk.refreshed.connect(wata.updateWalletDisplay)
-	# wrk.msg.connect(wata.display_message)
-
+	
 	wrk_thread.started.connect(wrk.run)
-	# print('thread start')
 	wrk_thread.start()
-	# print(wrk)
-	# print(wrk_thread)
 	new_root.setWorker(wrk,wrk_thread)
 
 
