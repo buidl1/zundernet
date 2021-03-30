@@ -44,6 +44,8 @@ class WalDispSet(gui.QObject):
 		for rr in addr_cat:
 			self.addr_cat_map[rr[0]]=rr[1]
 			
+		# print(self.addr_cat_map)
+			
 			
 				
 	def show_bills(self,btn,addr):
@@ -656,10 +658,167 @@ class WalDispSet(gui.QObject):
 		w4.set_fun(False,import_keys,w3.item(0,0))
 		
 		gui.CustomDialog(btn,[w0,w1,w2,w3,w4], title='Import Private keys',wihi=[512,256])
-		# todo:
-		# 1. check real encrypted priv keys loads
-		# 2. check real decrypted loads
-		# 3. add deamon command 
+
+		
+		
+		
+		
+		
+		
+	def merge_utxo(self,btn):
+
+		def set_to(btn3,selz,categ,alias):
+			ttable=btn3.parent().parent()
+			btn3.setText(u"\u2611")
+			for bii in range( ttable.rowCount()):
+				if ttable.cellWidget(bii,6)==btn3:
+					continue
+					
+				ttable.cellWidget(bii,6).setText(u"\u2610")
+			
+			# print(selz,categ,alias)
+			
+		def set_values(btn3,selz,categ,alias):
+			if btn3.text()==u"\u2610":
+				btn3.setText(u"\u2611")
+			else:
+				btn3.setText(u"\u2610")
+			# print(selz,categ,alias)
+
+		filter_frame=gui.FramedWidgets(None ,'Filter addresses to merge FROM') #ttk.LabelFrame(selframe,text='Filter') ,layout=gui.QHBoxLayout()
+		filtbox=gui.Combox(None,self.own_wallet_categories()) 
+		filter_frame.insertWidget(filtbox)
+		
+		
+		filter_to=gui.FramedWidgets(None ,'Filter address to merge TO') #ttk.LabelFrame(selframe,text='Filter') ,layout=gui.QHBoxLayout()
+		filtbox2=gui.Combox(None,self.own_wallet_categories()) 
+		filter_to.insertWidget(filtbox2)
+		
+		addr_list_frame=gui.FramedWidgets(None,'Select addresses to merge FROM',layout=gui.QVBoxLayout()) 
+		
+		grid_lol_select,colnames=self.prepare_byaddr_frame( True,True, True)
+		 
+		select_table=gui.Table(None,{'dim':[len(grid_lol_select),len(colnames)], 'toContent':1})
+		select_table.updateTable(grid_lol_select,colnames)
+		
+		
+		select_to=gui.Table(None,{'dim':[len(grid_lol_select),len(colnames)], 'toContent':1})
+		select_to.updateTable(grid_lol_select,colnames)
+		
+		# btn actions 
+		for bii in range( select_table.rowCount()):
+			select_table.cellWidget(bii,6).set_fun( False, set_values, select_table.item(bii,7).text(), select_table.item(bii,0).text(), select_table.item(bii,1).text())
+			select_table.cellWidget(bii,6).setText(u"\u2610")
+			select_table.cellWidget(bii,6).setStyleSheet('QPushButton {padding:0px;font-size:22px;}')
+			
+			
+			select_to.cellWidget(bii,6).set_fun( False, set_to, select_table.item(bii,7).text(), select_table.item(bii,0).text(), select_table.item(bii,1).text())
+			select_to.cellWidget(bii,6).setText(u"\u2610")
+			select_to.cellWidget(bii,6).setStyleSheet('QPushButton {padding:0px;font-size:22px;}')
+		 
+		addr_list_frame.insertWidget(select_table)
+		
+		
+		def select_all(btn,args):
+			# print(args)
+			tmpico=u"\u2611"
+			if btn.text()=='Select all':
+				btn.setText('Deselect all')
+			else:
+				tmpico=u"\u2610"
+				btn.setText('Select all')
+				
+			for bii in range( args.rowCount()):
+				if args.isRowHidden(bii):
+					continue
+				args.cellWidget(bii,6).setText(tmpico)
+			
+		buttons=gui.ContainerWidget(None,layout=gui.QHBoxLayout() )
+		
+		btn_all=gui.Button(None,'Select all',actionFun=select_all,args=[select_table])
+		buttons.insertWidget(btn_all)
+		
+		lbllimit=gui.Label(None,'Input limit: ','20 for slow machines, 200 for very fast')
+		# lbllimit.setStyleSheet('QWidget QLabel {text-align:right;float:right;color:red;}')
+		lbllimit.setAlignment(gui.Qt.AlignRight | gui.Qt.AlignVCenter);
+		llimit=gui.Combox(None,['20','50','100','200'])
+		buttons.insertWidget(lbllimit)
+		buttons.insertWidget(llimit)
+		
+		addr_list_frame.insertWidget(buttons)
+		
+		
+		def refresh_add_list(btn4,tmp_table):
+			tmp_table.filtering( 'item',0,btn4.currentText() )
+		
+		filtbox.set_fun(refresh_add_list,select_table)  
+		filtbox2.set_fun(refresh_add_list,select_to)  
+		# 
+		grid=gui.ContainerWidget(None)
+		grid.insertWidget( filter_frame, 0, 0)
+		grid.insertWidget( addr_list_frame, 1, 0)
+		grid.insertWidget( filter_to, 0, 1)
+		
+		addr_list_frame_to=gui.FramedWidgets(None,'Select addresses to merge TO',layout=gui.QVBoxLayout()) 
+		addr_list_frame_to.insertWidget(select_to)
+		
+		def merge(btn5,t1,li,t2):
+			from_addr=[]
+			to_addr=''
+			for bii in range( t1.rowCount()):
+				if t1.cellWidget(bii,6).text()==u"\u2611":
+					from_addr.append(t1.item(bii,7).text())
+				
+				if t2.cellWidget(bii,6).text()==u"\u2611":
+					to_addr=t2.item(bii,7).text()
+					
+			if len(from_addr)==0:
+				gui.messagebox_showinfo('Merge canceled','Missing FROM addresses - none was selected.',btn5)
+				return
+				
+			if to_addr=='':
+				gui.messagebox_showinfo('Merge canceled','Missing TO addresses - none was selected.',btn5)
+				return
+				
+			lim=li.currentText()
+		
+			# print(from_addr,from_addr,lim)
+			merge_type='merge'
+			if 'Auto' in btn5.text():
+				merge_type='automerge'
+			
+			ddict={'fromaddr':from_addr, 'limit':lim	,'to':to_addr	}
+			table={}
+			# if asap:
+			table['queue_waiting']=[localdb.set_que_waiting(merge_type,jsonstr=json.dumps(ddict) ) ]
+			# else:
+				# table['queue_waiting']=[localdb.set_que_waiting('send',jsonstr=json.dumps(ddict) , wait_seconds=WAIT_S) ]
+			# print(table)
+			idb=localdb.DB(self.db)
+			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
+			self.sending_signal.emit(['cmd_queue'])
+			
+			btn5.parent().parent().parent().parent().close()
+		
+		btn_merge=gui.Button(None,'Merge once',actionFun=merge,args=[select_table,llimit,select_to],tooltip='It will take number of inputs not bigger then limit set.')
+		btn_merge_auto=gui.Button(None,'Auto-merge',actionFun=merge,args=[select_table,llimit,select_to],tooltip='Merging will work each time limit threshold is reached.\nYou can cancel it in the task queue.')
+		buttons2=gui.ContainerWidget(None,layout=gui.QHBoxLayout() )
+		buttons2.insertWidget( btn_merge)
+		buttons2.insertWidget( btn_merge_auto)
+		addr_list_frame_to.insertWidget(buttons2)
+		
+		grid.insertWidget( addr_list_frame_to, 1, 1)
+		
+		gui.CustomDialog(btn,[grid  ], title='Merging setup')
+		# todo: deamon side -
+		# test
+		# add automation 
+		
+		
+		
+		
+		
+		
 		
 		
 				
@@ -687,7 +846,7 @@ class WalDispSet(gui.QObject):
 					'opt':expo.cellWidget(1,1).currentText( ) #expo.get_value('opt')
 					}
 				
-			print(ddict)	
+			# print(ddict)	
 			if ddict['opt']=='Wallet' or ddict['opt']=='Database' :
 			
 				idb=localdb.DB('init.db')
@@ -1054,8 +1213,9 @@ class WalDispSet(gui.QObject):
 	
 		all_cat_unique=[]
 		all_cat=self.addr_cat_map.values() 
+		# print(all_cat)
 		for rr in all_cat: 
-			all_cat_unique.append(rr[0])
+			all_cat_unique.append(rr )
 			
 		if 'Excluded' not in all_cat_unique:
 			all_cat_unique=['Excluded']+all_cat_unique 
@@ -1071,6 +1231,9 @@ class WalDispSet(gui.QObject):
 			
 		if 'Edit' not in all_cat_unique:
 			all_cat_unique=all_cat_unique+['Edit']
+			
+		# print(self.addr_cat_map.values() )
+		# print(all_cat_unique)
 			
 		return all_cat_unique
 
@@ -1093,7 +1256,6 @@ class WalDispSet(gui.QObject):
 		self.disp_dict=idb.select('jsons',['json_content','last_update_date_time'],{'json_name':['=',"'display_wallet'"]})
 		
 		
-		
 	def set_format(self,format_str_value=''):
 		self.format_str=self.get_rounding_str(direct_value=format_str_value)
 	
@@ -1109,6 +1271,8 @@ class WalDispSet(gui.QObject):
 		# col_names=['Total','Confirmed','Pending','Round','Filter','New address','Wallet']
 		
 		all_cat=self.own_wallet_categories() #all_cat_unique
+		
+		wallet_opt=['Select:','New address','Export','Import priv. keys','Merge']
 				
 		if len(self.disp_dict)>0:
 			disp_dict=json.loads(self.disp_dict[0][0])
@@ -1123,7 +1287,7 @@ class WalDispSet(gui.QObject):
 										# {'T':'Combox','V':['amounts','bills','usage'], 'uid':'sort', 'width':7}, # enter this function!
 										{'T':'Combox', 'uid':'round', 'V':['1','0.1','0.01','0.001','0.0001','off'], 'width':6},
 										{'T':'Combox', 'uid':'filter', 'V':all_cat, 'width':6, 'tooltip':'Special categories:\nHidden - allows to hide address on the list,\n Excluded - allows to exclude address from UTXO/bills auto maintenance when it is ON.'},
-										{'T':'Combox', 'V':['Select:','New address','Export','Import priv. keys']}
+										{'T':'Combox', 'V':wallet_opt }
 										#{'T':'Button', 'L':'+', 'uid':'addaddr', 'tooltip':'Create new address'}
 										# ,{'T':'Button', 'L':'Export', 'uid':'export' }
 										]
@@ -1139,7 +1303,7 @@ class WalDispSet(gui.QObject):
 										# {'T':'Combox','V':['amounts','bills','usage'], 'uid':'sort', 'width':7}, # enter this function!
 										{'T':'Combox', 'uid':'round', 'V':['1','0.1','0.01','0.001','0.0001','off'], 'width':6},
 										{'T':'Combox', 'uid':'filter', 'V':all_cat, 'width':6},
-										{'T':'Combox', 'V':['Select:','New address','Export','Import priv. keys']}
+										{'T':'Combox', 'V':wallet_opt }
 										#{'T':'Button', 'L':'+', 'uid':'addaddr', 'tooltip':'Create new address'}
 										#,{'T':'Button', 'L':'Export', 'uid':'export' }
 										]
@@ -1180,7 +1344,8 @@ class WalDispSet(gui.QObject):
 			send_style='padding:-6px;font-size:28px;'
 			if uu.os!='windows':
 				send_style='padding-top:-4px;padding-bottom:0px;font-size:28px;'
-		
+		# if ddict['wl'][ii]['addr'] in addr_cat:
+					# tmpcurcat=addr_cat[ddict['wl'][ii]['addr']]
 			ddict=json.loads(self.disp_dict[0][0])
 			sorting_lol=ddict['lol'] # not needed with qt
 			
@@ -1291,7 +1456,7 @@ class WalDispSet(gui.QObject):
 			le.setFocus(gui.Qt.PopupFocusReason)
 		
 		tw.cellWidget(2,0).set_fun(True,setV,tw.cellWidget(1,0),'Main')
-		tw.cellWidget(2,1).set_fun(True,setV,tw.cellWidget(1,0),'Exclude') 
+		tw.cellWidget(2,1).set_fun(True,setV,tw.cellWidget(1,0),'Excluded') 
 		tw.cellWidget(2,2).set_fun(True,setV,tw.cellWidget(1,0),'Hidden') 
 		
 		
