@@ -40,22 +40,27 @@ class Worker(gui.QObject):
 
 			# if xx % 19 ==1:
 				# print('thread working',xx,self.init_app.close_thread,flush=True)
-			
+			# print(45,self.queue_start_stop.qsize())
 			if self.queue_start_stop.qsize(): # start stop blockchain ON/OFF
+				
 				try:
+				# if True:
 					cmd = self.queue_start_stop.get(0)
+					# print(48,cmd)
 					if cmd['cmd']=='stop_deamon':
+						# print('stoping?')
 						self.dmn.stop_deamon()
 					elif cmd['cmd']=='start_deamon':
 						self.dmn.start_deamon(cmd['addrescan'] )
 				except : #Queue.Empty:
-					print('Queue.Empty?')
+					print('Queue exception bug?')
 					pass
 			
-			# print(87,flush=True)
+			# print(87,self.dmn.started,flush=True)
 			vemit=[]
 			if self.dmn.started:
 				vemit=self.dmn.update_status(xx)
+				# print(63,vemit)
 				if 'CONNECTED' not in vemit:
 					self.block_closing=True
 				else:
@@ -63,18 +68,19 @@ class Worker(gui.QObject):
 			else:
 				vemit.append('cmd_queue')
 				self.block_closing=False
+				# print(self.init_app.autostart)
 				if self.init_app.autostart!='no':
 					self.init_app.autostart='no'
 					self.dmn.start_deamon( )
 			
 			
+			# print('before vemit',vemit)
 			self.refreshed.emit(vemit)
-			# print('before sleep')
 			time.sleep(0.3) # change to 0.3
 			xx+=1
 			# print('after sleep')
 			
-			
+		# print(self.init_app.close_thread)
 			
 		self.finished.emit()
 
@@ -247,8 +253,11 @@ class WalletTab:
 		def togglestartstop(elem):
 			if elem.text()=='Stop blockchain':
 				elem.setText('Start blockchain')
+				# print('after start chain')
 				elem.setEnabled(False)
-				queue_start_stop.put({'cmd':'stop_deamon'})				
+				# print('after set enablen')
+				queue_start_stop.put({'cmd':'stop_deamon'})
+				# print('after que put')				
 			else:
 				elem.setText('Stop blockchain')	
 				elem.setEnabled(False)			 
@@ -364,8 +373,9 @@ class WalletTab:
 			elif cbtn.currentText()=='Export':
 				self.wds.export_wallet(cbtn)
 			elif cbtn.currentText()=='Import priv. keys':
-				print('Import priv. keys')
 				self.wds.import_priv_keys(cbtn)
+			elif cbtn.currentText()=='Merge':
+				self.wds.merge_utxo(cbtn)
 				
 			cbtn.setCurrentIndex( 0 )
 		
