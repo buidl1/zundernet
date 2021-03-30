@@ -783,7 +783,7 @@ def set_que_waiting( command,jsonstr='', wait_seconds=0):
 	# print(tt[0])
 	dbname=json.loads(tt[0][0])
 	dbname=dbname['db']+'.db'
-	print(dbname)
+	# print(dbname)
  
 	idb=DB(dbname)
 	tmparr=[0]
