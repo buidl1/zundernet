@@ -53,7 +53,7 @@ class DeamonInit(gui.QObject):
 				
 	def init_clear_queue(self):	
 		idb=localdb.DB(self.db)
-		waiting=idb.select('queue_waiting', ["type","wait_seconds","created_time","command","json","id","status"])
+		waiting=idb.select('queue_waiting', ["type","wait_seconds","created_time","command","json","id","status"],{'command':['<>',"'automerge'"]})
 		
 		for ii,rr in enumerate(waiting):
 
@@ -82,6 +82,8 @@ class DeamonInit(gui.QObject):
 		count_task_done=0
 		new_notif_count=0
 		new_tx_history_count=0
+		
+		# print('toupdate')
 
 		if len(toupdate)>0:
 		
@@ -127,6 +129,7 @@ class DeamonInit(gui.QObject):
 					
 		waiting=idb.select('queue_waiting', ["type","wait_seconds","created_time","command","json","id","status"])
 		
+		# print('waiting')
 		merged_ii=[]
 		for ii,rr in enumerate(waiting):
 			
@@ -595,15 +598,21 @@ class DeamonInit(gui.QObject):
 					idb.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
 				
 				count_task_done+=1
-					
-			table={}
-			table['queue_waiting']=[{'status':'done'}]
-			idb.update( table,['status'],{'id':[ '=',rr[5] ], 'status':[ '=',"'processing'" ]})
-			self.sending_signal.emit(['cmd_queue'])
-			time.sleep(1)
-			# self.task_history.update_history_frame()
-					
-		idb.delete_where('queue_waiting',{'status':['<>',"'awaiting_balance'"],"command":['<>',"'send'"]  }) #
+			
+			if rr[3]!='automerge':
+				table={}
+				table['queue_waiting']=[{'status':'done'}]
+				idb.update( table,['status'],{'id':[ '=',rr[5] ], 'status':[ '=',"'processing'" ],"command":['<>',"'automerge'"]})
+				self.sending_signal.emit(['cmd_queue'])
+				time.sleep(1)
+				# self.task_history.update_history_frame()
+		
+		# print('b4 delete')			
+		idb.delete_where('queue_waiting',{'status':['<>',"'awaiting_balance'"],'status':['<>',"'waiting'"],"command":['<>',"'send'"],"command":['<>',"'automerge'"]  }) 
+		# do not delete if awaiting balance or waiting or command is send (delete in another thread time based) or command is autom merge - cancelled manually
+		
+		# print('after delete')	
+		
 		list_emit=['cmd_queue']
 		if count_task_done>0:
 			list_emit.append('task_done')
@@ -693,6 +702,7 @@ class DeamonInit(gui.QObject):
 			if True:
 				gitmp=app_fun.run_process(self.cli_cmd,'getinfo')
 				gi=json.loads(gitmp)
+				# print('\nupdate_status 700',gi)
 				tmpstr="Synced: "+str(gi["synced"])+"\nCurrent block: "+str(gi["blocks"])+"\nLongest chain: "+str(gi["longestchain"])+"\nNotarized: "+str(gi["notarized"])+"\nConnections: "+str(gi["connections"])
 				
 				if time.time()-self.insert_block_time>50: # check every 50 seconds
@@ -701,23 +711,33 @@ class DeamonInit(gui.QObject):
 					idbinit=localdb.DB('init.db')
 					idbinit.upsert(table,['uid', 'ttime','block'],{'block':['=',gi["blocks"]]})
 				
+				# print('\nupdate_status 709' )
 				self.output(tmpstr)
 				
 				if int(gi["connections"])>0:
 					ret_val.append('CONNECTED')
 				
+				# print('\nupdate_status 715' )
 				modv=46 # about 15 sec
 				
 				if xx%modv==modv-1 and self.started:
 					self.update_wallet()
 					ret_val.append('wallet')
+				# print('\nupdate_status 721',ret_val)
 					
 				if xx%modv==modv-1 and self.started:
 					self.update_incoming_tx()
 					
-				if xx%3==2 and self.started: # every second
+				
+				# print('\nupdate_status 727' )
+					
+				if xx%3==2: # and self.started: # every second
+					# print('process queue')
 					self.process_queue()
+					# print('process queue done')
 					ret_val.append('cmd_queue')
+					
+				# print('\nupdate_status 732' )
 					
 		return 	ret_val
 		
@@ -736,6 +756,7 @@ class DeamonInit(gui.QObject):
 		self.started=False
 		self.insert_block_time=0
 		self.the_wallet=None
+		self.deamon_started_ok=False
 		
 		# self.msg_queue = queue.Queue()	
 		# self.refreshed_results={}
@@ -780,7 +801,9 @@ class DeamonInit(gui.QObject):
 	def stop_deamon(self):
 	
 		self.started=False
+		# print('b4 outpost')
 		self.output('Stopping deamon\n')
+		# print('after outpost')
 		self.run_subprocess(self.cli_cmd,'stop',2)
 		
 
@@ -825,6 +848,7 @@ class DeamonInit(gui.QObject):
 			if addrescan:
 				reskanopt=['-rescan']
 				
+			# print([self.deamon_par+reskanopt,self.cli_cmd])
 			self.run_subprocess([self.deamon_par+reskanopt,self.cli_cmd],'start',8)
 			
 			return
@@ -981,6 +1005,7 @@ class DeamonInit(gui.QObject):
 			table['deamon_start_logs']=[{'uid':'auto', 'time_sec':tdiff, 'ttime':tend, 'loaded_block':loaded_block }]
 			idb.insert(table,['uid','time_sec','ttime','loaded_block'])
 			self.start_stop_enable.emit(True)
+			self.deamon_started_ok=True
 			# self.walletTab.bstartstop.setEnabled(True) #self.bstartstop.configure(state='normal')
 			
 		elif cmd_orig=='stop':
@@ -1056,6 +1081,8 @@ class DeamonInit(gui.QObject):
 		
 		return 'Decrypted'
 			
+			
+			
 	def encrypt_wallet_and_data(self):
 		
 		if self.wallet_display_set.password==None:
@@ -1065,9 +1092,19 @@ class DeamonInit(gui.QObject):
 		ppath=idb.select('init_settings',['datadir'] )
 		
 		cc=aes.Crypto()
-		rv=cc.aes_encrypt_file( os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.dat'), os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.encr') , self.wallet_display_set.password)
+		path2encr=os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.dat')
+		path_end=os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.encr')
+		rv=cc.aes_encrypt_file( path2encr, path_end , self.wallet_display_set.password)
 		time.sleep(1)
-		if rv!='' and os.path.exists(rv):
+		# print('encrypted wallet',path2encr,path_end,rv)
+		
+		encrypted_size=os.path.getsize(path_end)
+		# print('encrypted_size error ',encrypted_size)
+		
+		if rv  and os.path.exists(path_end) and encrypted_size>10000: #rv!=''
 			app_fun.secure_delete(os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.dat'))
+			
+		if encrypted_size<10000:
+			print('encrypted_size error ',encrypted_size)
 		time.sleep(1)
 	
