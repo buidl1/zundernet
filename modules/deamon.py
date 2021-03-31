@@ -67,8 +67,23 @@ class DeamonInit(gui.QObject):
 	@gui.Slot()
 	def process_queue(self):
 	
-		# print('process_queue')
 		idb=localdb.DB(self.db)
+		
+		# print('process_queue1')
+		if not hasattr(self,'counter_15m'):
+			self.counter_15m=datetime.datetime.now()
+			
+			# print('process_queue2')
+			# print(idb.select('queue_waiting', ["type","wait_seconds","created_time","command","json","id","status"] ) )
+			# print(idb.select('queue_waiting', ["type","wait_seconds","created_time","command","json","id","status"],{'command':['=',"'automerge'"]}) )
+			
+			table={}
+			table['queue_waiting']=[{"created_time":app_fun.now_to_str(False)}]
+			
+			# print('process_queue3',table)
+			idb.update( table,["created_time"],{'command':[ '=','"automerge"' ]})
+		
+		# print('process_queue4' )
 		cc=aes.Crypto()		
 
 		gitmp=app_fun.run_process(self.cli_cmd,'getinfo')
@@ -129,7 +144,7 @@ class DeamonInit(gui.QObject):
 					
 		waiting=idb.select('queue_waiting', ["type","wait_seconds","created_time","command","json","id","status"])
 		
-		# print('waiting')
+		# print('waiting',waiting)
 		merged_ii=[]
 		for ii,rr in enumerate(waiting):
 			
@@ -152,20 +167,25 @@ class DeamonInit(gui.QObject):
 				
 				continue
 			
-			if rr[6] not in ['waiting','awaiting_balance']:
+			if rr[6] not in ['waiting','awaiting_balance'] and rr[3]!='automerge':
 				continue
 			
-			if rr[1] - (datetime.datetime.now()-app_fun.datetime_from_str(rr[2]) ).total_seconds() - 1 >0:
+			if rr[1] - (datetime.datetime.now()-app_fun.datetime_from_str(rr[2]) ).total_seconds() - 1 >0 and rr[3]!='automerge':
 				continue
 			
 			# 1 change status in case of task takes longer
-			if rr[6]=='waiting':
+			if rr[6]=='waiting' and rr[3]!='automerge':
 				table={}
 				table['queue_waiting']=[{'status':'processing'}]
 				idb.update( table,['status'],{'id':[ '=',rr[5] ]})
 			
 				self.sending_signal.emit(['cmd_queue'])
-				time.sleep(1)
+				time.sleep(0.3)
+				
+				
+				
+				
+			# print(188,rr[3])
 				
 			if rr[3]=='import_view_key': #json.dumps({'addr':tmpaddr,'viewkey':tmpvk})
 				adrvk=json.loads(rr[4])
@@ -337,6 +357,64 @@ class DeamonInit(gui.QObject):
 				self.msg_signal_list.emit('Bills / utxos',['Amount','Confirm.','Txid'],results_array)
 				time.sleep(1)
 				
+				
+			elif 'merge' in rr[3]: #=='show_bills': # 
+				# print('merging343')
+				ddict=json.loads(rr[4])
+				
+				def merge(once=True):
+					# print('ddict',ddict)
+					tmpresult2=self.the_wallet.merge(json.dumps(ddict['fromaddr']),ddict['to'],ddict['limit'])
+					# print(tmpresult2)
+					if once:
+						self.msg_signal.emit('Merging result',tmpresult2,'')
+						
+						table={}
+						table['queue_done']=[{"type":rr[0],"wait_seconds":rr[1],"created_time":rr[2],"command":rr[3],"json":rr[4],"id":rr[5],"result":tmpresult2,'end_time':app_fun.now_to_str(False)}]
+						
+						idb.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
+					
+					
+				total_s=(datetime.datetime.now() - self.counter_15m).total_seconds()
+				
+				# print((int(total_s)/60 ) %3)
+				if rr[3]=='merge':
+					merge()
+					count_task_done+=1
+					
+				elif  (int(total_s)/60 ) %3==0: # every 3 minutes
+				
+					disp_dict=self.the_wallet.display_wallet() 
+					notes_count=0
+					for ri in disp_dict['wl']: 
+						if ri['addr'] in ddict['fromaddr']:
+							notes_count+=ri['#conf']
+					
+					
+					if total_s> 15*60:
+						self.counter_15m=datetime.datetime.now()
+						
+						if notes_count>=ddict['limit']:
+							merge(False)
+						
+						table={}
+						table['queue_waiting']=[{'status':'waiting 15min\ntill next check',"created_time":app_fun.now_to_str(False)}]
+						idb.update( table,['status',"created_time"],{'id':[ '=',rr[5] ]})
+					
+						self.sending_signal.emit(['cmd_queue'])
+						
+					elif int(total_s)%5==0:
+						
+						table={}
+						if notes_count<ddict['limit']:
+							
+							table['queue_waiting']=[{'status':'awaiting\nlimit '+str(notes_count)+'/'+str(ddict['limit'])} ]
+						else:
+							table['queue_waiting']=[{'status':'waiting 15min\ntill next check'} ]
+						
+						idb.update( table,['status'],{'id':[ '=',rr[5] ]})	
+						self.sending_signal.emit(['cmd_queue'])
+					
 			elif rr[3]=='send': # 
 			
 				def insert_notification(details, tmpjson):
@@ -440,7 +518,7 @@ class DeamonInit(gui.QObject):
 					tmpres['exceptions']= '\n'.join(exceptions)	
 					if len(tostr)>0:
 						tostr=json.dumps(tostr)
-						
+						# print(ddict['fromaddr'],tostr)
 						tmpres['opid']=str(self.the_wallet.send(ddict['fromaddr'],tostr))
 						tmpres['opid']=tmpres['opid'].strip()
 						
@@ -695,6 +773,8 @@ class DeamonInit(gui.QObject):
 	
 	
 	def update_status(self,xx):
+	
+	
 		ret_val=[]
 		if self.started:
 		
