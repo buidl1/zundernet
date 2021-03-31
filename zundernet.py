@@ -1,7 +1,9 @@
 
 # NEXT:
-# auto maintenance zmerge																						
-# send to addr / zmerge manual maintenance
+# replace long tooltips in queue task with addr alias 
+# fix history empty columns
+# add utxo spliter ?
+# simplify merge - add button in main table 
 
 
 # zs_listreceivedbyaddress it has the rpc interface you are looking for
@@ -75,6 +77,7 @@ tabs0.insertTab( tab_dict={'Wallet':wata.tabs1})
 
 wds.sending_signal.connect(wata.updateWalletDisplay)
 	
+dmn=init_app.dmn
 	
 def uploadTabs():
 
@@ -82,18 +85,15 @@ def uploadTabs():
 
 	addrb=addr_book.AddressBook( wds)
 	tabs0.insertTab( tab_dict={'Address Book':addrb.setaddrbook()})
+	wata.init_additional_tabs(addrb)
+	
 
 	mmm=msg.Msg( addrb )
 	tabs0.insertTab( tab_dict={'Messages':mmm.parent_frame})
 	###################################################  donate
 	tabs0.insertTab( tab_dict={'Donate':donate.donate(None,wds)})
-	
-	
-	
-	wata.init_additional_tabs(addrb)
 	# now need a thread with separate deamon running 
 	# print('b4 dmn init')
-	dmn=init_app.dmn
 	dmn.sending_signal.connect(wata.updateWalletDisplay)
 	dmn.msg_signal.connect(wata.display_message)
 	dmn.msg_signal_list.connect(wata.display_list)
@@ -101,9 +101,9 @@ def uploadTabs():
 	dmn.start_stop_enable.connect(wata.settings.updatePassChangeState )
 	dmn.wallet_status_update.connect(wata.updateStatus)
 	dmn.set_wallet_widgets(wds) #,wata,task_history=None,txhi=None,notif=None,messages=None)
-	dmn.update_addr_book.connect(addrb.refresh_addr_book)
 	dmn.update_addr_book.connect(wds.addr_book_data_refresh)
 	dmn.refresh_msgs_signal.connect(mmm.update_msgs)
+	dmn.update_addr_book.connect(addrb.refresh_addr_book)
 
 
 	wrk=wallet_tab.Worker(init_app, queue_start_stop, dmn)
