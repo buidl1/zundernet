@@ -544,8 +544,12 @@ class DB:
 		tname=list(table.keys())
 		tname=tname[0]
 		
+		# print('tname',tname)
+		
 		if 'uid' in items_order:
 			items_order.remove('uid')
+		
+		# print('items_order',items_order)
 		
 		for rr in table[tname]:
 			
@@ -556,6 +560,7 @@ class DB:
 			
 			update_str+=strwhere
 			vtuple=tuple(vtuple+vtup)
+			# print('update_str',update_str,vtuple)
 			
 			curs.execute(update_str, vtuple)
  
