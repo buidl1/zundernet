@@ -13,6 +13,7 @@ import operator
 import modules.aes as aes
 
 import modules.gui as gui
+import traceback
 
 WAIT_S=900
 
@@ -784,13 +785,15 @@ class WalDispSet(gui.QObject):
 		
 			# print(from_addr,from_addr,lim)
 			merge_type='merge'
+			wait_seconds_tmp=0
 			if 'Auto' in btn5.text():
 				merge_type='automerge'
+				wait_seconds_tmp=900
 			
-			ddict={'fromaddr':from_addr, 'limit':lim	,'to':to_addr	}
+			ddict={'fromaddr':from_addr, 'limit':int(lim)	,'to': to_addr 	} #,'to':'"'+to_addr+'"'	}
 			table={}
 			# if asap:
-			table['queue_waiting']=[localdb.set_que_waiting(merge_type,jsonstr=json.dumps(ddict) ) ]
+			table['queue_waiting']=[localdb.set_que_waiting(merge_type,jsonstr=json.dumps(ddict), wait_seconds=wait_seconds_tmp ) ]
 			# else:
 				# table['queue_waiting']=[localdb.set_que_waiting('send',jsonstr=json.dumps(ddict) , wait_seconds=WAIT_S) ]
 			# print(table)
@@ -801,7 +804,7 @@ class WalDispSet(gui.QObject):
 			btn5.parent().parent().parent().parent().close()
 		
 		btn_merge=gui.Button(None,'Merge once',actionFun=merge,args=[select_table,llimit,select_to],tooltip='It will take number of inputs not bigger then limit set.')
-		btn_merge_auto=gui.Button(None,'Auto-merge',actionFun=merge,args=[select_table,llimit,select_to],tooltip='Merging will work each time limit threshold is reached.\nYou can cancel it in the task queue.')
+		btn_merge_auto=gui.Button(None,'Auto-merge',actionFun=merge,args=[select_table,llimit,select_to],tooltip='Merging will work each time limit threshold is reached, but not sooner then 15 min after GUI is ON and not more often then every 15 minutes.\nYou can cancel it in the task queue.')
 		buttons2=gui.ContainerWidget(None,layout=gui.QHBoxLayout() )
 		buttons2.insertWidget( btn_merge)
 		buttons2.insertWidget( btn_merge_auto)
@@ -1061,28 +1064,31 @@ class WalDispSet(gui.QObject):
 		def cancell(btn,id):
 		
 			# print(btn,id)
+			# if True:
 			try:
 				disp_dict=idb.select('queue_waiting', ["type","command","created_time","status","wait_seconds","json","id"],{'id':['=',id]})
 				# print('disp_dict',disp_dict)
-				table={}	
-				if disp_dict[0][3]!='done':
-					
-					table['queue_done']=[{"type":disp_dict[0][0]
-									, "wait_seconds":disp_dict[0][4]
-									, "created_time":disp_dict[0][2]
-									, "command":disp_dict[0][1]
-									, "json":disp_dict[0][5]
-									, "id":disp_dict[0][6]
-									, "result":'canceled'
-									, 'end_time':app_fun.now_to_str(False)
-									} ]
-					idb.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
+				if len(disp_dict)>0:
+					table={}	
+					if disp_dict[0][3]!='done':
+						
+						table['queue_done']=[{"type":disp_dict[0][0]
+										, "wait_seconds":disp_dict[0][4]
+										, "created_time":disp_dict[0][2]
+										, "command":disp_dict[0][1]
+										, "json":disp_dict[0][5]
+										, "id":disp_dict[0][6]
+										, "result":'canceled'
+										, 'end_time':app_fun.now_to_str(False)
+										} ]
+						idb.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
 				
 				# print('before delete',idb.select('queue_waiting'))
 				idb.delete_where('queue_waiting',{'id':['=',id]})
 				self.sending_signal.emit(['cmd_queue'])
 				
 			except:
+				traceback.print_exc()
 				print(792,'cancel exception')
 				pass # double click cancell error
 		
@@ -1124,12 +1130,16 @@ class WalDispSet(gui.QObject):
 						tmptooltip+=ss['z']+' amount '+str(ss['a'])+'\n'
 				else:
 					tmptooltip=app_fun.json_to_str( rr[4] )
+					
+				total_s=str(int( int(rr[3])-(datetime.datetime.now()-app_fun.datetime_from_str(rr[1]) ).total_seconds() ))
+				# if rr[0]=='automerge':
+					# total_s='0'
 				
 				tmpdict2['rowk']=str(tmpid)
 				tmpdict2['rowv']=[ {'T':'LabelV', 'L':rr[0], 'tooltip':tmptooltip },
 									{'T':'LabelV', 'L': rr[1].replace(' ','\n') , 'width':12},
 									status_label,
-									{'T':'LabelV', 'L':str(int( int(rr[3])-(datetime.datetime.now()-app_fun.datetime_from_str(rr[1]) ).total_seconds() ))  },
+									{'T':'LabelV', 'L':total_s  },
 									{'T':'Button', 'L': 'Cancel', 'fun':cancell, 'args':(str(tmpid),) }	
 									# , 'fun':self.edit_category, 'args':(tmpalias,tmpaddr)
 								]
