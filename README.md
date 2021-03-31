@@ -3,7 +3,7 @@ _Python3 wallet GUI for [Pirate Chain](https://pirate.black/)_
 
 Zundernet is new proof of concept wallet, with features not available in other wallets.  
 
-List of features:
+## List of features:
 
 Big:
 1. address book
