@@ -15,7 +15,7 @@ Big:
 
 Small:
 1. amounts rounding
-2. nadling many addresses - filtering addresses by category
+2. handling many addresses - filtering addresses by category
 3. creating new wallet by default with random name - to not touch the default one
 4. easy merging - z_mergetoaddress
 5. able to send many tx in a single one (z_sendmany)
