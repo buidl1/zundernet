@@ -130,10 +130,6 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 		
 		
 		
-	def send(self,fr,tostr):
-		# print(tostr)
-		args=['z_sendmany',fr,tostr]
-		return app_fun.run_process(self.cli_cmd,args)
 		
 		
 	
@@ -646,7 +642,15 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 			
 		return retv
 			
-		
+	def merge(self,fr,tostr,limit):
+		args=['z_mergetoaddress',fr,tostr ,'0.0001','1',str(limit)]
+		# print(647,args,flush=True)
+		return app_fun.run_process(self.cli_cmd,args)
+	
+	def send(self,fr,tostr):
+		# print(tostr)
+		args=['z_sendmany',fr,tostr]
+		return app_fun.run_process(self.cli_cmd,args)
 
 	def exp_prv_key(self,zaddr):
 		try:
