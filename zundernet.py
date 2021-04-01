@@ -91,7 +91,7 @@ def uploadTabs():
 	mmm=msg.Msg( addrb )
 	tabs0.insertTab( tab_dict={'Messages':mmm.parent_frame})
 	###################################################  donate
-	tabs0.insertTab( tab_dict={'Donate':donate.donate(None,wds)})
+	tabs0.insertTab( tab_dict={'Donate':donate.donate(None,wds,init_app.chain=='verus')})
 	# now need a thread with separate deamon running 
 	# print('b4 dmn init')
 	dmn.sending_signal.connect(wata.updateWalletDisplay)
