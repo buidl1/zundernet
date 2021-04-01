@@ -196,7 +196,7 @@ def get_file_dialog(strtitle ,init_path=os.getcwd(),parent=None,name_filter=''):
 		
 	
 # setdir
-def set_file( widget,validation_fun=None,dir=False,parent=None,init_path=os.getcwd(),title="Select relevant file"):
+def set_file( widget,validation_fun=None,dir=False,parent=None,init_path=os.getcwd(),title="Select relevant file",on_change_fun=None):
 
 	# print('dir')
 	
@@ -216,14 +216,24 @@ def set_file( widget,validation_fun=None,dir=False,parent=None,init_path=os.getc
 			if widget==None:
 				return path
 		
-			# print(path)
+			change=False
+			
 			if type(path)==type('asdf'):
+				if path!=widget.text():
+					change=True
+			
 				widget.setText(path )
 				widget.setToolTip(path )
 			
 			else:
+				if path[0]!=widget.text():
+					change=True
 				widget.setText(path[0])
 				widget.setToolTip(path[0])
+			
+			if on_change_fun!=None and change:
+				on_change_fun()
+				
 			parent.parent().adjustSize()
 			break
 			
