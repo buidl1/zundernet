@@ -79,7 +79,10 @@ def check_deamon_running():
 			processName = proc.name()
 			processID = proc.pid
 			procstr=''.join(proc.cmdline())
-			if 'komodod' in procstr and '-ac_name=PIRATE' in procstr: #==deamon_cmd: 
+			cond1='komodod' in procstr and '-ac_name=PIRATE' in procstr
+			cond2='pirated' in procstr
+			cond3='verusd' in procstr 
+			if cond1 or cond2 or cond3:
 				zxc=proc.as_dict(attrs=['pid', 'memory_percent', 'name', 'cpu_times', 'create_time', 'memory_info', 'cmdline','cwd'])
 				
 				is_komodod_running=True
