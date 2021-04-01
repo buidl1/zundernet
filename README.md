@@ -5,6 +5,8 @@ Zundernet is new proof of concept wallet, with features not available in other w
 
 It works with Pirate (komodod or pirated) and Verus (verusd).
 
+NOTE: when using zundernet do not run Pirate and Verus at the same time with different wallets.
+
 ## List of features:
 
 Big:
