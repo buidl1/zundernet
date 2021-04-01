@@ -15,7 +15,7 @@ from modules.notifications import Notifications
 import modules.addr_book as addr_book
 
 import modules.gui as gui
-
+import traceback
 
 class Worker(gui.QObject):
 	finished = gui.Signal()
@@ -47,13 +47,15 @@ class Worker(gui.QObject):
 				# if True:
 					cmd = self.queue_start_stop.get(0)
 					# print(48,cmd)
-					if cmd['cmd']=='stop_deamon':
-						# print('stoping?')
-						self.dmn.stop_deamon()
-					elif cmd['cmd']=='start_deamon':
-						self.dmn.start_deamon(cmd['addrescan'] )
+					if len(cmd)>0:
+						if cmd['cmd']=='stop_deamon':
+							# print('stoping?')
+							self.dmn.stop_deamon()
+						elif cmd['cmd']=='start_deamon':
+							self.dmn.start_deamon(cmd['addrescan'] )
 				except : #Queue.Empty:
 					print('Queue exception bug?')
+					traceback.print_exc()
 					pass
 			
 			# print(87,self.dmn.started,flush=True)
