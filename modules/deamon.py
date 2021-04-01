@@ -561,7 +561,7 @@ class DeamonInit(gui.QObject):
 									
 									opstat=app_fun.run_process(self.cli_cmd,cmdloc)
 									opj=json.loads(opstat)[0]
-									print('while exe',opj)
+									# print('while exe',opj)
 									
 								if opj["status"]=="success":
 									tmpres["result"]='success'
@@ -783,7 +783,15 @@ class DeamonInit(gui.QObject):
 				gitmp=app_fun.run_process(self.cli_cmd,'getinfo')
 				gi=json.loads(gitmp)
 				# print('\nupdate_status 700',gi)
-				tmpstr="Synced: "+str(gi["synced"])+"\nCurrent block: "+str(gi["blocks"])+"\nLongest chain: "+str(gi["longestchain"])+"\nNotarized: "+str(gi["notarized"])+"\nConnections: "+str(gi["connections"])
+				kv_tmp=[{"name":"Chain: "},{"synced":"Synced: "},{"blocks":"\nCurrent block: " }, {"longestchain":"\nLongest chain: "}, {"notarized":"\nNotarized: "}, {"connections":"\nConnections: "}]
+				tmpstr=""
+				for dd in kv_tmp:
+					for kk,vv in dd.items():
+						if kk in gi:
+							tmpstr+=vv+str(gi[kk])
+				
+				
+				# "Synced: "+str(gi["synced"])+"\nCurrent block: "+str(gi["blocks"])+"\nLongest chain: "+str(gi["longestchain"])+"\nNotarized: "+str(gi["notarized"])+"\nConnections: "+str(gi["connections"])
 				
 				if time.time()-self.insert_block_time>50: # check every 50 seconds
 					self.insert_block_time=time.time()
@@ -910,8 +918,11 @@ class DeamonInit(gui.QObject):
 				self.the_wallet=wallet_api.Wallet(self.cli_cmd,self.get_last_load(),self.db)
 		
 			y = json.loads(gitmp)
-			if y["synced"]==True:
+			if "synced" in y:
+				if y["synced"]==True:
 				# self.walletTab.bstartstop.setEnabled(True) #self.bstartstop.configure(state='normal')
+					self.start_stop_enable.emit(True)
+			elif y['longestchain']==y['blocks']:
 				self.start_stop_enable.emit(True)
 			else:
 				# self.walletTab.bstartstop.setEnabled(False) #self.bstartstop.configure(state='disabled')
@@ -1007,7 +1018,15 @@ class DeamonInit(gui.QObject):
 				elif 'longestchain' in gitmp:
 				
 					y = json.loads(gitmp)
-					gtmpstr="Synced: "+str(y["synced"])+"\nCurrent block: "+str(y["blocks"])+"\nLongest chain: "+str(y["longestchain"])+"\nConnections: "+str(y["connections"])
+					
+					kv_tmp=[{"synced":"Synced: "},{"blocks":"\nCurrent block: " }, {"longestchain":"\nLongest chain: "}, {"notarized":"\nNotarized: "}, {"connections":"\nConnections: "}]
+					gtmpstr=""
+					for dd in kv_tmp:
+						for kk,vv in dd.items():
+							if kk in y:
+								gtmpstr+=vv+str(y[kk])
+					
+					# gtmpstr="Synced: "+str(y["synced"])+"\nCurrent block: "+str(y["blocks"])+"\nLongest chain: "+str(y["longestchain"])+"\nConnections: "+str(y["connections"])
 				
 					if y['longestchain']==y["blocks"] and y['longestchain']>0:
 						if cmd_orig=='start':
