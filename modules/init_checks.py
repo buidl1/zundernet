@@ -23,24 +23,47 @@ import getpass
 # self.dmn
 class InitApp:
 
+	def correctWin(self,p1,p2):
+		if sys.platform=='win32':
+			p1+='.exe'
+			p2+='.exe'
+			
+		return p1,p2
+
 	def deamon_setup(self,tt):
 		
+		self.chain='pirate'
+		
+		verus=False
 		pirated=False
 		dpath=os.path.join(tt[0][0],'komodod')
 		cpath=os.path.join(tt[0][0],'komodo-cli')
 		
-		if sys.platform=='win32':
-			dpath+='.exe'
-			cpath+='.exe'
+		dpath,cpath=self.correctWin(dpath,cpath)
+		
+		# if sys.platform=='win32':
+			# dpath+='.exe'
+			# cpath+='.exe'
 			
 		# print(dpath,os.path.exists(dpath))
 		if not os.path.exists(dpath):
 			dpath=os.path.join(tt[0][0],'pirated')
 			cpath=os.path.join(tt[0][0],'pirate-cli')
-			if sys.platform=='win32':
-				dpath+='.exe'
-				cpath+='.exe'
-			pirated=True
+			
+			dpath,cpath=self.correctWin(dpath,cpath)
+			# if sys.platform=='win32':
+				# dpath+='.exe'
+				# cpath+='.exe'
+			if not os.path.exists(dpath):	
+				dpath=os.path.join(tt[0][0],'verusd')
+				cpath=os.path.join(tt[0][0],'verus')
+				dpath,cpath=self.correctWin(dpath,cpath)
+				verus=True
+				if not os.path.exists(dpath):
+					print('Wrong path, file does not exist: ',dpath)
+					exit()
+			else:
+				pirated=True
 		
 		ddatap=tt[0][1]
 		
@@ -57,6 +80,7 @@ class InitApp:
 		}	
 		
 		if pirated:
+			
 			deamon_cfg={
 				"deamon-path":dpath, 
 				"cli-path":cpath, 
@@ -64,6 +88,16 @@ class InitApp:
 				"datadir":ddatap, 
 				"fee":"0.0001"# "addnode":["136.243.102.225", "78.47.205.239"],
 			}
+		elif verus:
+			self.chain='verus'
+			deamon_cfg={
+				"deamon-path":dpath, 
+				"cli-path":cpath, 
+				"wallet":self.wallet,
+				"datadir":ddatap, 
+				"fee":"0.0001"
+			}
+		
 			
 		# print(deamon_cfg)
 		
@@ -80,6 +114,7 @@ class InitApp:
 		self.data_files={'wallet':'wallet','db':'local_storage'} # .dat/.encr or .db/.encr
 		self.was_derypted_warning=False
 		self.close_thread=False
+		self.chain='pirate'
 
 		app_fun.check_already_running(os.path.basename(__file__)) # check app not runnin - else escape !
 
@@ -174,14 +209,14 @@ class InitApp:
 	
 		idb=localdb.DB('init.db')
 		komodod_ok=False
-		allowed_deamons=['komodod.exe','komodod','pirated','pirated.exe']
+		allowed_deamons=['komodod.exe','komodod','pirated','pirated.exe','verusd','verusd.exe']
 		for ad in allowed_deamons:
 			if os.path.exists( os.path.join(deamon,ad) ):
 				komodod_ok=True
 				break
 				
 		komodo_cli_ok=False
-		allowed_cli=['komodo-cli.exe','komodo-cli','pirate-cli','pirate-cli.exe']
+		allowed_cli=['komodo-cli.exe','komodo-cli','pirate-cli','pirate-cli.exe','verus','verus.exe']
 		for ac in allowed_cli:
 			if os.path.exists( os.path.join(deamon,ac) ):
 				komodo_cli_ok=True
@@ -282,9 +317,11 @@ class InitApp:
 			idb.insert(dict_set,["komodo","datadir","data_files" ]) #,"password_on"
 			
 		elif not komodod_ok:
-			gui.messagebox_showinfo('Path for komodo deamon is wrong', deamon +'\n - no komodod file !')
+			gui.messagebox_showinfo('Path for komodo deamon is wrong', deamon +'\n - no komodod/pirated/verusd file !')
+			exit()
 		elif  not komodo_cli_ok:
-			gui.messagebox_showinfo('Path for komodo-cli is wrong', data +'\n - no komodo-cli file !')
+			gui.messagebox_showinfo('Path for komodo-cli is wrong', data +'\n - no komodo-cli/pirate/verus file !')
+			exit()
 		elif not new_wallet:
 			gui.messagebox_showinfo('Path for blockchain data is wrong', data +'\n - no wallet file !')
 			exit()
@@ -346,8 +383,12 @@ class InitApp:
 		tw=gui.Table( params={'dim':[5,3],"show_grid":False, 'colSizeMod':[256,'toContent','stretch'], 'rowSizeMod':['toContent','toContent','toContent','toContent','toContent']})		
 		tw.updateTable(automate_rowids)
 		
+		# on data dir change default to new wallet file 
+		def setDefWalOnDatadirChange():
+			tw.cellWidget(3,1).setIndexForText('Create new') 
+			
 		tw.cellWidget(1,1).set_fun(True,gui.set_file,tw.item(1,2),None,True,tw)
-		tw.cellWidget(2,1).set_fun(True,gui.set_file,tw.item(2,2),None,True,tw)
+		tw.cellWidget(2,1).set_fun(True,gui.set_file,tw.item(2,2),None,True,tw,os.getcwd(), "Select relevant file", setDefWalOnDatadirChange)
 		
 		
 		def combox(cbtn,tw):
@@ -368,6 +409,7 @@ class InitApp:
 				
 		tw.cellWidget(3,1).every_click=True
 		tw.cellWidget(3,1).set_fun( combox,tw)
+		
 		
 		
 		
