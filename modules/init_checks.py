@@ -1,564 +1,681 @@
 
 import os
+import time
 import sys
 import datetime
-import time
+
+# import subprocess
 import json
-import shutil
-import modules.app_fun as app_fun
-import modules.gui as gui
+# import modules.deamon as deamon
+# import re
 import modules.localdb as localdb
-import modules.aes as aes
-import modules.gui as gui
-import modules.deamon as deamon
-import modules.usb as usb
-import getpass
+import modules.app_fun as app_fun
+# import modules.aes as aes
+# save in db last block nr, last time loaded, last loading time
 
-# props:
-# self.cc=aes.Crypto()
-# self.autostart
- 
-# self.first_run
-# self.app_password
-# self.dmn
-class InitApp:
+class Wallet: # should store last values in DB for faster preview - on preview wallt commands frozen/not active
 
-	def correctWin(self,p1,p2):
-		if sys.platform=='win32':
-			p1+='.exe'
-			p2+='.exe'
+
+	def prep_msgs_inout(self,txid_utf8,mm,ttype,dt,tx_status='sent' ,in_sign_uid=-1 ):
+
+		tmpmsg,sign1,sign1_n,sign2,sign2_n =app_fun.split_memo(mm[0],False)
+		
+		# if tmpmsg=='':
+			# return {}
+		 
 			
-		return p1,p2
-
-	def deamon_setup(self,tt):
-		
-		self.chain='pirate'
-		
-		verus=False
-		pirated=False
-		dpath=os.path.join(tt[0][0],'komodod')
-		cpath=os.path.join(tt[0][0],'komodo-cli')
-		
-		dpath,cpath=self.correctWin(dpath,cpath)
-		
-		# if sys.platform=='win32':
-			# dpath+='.exe'
-			# cpath+='.exe'
-			
-		# print(dpath,os.path.exists(dpath))
-		if not os.path.exists(dpath):
-			dpath=os.path.join(tt[0][0],'pirated')
-			cpath=os.path.join(tt[0][0],'pirate-cli')
-			
-			dpath,cpath=self.correctWin(dpath,cpath)
-			# if sys.platform=='win32':
-				# dpath+='.exe'
-				# cpath+='.exe'
-			if not os.path.exists(dpath):	
-				dpath=os.path.join(tt[0][0],'verusd')
-				cpath=os.path.join(tt[0][0],'verus')
-				dpath,cpath=self.correctWin(dpath,cpath)
-				verus=True
-				if not os.path.exists(dpath):
-					print('Wrong path, file does not exist: ',dpath)
-					exit()
-			else:
-				pirated=True
-		
-		ddatap=tt[0][1]
-		
-		
-
-		deamon_cfg={
-			"deamon-path":dpath, 
-			"cli-path":cpath, 
-			"wallet":self.wallet,
-			"ac_name": "PIRATE",
-			"ac_params":"-ac_supply=0 -ac_reward=25600000000 -ac_halving=77777 -ac_private=1", # -rescan if needed
-			"datadir":ddatap, 
-			"fee":"0.0001"# "addnode":["136.243.102.225", "78.47.205.239"],
-		}	
-		
-		if pirated:
-			
-			deamon_cfg={
-				"deamon-path":dpath, 
-				"cli-path":cpath, 
-				"wallet":self.wallet,
-				"datadir":ddatap, 
-				"fee":"0.0001"# "addnode":["136.243.102.225", "78.47.205.239"],
-			}
-		elif verus:
-			self.chain='verus'
-			deamon_cfg={
-				"deamon-path":dpath, 
-				"cli-path":cpath, 
-				"wallet":self.wallet,
-				"datadir":ddatap, 
-				"fee":"0.0001"
-			}
-		
-			
-		# print(deamon_cfg)
-		
-		return deamon_cfg
-
-
-		
-		
-		
-	# need to generate name here for config and save it 	
-	def __init__(self):
-		self.wallet ='tmpwallet.dat'
-		# self.data_files['wallet']
-		self.data_files={'wallet':'wallet','db':'local_storage'} # .dat/.encr or .db/.encr
-		self.was_derypted_warning=False
-		self.close_thread=False
-		self.chain='pirate'
-
-		app_fun.check_already_running(os.path.basename(__file__)) # check app not runnin - else escape !
-
-		localdb.init_init() # init local DB initial settings - if not exist 
-		self.cc=aes.Crypto()
-
-		
-		is_deamon_working=app_fun.check_deamon_running()
-		idb=localdb.DB('init.db')
-		# db=localdb.DB( )
-
-		tt= idb.select('init_settings',columns=["komodo","datadir","data_files"]) 
-		
-		if is_deamon_working[0]:
-			if len(tt)==0:
-				gui.messagebox_showinfo("init.db file missing while running - exit", "init.db file missing while running - exit")
-				exit()
-			# print(tt)	
-			tmp=json.loads(tt[0][2])
-			self.data_files={ 'wallet':tmp['wallet'],'db':tmp['db'] }
-
-		else: # deamon starting - ask paths 
-			self.paths_confirmed=False
-			self.ask_paths() 
-			if not self.paths_confirmed:
-				gui.messagebox_showinfo("Exiting app...", "Exiting app...")
-				exit()
-			
-			tt= idb.select('init_settings',columns=["komodo","datadir", "data_files"])  
-			if len(tt)==0 :
-				gui.messagebox_showinfo("init.db file missing while running - exit", "init.db file missing while running - exit")
-				exit()
+		tmpaddr=mm[2] # for incoming save full sign info
+		if tmpaddr=='':
+			tmpdict={}
+			if sign2!='none':
+				tmpdict={'sign1':sign1,'sign1_n':sign1_n,'sign2':sign2,'sign2_n':sign2_n}
+			elif sign1!='none':
+				tmpdict={'sign1':sign1,'sign1_n':sign1_n}
 				
-			# idb.upsert(dict_set,["lock"],{})
-
-		# self.autostart=tt[0][2]
-		self.autostart='no'	
-		if is_deamon_working[0]:
-			self.autostart='yes'	
-			
-		dict_set={}
-		dict_set['lock_db_threads']=[{'lock':'no'}]
-		if idb.check_table_exist('lock_db_threads'):
-			idb.upsert(dict_set,["lock"],{})
-		
-		self.first_run=False
-		
-		ppath=os.getcwd()	
-		if os.path.exists(os.path.join(ppath , self.data_files['db']+'.encr'))==False and os.path.exists(os.path.join(ppath ,self.data_files['db']+'.db'))==False:
-			newdbfname= self.data_files['db']+'.db' 
-			gui.messagebox_showinfo("Creating new database","Creating new database file:\n"+newdbfname)
-			localdb.init_tables(newdbfname)
-			self.first_run=True
-
-		self.app_password=None
-		while self.app_password==None:
-		
-			tmpv=[]
-			# self.ask_password( tmpv )
-			gui.PassForm(tmpv,self.first_run)
-			# print(102,tmpv)
-			
-			if len(tmpv)==0:
-				gui.messagebox_showinfo("Canceled - exiting", "Exiting app...")
-				exit()
-			
-			if self.isvalid(tmpv[0]): # checks if decryption is correct 
-				self.app_password=tmpv[0]
-			else:
-				gui.messagebox_showinfo("Wrong password", "Password was not correct - try again.")
-			
-		###################### INIT DB AND DEAMON	
-		if not self.first_run:
-			localdb.init_tables(self.data_files['db']+'.db')
-		
-		self.wallet = self.data_files['wallet']+'.dat'
-		self.db = self.data_files['db']+'.db'
-		
-		deamon_cfg=self.deamon_setup(tt)
-		# print(155,deamon_cfg)
-		self.dmn=deamon.DeamonInit(deamon_cfg,self.db)
-		self.dmn.init_clear_queue()	
-		# self.data_files={ 'wallet':tmp['wallet'],'db':tmp['local_storage'] }
-		
-		
-		
-		
-		
-		
+			tmpaddr=json.dumps(tmpdict) #.replace(',',';')
+			 
+		table={}
+		table['msgs_inout']=[{'proc_json':'False'
+							,'type':ttype
+							,'addr_ext':tmpaddr #tostr[mmii]["address"]
+							,'txid':txid_utf8
+							,'tx_status':tx_status
+							,'date_time':dt
+							,'msg':tmpmsg
+							,'uid':'auto'
+							,'in_sign_uid':in_sign_uid}]
+		return table #table['msgs_inout'][0]['msg']
 	
-	def update_paths(self,deamon,data, parent,new_wallet):
-	
-		idb=localdb.DB('init.db')
-		komodod_ok=False
-		allowed_deamons=['komodod.exe','komodod','pirated','pirated.exe','verusd','verusd.exe']
-		for ad in allowed_deamons:
-			if os.path.exists( os.path.join(deamon,ad) ):
-				komodod_ok=True
-				break
+
+
+	def __init__(self,CLI_STR,last_load,db):
+		self.db=db
+		self.first_block=None
+		self.min_conf=1
+		self.cli_cmd=CLI_STR
+
+		self.last_block=0
+		self.addr_amount_dict={}
+		self.amounts=[]
+		self.amounts_conf=[]
+		self.amounts_unc=[]
+
+		self.addr_list=[]
+		self.alias_map={}
+		self.total_balance=0
+		self.total_conf=0
+		self.total_unconf=0
+		self.wl=[]
+		
+		
+		self.unconfirmed={}
+		self.confirmed={}
+		self.all_unspent={}
+		self.utxids={}
+		
+		idb=localdb.DB(self.db)	
+		 
+		disp_dict=idb.select('jsons',['json_content','last_update_date_time'],{'json_name':['=',"'display_wallet'"]})
+		if len(disp_dict)>0:
+			disp_dict=json.loads(disp_dict[0][0])
+		 
+			if "blocks" in disp_dict: self.last_block=disp_dict["blocks"]
+			if "addr_amount_dict" in disp_dict: self.addr_amount_dict=disp_dict['addr_amount_dict']
+			if "amounts" in disp_dict: self.amounts=disp_dict['amounts']
+			if "amounts_conf" in disp_dict: self.amounts_conf=disp_dict['amounts_conf']
+			if "amounts_unc" in disp_dict: self.amounts_unc=disp_dict['amounts_unc']	
+			if "unconfirmed" in disp_dict: self.unconfirmed=disp_dict['unconfirmed']
+			if "confirmed" in disp_dict: self.confirmed=disp_dict['confirmed']
+			if "all_unspent" in disp_dict: 
+				self.all_unspent=disp_dict['all_unspent']	
+				for aa,rr in self.all_unspent.items():
+					for utxo,vv in rr.items():
+						if utxo not in self.utxids:
+							self.utxids[utxo]=vv['amount']
 				
-		komodo_cli_ok=False
-		allowed_cli=['komodo-cli.exe','komodo-cli','pirate-cli','pirate-cli.exe','verus','verus.exe']
-		for ac in allowed_cli:
-			if os.path.exists( os.path.join(deamon,ac) ):
-				komodo_cli_ok=True
-				break		
+				
+			if "addr_list" in disp_dict: self.addr_list=disp_dict['addr_list']
+			# if "historical" in disp_dict: self.historical_txs=disp_dict['historical']
+			if "aliasmap" in disp_dict: self.alias_map=disp_dict['aliasmap']	
+			if "top" in disp_dict: 
+				self.total_balance=disp_dict['top']['Total']
+				self.total_conf=disp_dict['top']['Confirmed']
+				self.total_unconf=disp_dict['top']['Pending']
+			if "wl" in disp_dict: self.wl=disp_dict['wl']
+		
+		
+		tx_in_sql=idb.select('tx_history',['Category','Type','status','txid','block','timestamp','date_time','from_str','to_str','amount','uid'],{'Type':['=',"'in'"]})
+		
+		self.historical_txs={}
+		self.history_update_counter=0
+		
+		for ti in tx_in_sql:
+			aa=ti[8]
+			txid=ti[3]
+			outindex=int(ti[0].replace('outindex_',''))
+			if aa not in self.historical_txs:
+				self.historical_txs[aa]={}
+			
+			if txid not in self.historical_txs[aa]:
+				self.historical_txs[aa][txid]={}
+				
+				
+			if outindex not in self.historical_txs[aa][txid]:
+				self.historical_txs[aa][txid][outindex]	= { "amount":ti[9]} #,"conf": self.last_block-ti[4],"memo":ti[7]  }
 				
 		
-		# if os.path.exists( os.path.join(deamon,'komodod.exe') ) or os.path.exists(deamon+'/komodod') or os.path.exists( os.path.join(deamon,'pirated.exe') ) or os.path.exists(deamon+'/pirated'):
-			# komodod_ok=True
-			
-		# if os.path.exists( os.path.join(deamon,'komodo-cli.exe') ) or os.path.exists(deamon+'/komodo-cli'):
-			# komodo_cli_ok=True
-			
-		blockchain_data_ok=False
-		test_ppath=os.path.join(data,self.data_files['wallet']+'.dat')
-		decr_wal_exist=os.path.exists( test_ppath  ) #app_fun.fileExist(data,cond={'start':self.data_files['wallet'],'end':'.dat' })
-		self.was_derypted_warning=(decr_wal_exist==True)
-		
-		# print('checked ', test_ppath ,decr_wal_exist)
-		# print( decr_wal_exist,app_fun.fileExist(data,cond={'start':self.data_files['wallet'],'end':'.encr' }))
-		if decr_wal_exist or app_fun.fileExist(data,cond={'start':self.data_files['wallet'],'end':'.encr' }):
-			blockchain_data_ok=True
-		
-		# decr_wal_exist=os.path.exists( os.path.join(data,self.data_files['wallet']+'.dat'))
-		# if decr_wal_exist or os.path.exists( os.path.join(data,self.data_files['wallet']+'.encr') ):
-			# blockchain_data_ok=True
-			
-		# print('blockchain_data_ok',blockchain_data_ok,new_wallet,str_data_files)
-			
-			
-		if decr_wal_exist: # backup!
-			
-			gui.messagebox_showinfo('Wallet backup required','Decrypted wallet exist - backup required')
-			
-			uu=usb.USB()
-			
-			while len(uu.locate_usb())==0:
-				gui.messagebox_showinfo('Please insert USB pendrive','Please insert USB pendrive. Unencrypted wallet file detected - needs to be backed up to external memory.')
-				
-			path=uu.locate_usb()
-			path=path[0]
-			path2=''
-			while path2=='':
-				tmpinitdir=os.getcwd()
-				
-				if sys.platform=='win32':
-					if os.path.exists(path):
-						tmpinitdir=path
-						
-				elif sys.platform!='win32':
-					curusr=getpass.getuser()
-					if os.path.exists('/media/'+curusr+'/'):
-						tmpinitdir='/media/'+curusr+'/'
-				
-				# path=filedialog.askdirectory(initialdir=tmpinitdir, title="Select directory on your USB drive") # was 
-				path2=gui.set_file( None,None,True,parent,init_path=tmpinitdir,title="Select directory on your USB drive" )
-				# print(path2)
-				if path2!=None:
-					if uu.verify_path_is_usb(path2):
-						# gui.messagebox_showinfo('Starting backup','Please wait untill backup is finished and relevant message is displayed.' )
-						dest=os.path.join(path2,self.data_files['wallet']+ '_'+app_fun.now_to_str()+'.dat')  
-						src= os.path.join(data,self.data_files['wallet']+'.dat')
-						
-						path2=gui.copy_progress(path2, 'Wallet backup to '+path2+'\n',src,dest)
-						
-						# try:
-							# shutil.copy(src, dest)
-							# path2=''
-							# gui.messagebox_showinfo('Backup done','Your wallet is safe now at \n'+dest )
-							# break
-						# except:
-							# exit()
-					else:
-						gui.messagebox_showinfo('Wrong path','Selected path is not USB drive, please try again.' )
-						path2=''
-				else:
-					# path2=''
-					exit()
 		
 		
 		
-		# print(254,deamon,data,self.data_files)
 		
-		if komodod_ok and komodo_cli_ok  and (blockchain_data_ok or new_wallet):  
-
-			# wallet name = wallet_ABECUP.dat local_storage_ABECUP.dat
 		
-			# data_files=json.dumps()
 		
-			dict_set={}
-			dict_set['init_settings']=[]
-			dict_set['init_settings'].append({
-												"komodo":  deamon ,
-												"datadir": data  ,
-												"data_files":json.dumps(self.data_files)
-											})
-			
-			idb.delete_where('init_settings')
-			idb.insert(dict_set,["komodo","datadir","data_files" ]) #,"password_on"
-			
-		elif not komodod_ok:
-			gui.messagebox_showinfo('Path for komodo deamon is wrong', deamon +'\n - no komodod/pirated/verusd file !')
-			exit()
-		elif  not komodo_cli_ok:
-			gui.messagebox_showinfo('Path for komodo-cli is wrong', data +'\n - no komodo-cli/pirate/verus file !')
-			exit()
-		elif not new_wallet:
-			gui.messagebox_showinfo('Path for blockchain data is wrong', data +'\n - no wallet file !')
-			exit()
-			
+		
+		
+	
+	def refresh_wallet(self): # once a 1-2 minutes?
+		
+		tmpblocks=self.getinfo()["blocks"]
+		self.last_block=tmpblocks
+		
+		self.update_all_addr()
+		self.address_aliases()
+		freshutxo=self.update_unspent() #init=False,maxconf=str(blocks_div) )
+		tmptotal_balance=self.total_balance
+		self.wallet_summary()
+		total_change=round(self.total_balance-tmptotal_balance,8)
+		# if total_change!=0:
+			# print(168,'total change diff 0 wal api ',total_change)
+			# total_change=1
+		
+		return self.update_historical_txs(freshutxo)+total_change
 	
 	
 	
+	# run only once after startup to fill gaps if any
+	# later base on list unspent ...
 	
-	
-	
-
-	# qt dialog komodod, data dir 	
-	def ask_paths(self): # read from db if possible
-	
-		# self.data_files['wallet'], self.data_files['db']
-		tmpwallet=['Create new','Select file']
-
-		idb=localdb.DB('init.db')
+	def update_historical_txs(self,freshutxo): # max count: 80*tps * 60 =4800 < 5000
+		idb=localdb.DB(self.db)	
 		
-		preset=[]
-		tt= idb.select('init_settings',columns=["komodo","datadir",'data_files']) #,"password_on" "start_chain",
-		if len(tt)>0:  
-
-			for t in tt[0]: # single row only
-				preset.append(t)
-				
-			if preset[2]!=None:
-				tmpj=json.loads(preset[2])
-				tmpwallet=[tmpj['wallet'] , 'Create new','Select file']
-		else:
-
-			preset=['','', 'New' ] # preset win path "{'wallet':'wallet','db':'local_storage'}"
-			
-			curusr=getpass.getuser()
-			curpath=os.getcwd().split('\\') #C:\Users\zxcv\AppData\Roaming\Komodo\PIRATE
-			templatepath=os.path.join(curpath[0],'Users',curusr,'AppData','Roaming','Komodo','PIRATE')
-			# curpath[0]+'/'+'/'.join(['Users',curusr,'AppData','Roaming','Komodo','PIRATE'])
-			
-			if sys.platform=='win32' and os.path.exists(templatepath):
-				preset[1]=templatepath
-			elif os.path.exists('/home/'+curusr+'/.komodo/PIRATE'):
-				preset[1]='/home/'+curusr+'/.komodo/PIRATE'
-				
-		# combobox actions:
-		# new - generate name
-		# select file - open dialog and select -> generate db name relevant
-		# other - select value 
-		# END: update 
-			
-			
-			
-		automate_rowids=[ [{'T':'LabelV', 'L':'Set proper paths, otherwise the deamon may freeze and you may need to kill the process manually.', 'span':3},{  }, {  } ] ,
-						[{'T':'LabelC', 'L':'Select deamon and cli path \n(komodod and komodo-cli inside)', 'width':32}, {'T':'Button','L':'Komodo path:','uid':'p1', 'width':15}, {'T':'LabelV', 'L':preset[0],'uid':'deamon', 'width':60} ],
-						[{'T':'LabelC', 'L':'Select data directory', 'width':32}, {'T':'Button','L':'Data dir path:','uid':'p2', 'width':15}, {'T':'LabelV', 'L':preset[1],'uid':'data', 'width':60} ] ,
-						[{'T':'LabelC', 'L':'Select wallet', 'width':32}, {'T':'Combox','V':tmpwallet,'uid':'cs2', 'width':15 }, { } ],
-						# [{'T':'LabelC', 'L':'Start blockchain', 'width':32}, {'T':'Combox','V':['no','yes'],'uid':'cs2', 'width':15 }, { } ],
-						[{'T':'Button','L':'Confirm','uid':'conf', 'span':3, 'width':120}, {   }, { } ]	] #, 'width':128
-			
-		tw=gui.Table( params={'dim':[5,3],"show_grid":False, 'colSizeMod':[256,'toContent','stretch'], 'rowSizeMod':['toContent','toContent','toContent','toContent','toContent']})		
-		tw.updateTable(automate_rowids)
-		
-		# on data dir change default to new wallet file 
-		def setDefWalOnDatadirChange():
-			tw.cellWidget(3,1).setIndexForText('Create new') 
-			
-		tw.cellWidget(1,1).set_fun(True,gui.set_file,tw.item(1,2),None,True,tw)
-		tw.cellWidget(2,1).set_fun(True,gui.set_file,tw.item(2,2),None,True,tw,os.getcwd(), "Select relevant file", setDefWalOnDatadirChange)
+		iterat_arr=freshutxo
+		full_check=False
 		
 		
-		def combox(cbtn,tw):
-			if cbtn.currentText()=='Select file':
-				sel_file=gui.get_file_dialog('Select wallet file' ,init_path=tw.item(2,2).text(),parent=tw,name_filter="Data (*.dat *.encr)") #preset[1]
-				sel_file=sel_file[0]
-				if sel_file=='':
-					return
+		if self.history_update_counter%60==0:
+			iterat_arr=self.addr_list # oncece a 60 times check full 
+			full_check=True
+			
+		self.history_update_counter+=1
+		
+		
+		table_history_notif={}
+		
+		for aa in iterat_arr:
+			# try:
+			if True:
+				tt=aa
+				if full_check:
 					
-				h,t=os.path.split(sel_file)	
-				
-				if len(t.split())>1:
-					gui.messagebox_showinfo('Wrong wallet file name', 'Wallet file name cannot contain spaces or white characters!')
-					return
-				
-				cbtn.addItem( t , t )
-				cbtn.setIndexForText( t)
-				
-		tw.cellWidget(3,1).every_click=True
-		tw.cellWidget(3,1).set_fun( combox,tw)
-		
-		
-		
-		
-		def getv(tmptw):#self.data_files={'wallet':'wallet','db':'local_storage'}
-		
-			cbtntxt=tmptw.cellWidget(3,1).currentText()
-			data_path=tmptw.item(2,2).text()
-			# print(data_path)
-			
-			tmp_wal=''
-			newwallet=False
-		
-			if cbtntxt=='Create new':
-				tmprand=''
-				while True:
-					tmprand=self.cc.rand_slbls(3)
-					tmp_wal='wallet_'+tmprand+'.dat'
-					tmp_db='local_storage_'+tmprand+'.db'
-					if not os.path.exists(os.path.join(data_path,tmp_wal)) and not os.path.exists( os.path.join(os.getcwd(),tmp_db) ):
-						# print(os.path.join(data_path,tmp_wal), os.path.join(data_path,tmp_db) )
-						# with open(os.path.join(data_path,tmp_wal),'wb'):
-							# print('created new wallet file: ',os.path.join(data_path,tmp_wal))
+					tmp1=app_fun.run_process(self.cli_cmd,['z_listreceivedbyaddress',aa,str(self.min_conf) ])
+					try:
+						tt=json.loads(tmp1)
+					except:
+						print('Exception wal api 85 ',tmp1)
 						break
-				self.data_files['db']='local_storage_'+tmprand
-				self.data_files['wallet']='wallet_'+tmprand
-				newwallet=True
-			
-			elif 'wallet_'==cbtntxt[:7] :
-				tmp=cbtntxt[7:].split('.')
-				self.data_files['db']='local_storage_'+tmp[0]
-				self.data_files['wallet']='wallet_'+tmp[0]
-			else:
-				tmp=cbtntxt.split('.')
-				self.data_files['wallet']=tmp[0]
-				
-				cbtntxt=cbtntxt.replace('wallet','')
-				tmp=cbtntxt.split('.')
-				if tmp[0]=='':
-					self.data_files['db']= 'local_storage'
 				else:
-					self.data_files['db']= 'local_storage_'+tmp[0] 
-				
-			# print(self.data_files)
-				
-			self.paths_confirmed=True
-			self.update_paths(tmptw.item(1,2).text(),  tmptw.item(2,2).text(),   tmptw,newwallet)
-			tmptw.parent().close()
-
-		tw.cellWidget(4,0).set_fun(True, getv,tw)
-		# tw.cellWidget(4,0).setFocus()
-		# tw.cellWidget(4,0).setDefault(True)
-		
-		gui.CustomDialog(None,tw,'Enter zUnderNet', defaultij=[4,0])	
-		
-		
-	
-
-	
-	# self.data_files['db']
-	def isvalid(self,pas):
-
-		ppath=os.getcwd()
-		
-		if os.path.exists(os.path.join(ppath , self.data_files['db']+'.encr')):
-			# print(256,pas)
-			# print('decr path',os.path.join(ppath , 'local_storage.encr'), os.path.join(ppath,'local_storage.db'))
-			self.cc.aes_decrypt_file( os.path.join(ppath , self.data_files['db']+'.encr'), os.path.join(ppath,self.data_files['db']+'.db') , pas)
-			
-			db=localdb.DB(self.data_files['db']+'.db')
-			at=db.all_tables()
-			# print(at)
-			if len(at)>0:
-				app_fun.secure_delete(os.path.join(ppath , self.data_files['db']+'.encr'))
-
-				return True
-				
-		elif os.path.exists(os.path.join(ppath , self.data_files['db']+'.db')):
-			return True
-			
-		return False
-
-	
-	
-	
-		
-	def encr_db(self,parent):
-		
-		dict_set={}
-		dict_set['lock_db_threads']=[{'lock':'yes'}]
-		idb=localdb.DB('init.db')
-		if idb.check_table_exist('lock_db_threads'):
-			idb.upsert(dict_set,["lock"],{})
-			
-		self.dmn.started=False # ???
-		ppath =os.getcwd()
-		
-		if localdb.is_busy():
-			time.sleep(1)
-		
-		tryii=2
-		while localdb.is_busy():
-
-			time.sleep(1)
-			tryii=tryii-1
-			if tryii<0:
-				print('exit anyway ...')
-				break
-				
-			localdb.del_busy_too_long()
-				
-		tryii=3
-		while tryii>0:
-			tryii=tryii-1
-			try:
-			# if True:
-				self.cc.aes_encrypt_file( os.path.join(ppath ,self.data_files['db']+'.db'), os.path.join(ppath ,self.data_files['db']+'.encr') , self.app_password)
-				
-				if os.path.exists(os.path.join(ppath ,self.data_files['db']+'.encr')):
+					aa=tt['address']
 					
-					app_fun.secure_delete(os.path.join(ppath ,self.data_files['db']+'.db'))
+					tt=[tt]
+					
+					
 				
-					gui.messagebox_showinfo("Database encrypted", "DB secure: "+self.data_files['db']+".db -> "+self.data_files['db']+".encr ",parent)
+				if aa not in self.historical_txs:
+					self.historical_txs[aa]={}
 			
-					break
-			except:
-				print('Exception in delete '+self.data_files['db']+'.db', tryii)
+				for tx in tt: 
+						
+					if "txid" not in tx:
+						continue
+						
+					if tx["txid"] not in self.historical_txs[aa]:  # if this ever change - may be needed to update some records in case of reorg ?
+						self.historical_txs[aa][tx["txid"]]={}
+						
+					if tx['change']:
+						continue
+						
+					outindex=0
+					if 'outindex' in tx:
+						outindex=tx['outindex']
+					elif 'jsoutindex' in tx:
+						outindex=tx['jsoutindex']
+					
+					if outindex not in self.historical_txs[aa][tx["txid"]]: # 'Category'= "'outindex_"+str(outindex)+"'"
+					
+					
+						tmpmemo=tx["memo"]
+						try:
+							tmpmemo=bytes.fromhex(tmpmemo).decode('utf-8') #int(tx["memo"], 16)
+						except:
+							pass
+						# print(226)
+						tmpmemo=self.clear_memo(tmpmemo)
+						
+						self.historical_txs[aa][tx["txid"]][outindex]	= { "amount":tx["amount"]} #,"conf":tx["confirmations"],"memo":tmpmemo  }
+						
+						tmpwhere={'to_str':['=',"'"+aa+"'"],'Type':['=',"'in'"],'txid':['=',"'"+tx["txid"]+"'"],'Category':['=',"'outindex_"+str(outindex)+"'"] }
+						
+						
+						
+						checkexist=idb.select('tx_history', ["Type"],tmpwhere) #
+						if len(checkexist)==0:
+							table={}
+							
+							y=self.getinfo()
+															
+							dt,ts=app_fun.now_to_str(False,ret_timestamp=True)
+							
+							
+							
+							# insert incoming msgs:
+							dt=localdb.blocks_to_datetime(y["blocks"]-tx["confirmations"])
+							
+							##### prepare for inserting msg
+							if aa not in table_history_notif:
+								# merged_msg[aa]={}
+								table_history_notif[aa]={}
+							
+							if tx["txid"] not in table_history_notif[aa]:
+								# merged_msg[aa][tx["txid"]]={}
+								table_history_notif[aa][tx["txid"]]={}
+								
+							if outindex not in table_history_notif[aa][tx["txid"]]:
+								# merged_msg[aa][tx["txid"]][outindex]={'dt':dt, 'tmpmemo':tmpmemo } #table
+								q={'dt':dt
+									, 'tmpmemo':tmpmemo
+									,'block':y["blocks"]-tx["confirmations"]
+									,'timestamp':ts-60*tx["confirmations"]   
+									, 'date_time':app_fun.date2str(datetime.datetime.now()-datetime.timedelta(seconds=60*tx["confirmations"]) )
+									, 'amount':tx["amount"]
+									, 'outindex':'_'+str(outindex)
+									}
+								table_history_notif[aa][tx["txid"]][outindex]=q
+							
+			# except:
+				# break
+		
+		if self.first_block==None:
+			idbinit=localdb.DB('init.db')
+			first_block=idbinit.select_min_val('block_time_logs','block')
+			self.first_block=first_block[0][0]
 			
-			time.sleep(1)
-			
-		if self.was_derypted_warning and self.dmn.deamon_started_ok==False: #encrypt if started with unencrypted
-			print('exceptional encryption')
-			self.dmn.encrypt_wallet_and_data()
-			
-			
-
-	def on_closing(self,parent):
-		# self.close_thread=True
-		db=localdb.DB(self.data_files['db']+'.db' )
-		db.vacuum()
-		is_deamon_working=app_fun.check_deamon_running()
-		if is_deamon_working[0]:
-
-			if gui.askokcancel("Quit", "Are you sure you want to quit? Blockchain deamon is still running. If you plan to shut down your computer it is better to STOP blockchain and quit afterwards.",parent):
-			
-				self.encr_db(parent)
+		for aa,txids in table_history_notif.items():
+			for txid, iis in txids.items():
 				
-				return True
+				kk_ordered=sorted(iis.keys())
+				# print('320 wal api sorted ',kk_ordered)
+				init_table=iis[kk_ordered[0]]
+				# init_table=txid[iis[0]]
+				if len(kk_ordered)>1:
+					for ii in kk_ordered[1:]:
+						init_table['tmpmemo']+=iis[ii]['tmpmemo'] #merge memos if multiple outindex and multiple memos 
+						init_table['outindex']+=iis[ii]['outindex']
+						
+				table_msg={} # insert only those after first block
+				from_str=''
+				if init_table["block"]>=self.first_block:
+					table_msg=self.prep_msgs_inout(txid,[init_table['tmpmemo'],0,''],'in',init_table['dt'],tx_status='received', in_sign_uid=-2 ) # -2 to be detected
+					from_str=table_msg['msgs_inout'][0]['msg']
+					idb.insert(table_msg,['proc_json','type','addr_ext','txid','tx_status','date_time', 'msg','uid','in_sign_uid'])
+				
+				table={}
+				table['tx_history']=[{'Category':"outindex"+init_table['outindex'] # "outindex" not to miss some amounts!
+										, 'Type':'in'
+										, 'status':'received'
+										,'txid':txid
+										,'block':init_table["block"] 
+										, 'timestamp':init_table["timestamp"]
+										, 'date_time':init_table["date_time"]
+										,'from_str':from_str
+										,'to_str':aa
+										,'amount':init_table["amount"]
+										, 'uid':'auto'
+									}]
+				idb.insert(table,['Category','Type','status','txid','block','timestamp','date_time','from_str','to_str','amount','uid'])
+				
+				if init_table["block"]>=self.first_block:
+					table={}
+					toalias=' to address '+aa
+					if aa in self.alias_map:
+						toalias=' to alias '+self.alias_map[aa]
+						
+					tmpjson='Amount: '+str(init_table["amount"])+toalias
+					tmpopname='received'
+					
+					if len(from_str)>13 and from_str[:14] =='PaymentRequest':
+					# if table_msg['msgs_inout'][0]['msg'][:14] =='PaymentRequest':
+						# tmpjson+=';'+g['msgs_inout'][0]['msg']
+						tmpjson+=';'+from_str
+						tmpopname='payment request'
+					
+					table['notifications']=[{'opname':tmpopname,'datetime':init_table['dt'],'status':'Confirmed','details':txid,'closed':'False','orig_json':tmpjson
+											,'uid':'auto'}]
+								
+					idb.insert(table,['opname','datetime','status','details', 'closed','orig_json' ,'uid'])
+				
+		return len(table_history_notif)		
+				
+				
+	
+	def str_wallet_summary(self):
+
+		wl_str=[]
+		wl_str.append("\nWallet Total {:.8f}".format(self.total_balance) )
+		if self.total_unconf>0:
+			wl_str.append(" - confirmed {:.8f}".format(self.total_conf) )
+			wl_str.append(" - unconfirmed {:.8f}".format(self.total_unconf))
+			
+		wl_str.append("\n Alias | Amount | Full Address\n")
+		for i in sorted(enumerate(self.amounts), key=lambda x:x[1], reverse=True):
+			ii=i[0]
+			
+			tmp_total=self.wl[ii]['confirmed']+self.wl[ii]['unconfirmed']
+			
+			
+			wl_str.append(" "+self.alias_map[self.wl[ii]['addr']]+" | {:.8f}".format(tmp_total)+" | "+self.wl[ii]['addr'] )
+			if self.wl[ii]['unconfirmed']>0:
+				wl_str.append("   - confirmed {:.8f}".format(self.wl[ii]['confirmed']) )
+				wl_str.append("   - unconfirmed {:.8f}".format(self.wl[ii]['unconfirmed']) )
+	
+		return wl_str
+		
+		
+	def display_wallet(self,sorting=None,rounding=1): 	
+	
+		sorting_lol=[]
+		for ii,aa in enumerate(self.amounts):
+			tmplen=0
+			if self.wl[ii]['addr'] in self.historical_txs:
+				tmplen=len(self.historical_txs[self.wl[ii]['addr']] )
+			sorting_lol.append([ii, aa, int(self.wl[ii]['#conf']+self.wl[ii]['#unconf']), tmplen ])
+			
+		disp_dict={}
+		disp_dict['top']={'Total': self.total_balance , 'Confirmed': self.total_conf , 'Pending': self.total_unconf }
+		disp_dict['lol']=sorting_lol
+		disp_dict['wl']=self.wl
+		# disp_dict['historical']=self.historical_txs
+		disp_dict['aliasmap']=self.alias_map
+		disp_dict["blocks"]=self.last_block
+		
+		disp_dict['addr_amount_dict']=self.addr_amount_dict
+		disp_dict['amounts']=self.amounts
+		disp_dict['amounts_conf']=self.amounts_conf
+		disp_dict['amounts_unc']=self.amounts_unc
+		disp_dict['unconfirmed']=self.unconfirmed
+		disp_dict['confirmed']=self.confirmed
+		disp_dict['all_unspent']=self.all_unspent	
+		disp_dict['addr_list']=self.addr_list
+		
+		
+		return disp_dict
+		
+		
+	
+		
+	def wallet_summary(self):
+				
+		self.addr_amount_dict={}
+		self.total_balance=float(0)
+		self.total_conf=float(0)
+		self.total_unconf=float(0)
+		self.wl=[]
+		self.amounts=[]
+		self.amounts_conf=[]
+		self.amounts_unc=[]
+		
+		for aa in self.addr_list:
+		
+			amount_init=0 
+			
+			cc_conf=0
+			if aa in self.confirmed:
+				for vv in self.confirmed[aa]:
+					amount_init+=self.confirmed[aa][vv]['amount'] 
+					cc_conf+=1
+					
+			am_unc=0
+			cc_unc=0
+			if aa in self.unconfirmed:
+				for vv in self.unconfirmed[aa]:
+					am_unc+=self.unconfirmed[aa][vv]['amount'] 
+					cc_unc+=1
+			
+			self.addr_amount_dict[aa]={'confirmed':amount_init,'unconfirmed':am_unc,'#conf':cc_conf,'#unconf':cc_unc}
+			self.amounts_unc.append(am_unc)
+					
+			if amount_init>0:
+				self.wl.append({'addr':aa,'confirmed': amount_init, 'unconfirmed': am_unc,'#conf':cc_conf,'#unconf':cc_unc })
+				self.amounts.append(amount_init+am_unc)	
+				self.amounts_conf.append(amount_init)	
+				self.total_balance+=amount_init
+				self.total_conf+=amount_init
 			else:
-				return False
-		else:
-			self.encr_db(parent)	
-			return True
+				self.wl.append({'addr':aa,'confirmed':0, 'unconfirmed':am_unc,'#conf':cc_conf,'#unconf':cc_unc})
+				self.amounts.append(0+am_unc)	
+				self.amounts_conf.append(0)
+				
+			self.total_balance+=am_unc
+			self.total_unconf+=am_unc
+			
+	def clear_memo(self,initmem):
+		tmpmemo=initmem.replace('\\xf6','').replace('\\x00','').replace("b''",'') 
+		
+		ii=len(tmpmemo)-1
+		lastii=ii+1
+		while ii>-1:
+		
+			if tmpmemo[ii]==';':
+				
+				lastii=ii
+				break
+		
+			elif ord(tmpmemo[ii])==0 or tmpmemo[ii]=='0':
+				# print('lastii',ii)
+				lastii=ii
+				ii=ii-1
+			else:
+				break
+		
+		if lastii==0:
+			return ''
+			
+		return tmpmemo[:lastii].strip()
+		
+	def update_unspent(self ): 
+	
+		cmdloc=['z_listunspent','0','999999999','true']
+		
+		tmp1=app_fun.run_process(self.cli_cmd,cmdloc)
+		
+		js1=json.loads(tmp1)
+		
+		self.unconfirmed={}
+		self.confirmed={}
+		self.all_unspent={}
+		self.utxids={}
+		
+		fresh_tx=[]
+		
+		for jj in js1:
+			# try:		
+			if True:			
+				tmpadr=jj["address"]
+				tmptxid=jj["txid"]
+				tmpam=jj["amount"]
+				
+				if tmptxid not in self.utxids: # add also in unspent
+					self.utxids[tmptxid]=tmpam
+				
+				
+				if 'outindex' in jj:
+					tmptxid+=' outindex '+str(jj["outindex"])
+				elif 'jsoutindex' in jj:
+					tmptxid+=' outindex '+str(jj["jsoutindex"])
+															
+				tmpconf=jj["confirmations"]
+				if tmpconf<30:
+					fresh_tx.append(jj)
+				
+				tmpspendable=jj["spendable"] # false for watch only
+				
+				if tmpadr not in self.all_unspent:
+					self.all_unspent[tmpadr]={}
+					 
+				if tmptxid not in self.all_unspent[tmpadr]:
+					
+					self.all_unspent[tmpadr][tmptxid]={'amount':tmpam,'conf':tmpconf,'own':tmpspendable} #,'memo':tmpmemo}
+					
+				if tmpconf==0:
+					if tmpadr not in self.unconfirmed:
+						self.unconfirmed[tmpadr]={}
+					if tmptxid not in self.unconfirmed:
+						self.unconfirmed[tmpadr][tmptxid]={'amount':tmpam,'conf':tmpconf,'own':tmpspendable}
+				else:
+					if tmpadr not in self.confirmed:
+						self.confirmed[tmpadr]={}
+					if tmptxid not in self.confirmed:
+						self.confirmed[tmpadr][tmptxid]={'amount':tmpam,'conf':tmpconf,'own':tmpspendable}
+			
+		return fresh_tx
+	
+	
+	
+	
+	def alias_to_addr(self,alias):
+			
+		for oo in self.alias_map:
+			if self.alias_map[oo]==alias:
+				print('...alias['+alias+'] changed to addr ['+oo+']')
+				return oo
+					
+		return alias
+			
+		
+
+	
+	def address_aliases(self ): # address_aliases(get_wallet(True))
+		# self.alias_map={}
+		sorted_addr=sorted(self.addr_list) #self.addr_list
+		for aa in sorted_addr:
+		
+			if aa not in self.alias_map: # new addr:
+			
+				tmpa=aa[3:6].upper() #+aa[-3:].upper()
+				
+				iter=1
+				while tmpa in self.alias_map.values():
+					tmpa=aa[3:(6+iter)].upper()
+					
+					iter+=1
+				
+				self.alias_map[aa]=tmpa
+			
+		
+	def z_viewtransaction(self,txid):
+		try:
+		# if True:
+			tmp=app_fun.run_process(self.cli_cmd,'z_viewtransaction '+txid)
+			if 'error' in tmp.lower():
+				return 'not valid txid'
+			# print(396,tmp)
+			tmpj=json.loads(tmp)
+			# print(397,tmpj)
+					
+			return tmp
+		except:
+			print('wallet api not valid txid')
+			return 'not valid txid'
+		
+			
+
+	def getinfo(self,toprint=False):
+		try:
+			gi=app_fun.run_process(self.cli_cmd,"getinfo")
+			gi=json.loads(gi)
+			if toprint:
+				print(gi)
+			
+			
+			kv_tmp=["name","errors","synced","notarized","blocks","longestchain","tiptime","connections"]
+			gtmpstr={}
+			for dd in kv_tmp:
+				if dd in gi:
+					gtmpstr[dd]=gi[dd]
+			
+			return gtmpstr
+			# { "name":gi["name"],"errors":gi["errors"],"KMDversion":gi["KMDversion"],"synced":gi["synced"],"notarized":gi["notarized"],"blocks":gi["blocks"],"longestchain":gi["longestchain"],"tiptime":gi["tiptime"],"connections":gi["connections"]}
+		except:
+			print('wallet api getinfo')
+			return { "name":'exception',"errors":'',"KMDversion":'',"synced":'',"notarized":'',"blocks":'',"longestchain":'',"tiptime":'',"connections":''}
+
+		
+		
+
+	def update_all_addr(self):
+	
+		self.addr_list=[]
+					 
+		try:
+			r2=app_fun.run_process(self.cli_cmd,"z_listaddresses")
+			a2=json.loads(r2)
+			# print(403,r2,a2)
+
+			for aa in a2:
+				self.addr_list.append(aa)
+		except:
+			print('wallet api update_all_addr')
+			return
+		
+		
+		
+	def new_zaddr(self):
+
+		try:
+			tmpnewaddr=app_fun.run_process(self.cli_cmd,"z_getnewaddress")
+			self.refresh_wallet()
+			return str(tmpnewaddr) 
+		except:
+			print('wallet api no addr exception')
+			return 'no addr exception'
+		
+		
+	def validate_zaddr(self,zaddr):
+		try:
+			tmp=app_fun.run_process(self.cli_cmd,'z_validateaddress '+zaddr)
+			tmpj=json.loads(tmp)
+					
+			return tmpj['isvalid']
+		except:
+			print('wallet api not valid exception')
+			return 'not valid exception'
+		
+		
+	def exp_view_key(self,zaddr): # 'False' 'cannot export'
+		try:
+			# print('zaddr',zaddr)
+			return str(app_fun.run_process(self.cli_cmd,"z_exportviewingkey "+zaddr)) 
+		except:
+			print('wallet api cannot export')
+			return 'cannot export'
+		
+		
+	def imp_view_key(self,zaddr,vkey,rescan="whenkeyisnew",startHeight=996000):
+
+		# print('Importing viewing key may take a while (rescan) from height '+str(startHeight) ) hex
+		
+		tmpnewaddr=app_fun.run_process(self.cli_cmd,["z_importviewingkey",vkey,rescan,str(startHeight),zaddr])
+		# deamon.run_subprocess(self.cli_cmd,["z_importviewingkey",vkey,rescan,str(startHeight),zaddr], 64 ) 
+		self.refresh_wallet()
+		return json.loads(tmpnewaddr) 
+		# print('Done')	
+		
+		
+	def export_wallet(self):
+		retv={}
+		for aa in self.addr_list:
+			# print('fetching priv key for',aa)
+			retv[aa]=self.exp_prv_key(aa)
+			# print('   ',retv[aa])
+			
+			
+		return retv
+			
+	def merge(self,fr,tostr,limit):
+		args=['z_mergetoaddress',fr,tostr ,'0.0001','1',str(limit)]
+		# print(647,args,flush=True)
+		return app_fun.run_process(self.cli_cmd,args)
+	
+	def send(self,fr,tostr):
+		# print(tostr)
+		args=['z_sendmany',fr,tostr]
+		return app_fun.run_process(self.cli_cmd,args)
+
+	def exp_prv_key(self,zaddr):
+		try:
+			return str(app_fun.run_process(self.cli_cmd,"z_exportkey "+zaddr)) 
+		except:
+			print('wallet api cannot export exp_prv_key')
+			return 'cannot export'
+
+		
+	def imp_prv_key(self,zkey,rescan="whenkeyisnew",startHeight=996000):
+
+		# print('Importing private key may take a while (rescan) from height '+str(startHeight) )
+		
+		tmpnewaddr=app_fun.run_process(self.cli_cmd,["z_importkey",zkey,rescan,str(startHeight) ])
+		# deamon.run_subprocess(self.cli_cmd,"z_importkey "+zkey+rescan+str(startHeight), 64 ) 
+		self.refresh_wallet()
+		return json.loads(tmpnewaddr) 
+		# print('Done')
+
+
