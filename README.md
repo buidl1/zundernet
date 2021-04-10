@@ -3,9 +3,9 @@ _Python3 wallet GUI for [Pirate Chain](https://pirate.black/)_
 
 Zundernet is new proof of concept wallet, with features not available in other wallets.  
 
-It works with Pirate (komodod or pirated) and Verus (verusd).
+It works with Pirate (komodod or pirated) .
 
-NOTE: when using zundernet do not run Pirate and Verus at the same time with different wallets.
+NOTE: when using zundernet do not run Pirate at the same time with different wallets.
 
 ## List of features:
 
