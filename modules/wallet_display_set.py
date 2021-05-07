@@ -1325,6 +1325,181 @@ class WalDispSet(gui.QObject):
 		return grid_lol_wallet_sum, col_names
 		
 		
+# 1. insert into channel table:
+			# owner nickname, owner init hash, title, channel name, init content
+	def set_channel(self,addr,vkey):
+		# print('set_channel',addr,vkey)
+		select_addr_str='Select address to send initial tx'
+		automate_rowids=[ 
+							[{'T':'LabelC', 'L':'Channel for address: ','span':2  } , { } ] ,
+							[{'T':'LabelC', 'L':addr ,'span':2} , { } ] ,
+							[{'T':'LabelC', 'L':'Your nickname: ' } , {'T':'LineEdit' } ] ,
+							[{'T':'LabelC', 'L':'Channel name: ' } , {'T':'LineEdit' } ] ,
+							[{'T':'LabelC', 'L':'Introduction: ' } , {'T':'LineEdit' } ] ,
+							[{'T':'Button', 'L':select_addr_str,'span':2  }, {}] ,
+							[{'T':'Button', 'L':'Enter','span':2}, {}] 
+						]
+
+										
+		expo=gui.Table(None,{'dim':[7,2], 'toContent':1}) #flexitable.FlexiTable(rootframe,grid_settings)
+		expo.updateTable(automate_rowids)
+		# rootframe.insertWidget(expo)
+		
+		
+		
+		def select_addr(btn2):
+		
+			def set_values(btn3,selz,categ,alias,total_amount):
+				newtxt= ', '.join([categ,alias])
+				
+				total_amount=float(total_amount)-0.0001
+				
+				expo.cellWidget(5,0).setText(selz) 
+				btn3.parent().parent().parent().parent().close()
+				
+			filter_frame=gui.FramedWidgets(None,'Filter')
+			filtbox=gui.Combox(None,self.own_wallet_categories()) # #ttk.LabelFrame(selframe,text='Filter')
+			filter_frame.insertWidget(filtbox)
+
+			
+			addr_list_frame=gui.ContainerWidget(None,layout=gui.QVBoxLayout()) #,'Addresses list')
+			# print('parent3',filtbox.parent())
+			
+			grid_lol_select,colnames=self.prepare_byaddr_frame( True,True)
+			 
+			select_table=gui.Table(None,{'dim':[len(grid_lol_select),len(colnames)], 'toContent':1})
+			select_table.updateTable(grid_lol_select,colnames)
+			for bii in range( select_table.rowCount()):
+				# print('values',select_table.item(bii,7).text())
+				select_table.cellWidget(bii,6).set_fun( False, set_values, select_table.item(bii,7).text(), select_table.item(bii,0).text(), select_table.item(bii,1).text(), select_table.item(bii,2).text()  )
+			
+			addr_list_frame.insertWidget(select_table)
+			
+			def refresh_add_list(btn4,*eventsargs):
+				
+				list_frame_tmp=btn4.parent().parent().widgetAt(1) #listframe
+				tbltmp=list_frame_tmp.widgetAt(0)
+				
+				tbltmp.filtering( 'item',0,btn4.currentText() )
+
+			
+			filtbox.set_fun(refresh_add_list)  
+			gui.CustomDialog(btn2,[filter_frame,addr_list_frame ], title='Select address to send from')
+		
+		# send_from.cellWidget(1,0).set_fun(False,select_addr)s
+		
+		
+		expo.cellWidget(5,0).set_fun(False,select_addr) #set_cmd( 'enter',[],enter)
+		
+		
+
+		def enter(btn2): 
+			# print('save data')
+			
+			creator=expo.cellWidget(2,1).text().strip()
+			if creator=='':
+				gui.messagebox_showinfo('Your nickname must not be empty','Your nickname must not be empty',btn2)
+				return
+				
+			chname=expo.cellWidget(3,1).text().strip()
+			if chname=='':
+				gui.messagebox_showinfo('Channel name must not be empty','Channel name must not be empty',btn2)
+				return
+				
+			if expo.cellWidget(5,0).text()==select_addr_str:
+				gui.messagebox_showinfo('You must select address','You must select address for init transaction of the channel',btn2)
+				return
+				
+			# addr,vkey
+			# table['channels']={'address':'text', 'vk':'text', 'creator':'text', 'channel_name':'text', 'status':'text', 'own':'text' }
+			
+			
+			# sending INIT TX 
+			z=expo.cellWidget(5,0).text()
+			# a='0.0001'
+			initcontent=expo.cellWidget(4,1).text().strip()
+			
+			msg=json.dumps({'channel_name':chname,'channel_owner':creator, 'channel_intro':initcontent})
+			got_bad_char, msg_arr=localdb.prep_msg(msg,addr)
+			
+			if got_bad_char:
+				gui.showinfo(msg_arr[0], msg_arr[1])
+				return
+				
+			ddict={'fromaddr':z,	'to':[]	} #
+			for mm in msg_arr:
+				ddict['to'].append({'z':addr,'a':0.0001,'m':mm})
+				
+			table={}
+			table['queue_waiting']=[localdb.set_que_waiting('send',jsonstr=json.dumps(ddict) ) ]
+			table['queue_waiting'][0]['type']='channel'
+			
+			idb=localdb.DB(self.db)
+			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])	
+			
+			# all went through - save channel
+			table={'channels':[{'address':addr, 'vk':vkey, 'creator':creator, 'channel_name':chname, 'status':'active', 'own':'True'}]}	
+			
+			# idb=localdb.DB(self.db)
+			idb.insert(table,['address' , 'vk' , 'creator' , 'channel_name' , 'status' , 'own' ])
+			gui.showinfo('Channel created','Channel created.\nTo start using it - export channel view key and share with others.')
+			
+			# update addr category
+			
+			date_str=app_fun.now_to_str(False)
+			table={'address_category':[{'address':addr, 'category':tmp, 'last_update_date_time':date_str}]}			
+			idb.upsert(table,['address','category','last_update_date_time'],{'address':['=',"'"+addr+"'"]})
+			
+			# wallet_details.update_frame(self.prepare_summary_frame()) # update categories
+			# grid1,col1=self.prepare_byaddr_frame()
+			
+			self.update_addr_cat_map()
+			self.sending_signal.emit(['wallet'])
+			
+				
+			expo.parent().close() 
+
+
+		expo.cellWidget(6,0).set_fun(False,enter) #set_cmd( 'enter',[],enter)
+
+		gui.CustomDialog(None,expo, title='Creating channel')
+		
+		
+
+
+				
+
+
+
+
+
+
+		
+		
+									
+	def export_or_create_channel(self,btn,addr ):
+		if btn.currentText()=='Select:':
+			return
+		elif btn.currentText()=='address':
+			self.export_addr(btn,addr)
+		elif btn.currentText()=='view key':
+			self.export_viewkey(btn,addr)
+		elif btn.currentText()=='set channel':
+			print(btn.currentText())
+			ddict={'addr':addr,
+						'path':'',
+						'password':''
+						}
+			table={}	
+			table['queue_waiting']=[localdb.set_que_waiting('get_viewkey',jsonstr=json.dumps(ddict)) ]
+			idb=localdb.DB(self.db)
+			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
+			
+			
+		btn.setIndexForText('Select:')
+		
+		
+		
 		
 		
 	def get_header(self,selecting):
@@ -1332,7 +1507,8 @@ class WalDispSet(gui.QObject):
 		if selecting:
 			return ['Category','Alias','Total','Confirmed','Pending','Usage','Select','Full address']
 		else:
-			return  ['Category','Alias','Total','Confirmed',' ','Pending','Bills','Usage','Addr.','V.Key']
+			return  ['Category','Alias','Total','Confirmed',' ','Pending','Bills','Usage','Export']
+			# return  ['Category','Alias','Total','Confirmed',' ','Pending','Bills','Usage','Addr.','V.Key']
 		
 		
 	def prepare_byaddr_frame(self,init=False,selecting=False,selecting_to=False):	
@@ -1374,15 +1550,25 @@ class WalDispSet(gui.QObject):
 			
 				ii=i[0]
 				
-				self.amount_per_address[ddict['wl'][ii]['addr']]=float(ddict['wl'][ii]['confirmed'])
+				tmp_confirmed=0
+				if 'confirmed' in ddict['wl'][ii]:
+					tmp_confirmed=float(ddict['wl'][ii]['confirmed'])
+				if tmp_confirmed==None:
+					tmp_confirmed=0
+					
+				self.amount_per_address[ddict['wl'][ii]['addr']]=tmp_confirmed
 				
 				tmpcurcat='Edit'
 				if ddict['wl'][ii]['addr'] in addr_cat:
 					tmpcurcat=addr_cat[ddict['wl'][ii]['addr']]
 				
+				
+				tmp_unconfirmed=0
+				if 'unconfirmed' in ddict['wl'][ii]:			
+					tmp_unconfirmed=float(ddict['wl'][ii]['unconfirmed'])
+				if tmp_unconfirmed==None:
+					tmp_unconfirmed=0
 					
-				tmp_confirmed=ddict['wl'][ii]['confirmed']
-				tmp_unconfirmed=ddict['wl'][ii]['unconfirmed']
 				tmp_total=tmp_confirmed+tmp_unconfirmed
 				
 				
@@ -1437,9 +1623,10 @@ class WalDispSet(gui.QObject):
 									{'T':'Button', 'L':str(bills)+'/'+str(billsunc) , 'tooltip':'Show bills / UTXOs' , 'IS':bill_state, 'fun':self.show_bills, 'args':(tmpaddr,) },
 									
 									{'T':'LabelV', 'L':str( ddict['lol'][ii][3] ) },
-
-									{'T':'Button', 'L':u"\u2398" , 'tooltip': 'Export address '+tmpaddr, 'fun':self.export_addr, 'args':(tmpaddr,), 'style':'padding:-4px;font-size:24px; ' },
-									{'T':'Button', 'L':u"\u2398" , 'tooltip': 'Export Viewing Key of '+tmpaddr, 'fun':self.export_viewkey, 'args':(tmpaddr,), 'style':'padding:-4px;font-size:24px;' }
+									{'T':'Combox', 'V':['Select:','address','view key','set channel'],'fun':self.export_or_create_channel,'args':(tmpaddr,), 'every_click':1  }
+									
+									# {'T':'Button', 'L':u"\u2398" , 'tooltip': 'Export address '+tmpaddr, 'fun':self.export_addr, 'args':(tmpaddr,), 'style':'padding:-4px;font-size:24px; ' },
+									# {'T':'Button', 'L':u"\u2398" , 'tooltip': 'Export Viewing Key of '+tmpaddr, 'fun':self.export_viewkey, 'args':(tmpaddr,), 'style':'padding:-4px;font-size:24px;' }
 									]
 				grid_lol3.append(tmpdict2) 
 
@@ -1474,7 +1661,6 @@ class WalDispSet(gui.QObject):
 		
 			# global rootframe, tmpvar
 			tmp= tmpvar.text().strip()
-			wallet_details=btn.parent().parent()
 			
 			if tmp=='':
 				
@@ -1490,10 +1676,10 @@ class WalDispSet(gui.QObject):
 			table['address_category']=[{'address':addr, 'category':tmp, 'last_update_date_time':date_str}]
 			idb.upsert(table,['address','category','last_update_date_time'],{'address':['=',"'"+addr+"'"]})
 			
-			# wallet_details.update_frame(self.prepare_summary_frame()) # update categories
-			grid1,col1=self.prepare_byaddr_frame()
-			
-			wallet_details.updateTable(grid1)
+			## wallet_details.update_frame(self.prepare_summary_frame()) # update categories
+			# wallet_details=btn.parent().parent()
+			# grid1,col1=self.prepare_byaddr_frame()			
+			# wallet_details.updateTable(grid1)
 			self.update_addr_cat_map()
 			self.sending_signal.emit(['wallet'])
 			tmpvar.parent().parent().parent().close() #.destroy()
