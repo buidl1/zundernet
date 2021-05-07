@@ -120,9 +120,9 @@ class TransactionsHistory:
 							{'T':'LabelV', 'L':str(rr[4]), 'uid':'block'+str(rr[9]), 'visible':visible  } ,
 							{'T':'LabelV', 'L': rr[5]  , 'uid':'ts'+str(rr[9]) , 'visible':visible} , 
 							{'T':'LabelV', 'L':str(rr[8]), 'uid':'am'+str(rr[9]) , 'visible':visible} , 
-							{'T':'InputL', 'L':rr[6], 'uid':'from'+str(rr[9]), 'visible':visible, 'width':24} , 
-							{'T':'InputL', 'L':rr[7], 'uid':'to'+str(rr[9]) , 'visible':visible, 'width':24} , 
-							{'T':'InputL', 'L': rr[3] , 'uid':'txid'+str(rr[9]) , 'visible':visible, 'width':6} 
+							{'T':'LineEdit', 'V': rr[6], 'uid':'from'+str(rr[9]), 'visible':visible, 'width':24} , 
+							{'T':'LineEdit', 'V': rr[7], 'uid':'to'+str(rr[9]) , 'visible':visible, 'width':24} , 
+							{'T':'LineEdit', 'V': rr[3] , 'uid':'txid'+str(rr[9]) , 'visible':visible, 'width':6} 
 							]	
 							
 							
