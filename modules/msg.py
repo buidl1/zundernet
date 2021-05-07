@@ -1,4 +1,4 @@
-# check proper updating msm on events
+# add user name in signatures for use only in channels ? or generalize if not assign addr book ?
 
 import os
 # import datetime
@@ -12,7 +12,7 @@ import modules.gui as gui
 
 class Msg:
 
-	def match_sign(self,fsign): 
+	def match_sign(self,fsign,sender=''): 
 		if len(fsign)==0:
 			return -1,''
 		
@@ -57,26 +57,34 @@ class Msg:
 			
 		tuid=idb.select('in_signatures',['uid' ], {'hex_sign':['=',"'"+sign1+"'"],'n':['=',sign1_n]}   ) #
 		
-		if len(tuid)>0:
+		if len(tuid)>0: # this should be new hash - should be no other before like this one - if other detected - return 
 			return -666,''
 		
-		if tmphash=='': 
+		if tmphash=='': # new sender 
 			
 			table={}
-			table['in_signatures']=[{'hex_sign':sign1,'n':sign1_n ,'uid':'auto'}]
-			idb.insert(table,['hex_sign','n','uid'  ])
+			table['in_signatures']=[{'hex_sign':sign1,'n':sign1_n ,'uid':'auto' }]
+			insert_arr=['hex_sign','n','uid'  ]
+			if sender!='':
+				insert_arr.append('addr_from_book')
+				addr_from_book=sender+fsign[:4] # channel sender name = sender nickname + init hash 4 chars
+				table['in_signatures'][0]['addr_from_book']=addr_from_book
+				
+			idb.insert(table,insert_arr)
 			
-			tuid=idb.select('in_signatures',['uid','addr_from_book'], {'hex_sign':['=',"'"+sign1+"'"],'n':['=',sign1_n]}   ) #
+			tuid=idb.select('in_signatures',['uid','addr_from_book'], {'hex_sign':['=',"'"+sign1+"'"],'n':['=',sign1_n]}   ) #getting the new uid 
 			new_uid=tuid[0][0]
-			if tuid[0][1]!=None:
-				addr_from_book=tuid[0][1]
+			# if tuid[0][1]!=None:
+				# addr_from_book=tuid[0][1]
 		else: 
 			
 			table={}
 			table['in_signatures']=[{'hex_sign':sign1,'n':sign1_n}]
 			idb.update(table,['hex_sign','n'   ],{'hex_sign':['=',"'"+tmphash+"'"],'n':['=',n_init]})
+			
+			
 		
-		if sign2_n>-1: 
+		if sign2_n>-1: # if exchanging signature to new one 
 			
 			cursign=idb.select('in_signatures', ['uid','addr_from_book' ],{'hex_sign':['=', "'"+sign1+"'"], 'n':['=', sign1_n] } ) #
 			tmpaddr=cursign[0][1]
@@ -89,6 +97,8 @@ class Msg:
 			table={} 
 			table['in_signatures']=[{'uid':tmpuid,'addr_from_book':tmpaddr }]
 			idb.update(table,['uid','addr_from_book' ],{'hex_sign':['=',"'"+sign2+"'"],'n':['=',sign2_n] })
+			
+			# addr_from_book=tmpaddr # not needed - already done in the loop
 			
 		return new_uid,addr_from_book 
 		
@@ -186,10 +196,13 @@ class Msg:
 	
 	
 	
-	def proc_inout(self): # goal - set addr_ext and in_sign_uid for incoming msg
+	
+	
+	# main purpose - recognize sender
+	def proc_inout(self): # goal - set addr_ext and in_sign_uid for incoming msg removed ,'addr_to'
 		idb=localdb.DB(self.db)
 		
-		mio=idb.select('msgs_inout',['type','addr_ext','date_time','msg', 'in_sign_uid','uid','tx_status','txid'],{'proc_json':['=',"'False'"]},orderby=[{'date_time':'asc'}]) #
+		mio=idb.select('msgs_inout',['type','addr_ext','date_time','msg', 'in_sign_uid','uid','tx_status','txid','is_channel'],{'proc_json':['=',"'False'"]},orderby=[{'date_time':'asc'}]) #
 		
 		if len(mio)==0:
 			return
@@ -198,6 +211,21 @@ class Msg:
 		
 			mm1=mm[1]
 			tmpmsg=mm[3]
+			tmp_sender=''
+			
+			if mm[8]=='True': # if channel 
+				try:
+					tmp_str=json.loads(tmpmsg) #'channel_name':chname,'channel_owner':creator, 'channel_intro'
+					if 'channel_name' in tmp_str:
+						tmp_sender=tmp_str['channel_owner']
+						tmpmsg='Channel name: '+tmp_str['channel_name']+ '\nOwner: '+tmp_str['channel_owner']+ '\nIntroduction: '+tmp_str['channel_name']
+					elif 'txt' in tmp_str:					
+						tmpmsg=tmp_str['txt']
+						if 'sender' in tmp_str:
+							if tmp_str['sender'].strip()!='':
+								tmp_sender=tmp_str['sender'].strip()
+				except:
+					print('Bad channel json 222 ',tmpmsg)
 			
 			if mm[0]=='out':
 				table={'msgs_inout':[{'proc_json':'True' }]} 
@@ -207,12 +235,16 @@ class Msg:
 				
 				fsign=json.loads(mm1 )
 				
-				uid,addr_from_book=self.match_sign( fsign)
+				uid,addr_from_book=self.match_sign( fsign, tmp_sender ) #mio
 				
 				addr_ext=''
 				if uid>-1:
 					tmpalias='uid_'+str(uid)
-					if addr_from_book!='':
+					if mm[8]=='True': # if channel 
+						tmpalias=addr_from_book
+						tmpmsg=json.dumps({'sender':addr_from_book, 'txt':tmpmsg}) #addr_from_book+':\n'+tmpmsg
+					
+					elif addr_from_book!='':
 						addr_ext=addr_from_book
 						
 						tmpalias=idb.select('addr_book',['Alias'] , {'Address':['=',"'"+addr_from_book+"'"] } )
@@ -241,10 +273,15 @@ class Msg:
 					
 					tmpmsg=tmpmsg.split('PaymentRequest;')
 					tmpmsg=tmpmsg[-1]
-					tmpmsg='Payment request '+app_fun.json_to_str(json.loads(tmpmsg),tt='')				
+					tmpmsg='Payment request '+app_fun.json_to_str(json.loads(tmpmsg),tt='')		
+			
 					
-				table={'msgs_inout':[{'type':tmptype,'proc_json':'True', 'in_sign_uid':uid, 'addr_ext':addr_ext,'msg':tmpmsg}]} 
-				idb.update(table,['type','proc_json', 'in_sign_uid','addr_ext','msg'],{'uid':['=',mm[5]]})
+				table={'msgs_inout':[{'type':tmptype,'proc_json':'True', 'in_sign_uid':uid, 'addr_ext':addr_ext,'msg':tmpmsg}]} #,'is_channel':"False"
+				# if is_channel:
+					# table['msgs_inout'][0]['is_channel']='True'
+				
+				
+				idb.update(table,['type','proc_json', 'in_sign_uid','addr_ext','msg' ],{'uid':['=',mm[5]]})
 				
 		
 		
@@ -493,7 +530,7 @@ class Msg:
 			self.updating_threads=False
 			# when assigning - should refresh messages too !
 		except:
-			print('msg update_tread_frame')
+			# print('msg update_tread_frame')
 			self.updating_threads=False
 		
 	
@@ -536,7 +573,7 @@ class Msg:
 				
 			self.updating_chat=False
 		except:
-			print('update_msg_frame')
+			# print('update_msg_frame')
 			self.updating_chat=False
 	
 	
@@ -574,9 +611,9 @@ class Msg:
 		thr_filter=self.filter_table.cellWidget(0,1).currentText() #get_value('thr')
 		wwhere={} #'Last 7 days','Last 30 days','All'
 		if thr_filter=='Last 7 days':
-			wwhere={'date_time':['>=',"'"+app_fun.today_add_days(-7)+"'"], 'in_sign_uid':['>',-2]} #
+			wwhere={'date_time':['>=',"'"+app_fun.today_add_days(-7)+"'"], 'in_sign_uid':['>',-2],'is_channel':['=',"'False'"]} #
 		elif thr_filter=='Last 30 days':
-			wwhere={'date_time':['>=',"'"+app_fun.today_add_days(-30)+"'"], 'in_sign_uid':['>',-2]}
+			wwhere={'date_time':['>=',"'"+app_fun.today_add_days(-30)+"'"], 'in_sign_uid':['>',-2],'is_channel':['=',"'False'"]}
 			
 		adr_date=idb.select_max_val( 'msgs_inout',['in_sign_uid','date_time'],where=wwhere,groupby=['addr_ext'])
 		if hasattr(self,"adr_date") and self.adr_date==adr_date:
@@ -662,14 +699,14 @@ class Msg:
 			
 			wwhere={}
 			if threads_aa[k][0]=='unknown':
-				wwhere={'proc_json':['=',"'True'"],'type':['=',"'in'"],'in_sign_uid':['<',0] }				
+				wwhere={'proc_json':['=',"'True'"],'type':['=',"'in'"],'in_sign_uid':['<',0],'is_channel':['=',"'False'"] }				
 
 			elif 'uid_' in threads_aa[k][1]:
 			
-				wwhere={'proc_json':['=',"'True'"],'in_sign_uid':['=', threads_aa[k][0].replace('uid_','') ] } # ? int()
+				wwhere={'proc_json':['=',"'True'"],'in_sign_uid':['=', threads_aa[k][0].replace('uid_','') ],'is_channel':['=',"'False'"] } # ? int()
 			
 			else: #if threads_aa[k][1]!='unknown':
-				wwhere={'proc_json':['=',"'True'"],'addr_ext':['=',"'"+threads_aa[k][0]+"'"], 'in_sign_uid':['>',-2] }
+				wwhere={'proc_json':['=',"'True'"],'addr_ext':['=',"'"+threads_aa[k][0]+"'"], 'in_sign_uid':['>',-2],'is_channel':['=',"'False'"] }
 				
 			tmp_msg=idb.select('msgs_inout', ['type','msg','date_time','uid','in_sign_uid' ],where=wwhere, orderby=[ {'date_time':'desc'}], limit=llimit)
 			
