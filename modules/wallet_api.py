@@ -16,7 +16,7 @@ import modules.app_fun as app_fun
 class Wallet: # should store last values in DB for faster preview - on preview wallt commands frozen/not active
 
 
-	def prep_msgs_inout(self,txid_utf8,mm,ttype,dt,tx_status='sent' ,in_sign_uid=-1 ):
+	def prep_msgs_inout(self,txid_utf8,mm,ttype,dt,tx_status='sent' ,in_sign_uid=-1,addr_to='' ):
 
 		tmpmsg,sign1,sign1_n,sign2,sign2_n =app_fun.split_memo(mm[0],False)
 		
@@ -43,7 +43,8 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 							,'date_time':dt
 							,'msg':tmpmsg
 							,'uid':'auto'
-							,'in_sign_uid':in_sign_uid}]
+							,'in_sign_uid':in_sign_uid
+							,'addr_to':addr_to }]
 		return table #table['msgs_inout'][0]['msg']
 	
 
@@ -95,6 +96,9 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 				
 				
 			if "addr_list" in disp_dict: self.addr_list=disp_dict['addr_list']
+			
+			if "external_addr" in disp_dict: self.external_addr=disp_dict['external_addr']
+
 			# if "historical" in disp_dict: self.historical_txs=disp_dict['historical']
 			if "aliasmap" in disp_dict: self.alias_map=disp_dict['aliasmap']	
 			if "top" in disp_dict: 
@@ -135,18 +139,24 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 	
 	def refresh_wallet(self): # once a 1-2 minutes?
 		
+		# print(self.getinfo())
 		tmpblocks=self.getinfo()["blocks"]
 		self.last_block=tmpblocks
-		
+		# print(141)
 		self.update_all_addr()
+		# print(143)
 		self.address_aliases()
+		# print(145)
 		freshutxo=self.update_unspent() #init=False,maxconf=str(blocks_div) )
+		# print(147)
 		tmptotal_balance=self.total_balance
 		self.wallet_summary()
+		# print(150)
 		total_change=round(self.total_balance-tmptotal_balance,8)
 		# if total_change!=0:
 			# print(168,'total change diff 0 wal api ',total_change)
 			# total_change=1
+		# print('b4 return')
 		
 		return self.update_historical_txs(freshutxo)+total_change
 	
@@ -155,6 +165,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 	# run only once after startup to fill gaps if any
 	# later base on list unspent ...
 	
+	#freshutxo [{"address","txid","amount"},..]
 	def update_historical_txs(self,freshutxo): # max count: 80*tps * 60 =4800 < 5000
 		idb=localdb.DB(self.db)	
 		
@@ -163,7 +174,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 		
 		
 		if self.history_update_counter%60==0:
-			iterat_arr=self.addr_list # oncece a 60 times check full 
+			iterat_arr=self.addr_list + self.external_addr # oncece a 60 times check full 
 			full_check=True
 			
 		self.history_update_counter+=1
@@ -172,12 +183,14 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 		table_history_notif={}
 		
 		for aa in iterat_arr:
+			# print('aa',aa)
 			# try:
 			if True:
 				tt=aa
 				if full_check:
 					
 					tmp1=app_fun.run_process(self.cli_cmd,['z_listreceivedbyaddress',aa,str(self.min_conf) ])
+					# print(186,tmp1)
 					try:
 						tt=json.loads(tmp1)
 					except:
@@ -188,22 +201,27 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 					
 					tt=[tt]
 					
-					
+				# print('tt',tt)
 				
 				if aa not in self.historical_txs:
 					self.historical_txs[aa]={}
 			
 				for tx in tt: 
 						
+					# print(211)
 					if "txid" not in tx:
 						continue
 						
+					# print(215)
 					if tx["txid"] not in self.historical_txs[aa]:  # if this ever change - may be needed to update some records in case of reorg ?
 						self.historical_txs[aa][tx["txid"]]={}
 						
-					if tx['change']:
-						continue
+					# print(219)
+					if 'change' in tx:
+						if tx['change']:
+							continue
 						
+					# print(223)
 					outindex=0
 					if 'outindex' in tx:
 						outindex=tx['outindex']
@@ -217,8 +235,9 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 						try:
 							tmpmemo=bytes.fromhex(tmpmemo).decode('utf-8') #int(tx["memo"], 16)
 						except:
+							# print(226)
+						
 							pass
-						# print(226)
 						tmpmemo=self.clear_memo(tmpmemo)
 						
 						self.historical_txs[aa][tx["txid"]][outindex]	= { "amount":tx["amount"]} #,"conf":tx["confirmations"],"memo":tmpmemo  }
@@ -228,17 +247,23 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 						
 						
 						checkexist=idb.select('tx_history', ["Type"],tmpwhere) #
+						# print('checkexist',checkexist)
 						if len(checkexist)==0:
 							table={}
 							
 							y=self.getinfo()
+							# print('getinfo',y)
 															
 							dt,ts=app_fun.now_to_str(False,ret_timestamp=True)
+							# print('dt ts',dt,ts)
 							
-							
-							
+							# print('tx',tx)
 							# insert incoming msgs:
-							dt=localdb.blocks_to_datetime(y["blocks"]-tx["confirmations"])
+							
+							# estimate dt - why so big error?
+							# print('blocks, conf',y["blocks"],tx["confirmations"])
+							dt=localdb.blocks_to_datetime(y["blocks"]-tx["confirmations"]) # time it was sent 
+							# print('dt?',dt)
 							
 							##### prepare for inserting msg
 							if aa not in table_history_notif:
@@ -248,9 +273,10 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 							if tx["txid"] not in table_history_notif[aa]:
 								# merged_msg[aa][tx["txid"]]={}
 								table_history_notif[aa][tx["txid"]]={}
-								
+							# print(268)
 							if outindex not in table_history_notif[aa][tx["txid"]]:
 								# merged_msg[aa][tx["txid"]][outindex]={'dt':dt, 'tmpmemo':tmpmemo } #table
+								# print('times\ndt',dt,'timestamp',ts-60*tx["confirmations"]   ,'datetime',app_fun.date2str(datetime.datetime.now()-datetime.timedelta(seconds=60*tx["confirmations"]) ))
 								q={'dt':dt
 									, 'tmpmemo':tmpmemo
 									,'block':y["blocks"]-tx["confirmations"]
@@ -263,6 +289,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 							
 			# except:
 				# break
+		# print('after for')	
 		
 		if self.first_block==None:
 			idbinit=localdb.DB('init.db')
@@ -270,11 +297,14 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 			self.first_block=first_block[0][0]
 			
 		for aa,txids in table_history_notif.items():
+			# print('aa2',aa)
 			for txid, iis in txids.items():
 				
 				kk_ordered=sorted(iis.keys())
 				# print('320 wal api sorted ',kk_ordered)
 				init_table=iis[kk_ordered[0]]
+				
+				# print('init_table',init_table)
 				# init_table=txid[iis[0]]
 				if len(kk_ordered)>1:
 					for ii in kk_ordered[1:]:
@@ -283,11 +313,60 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 						
 				table_msg={} # insert only those after first block
 				from_str=''
-				if init_table["block"]>=self.first_block:
-					table_msg=self.prep_msgs_inout(txid,[init_table['tmpmemo'],0,''],'in',init_table['dt'],tx_status='received', in_sign_uid=-2 ) # -2 to be detected
-					from_str=table_msg['msgs_inout'][0]['msg']
-					idb.insert(table_msg,['proc_json','type','addr_ext','txid','tx_status','date_time', 'msg','uid','in_sign_uid'])
 				
+				
+				# print('init_table["block"]>=self.first_block:',init_table["block"],self.first_block)
+				
+				if init_table["block"]>=self.first_block:
+					
+					table_msg=self.prep_msgs_inout(txid,[init_table['tmpmemo'],0,''],'in',init_table['dt'],tx_status='received', in_sign_uid=-2,addr_to=aa ) # -2 to be detected
+					
+					from_str=table_msg['msgs_inout'][0]['msg']
+					# print(321,table_msg,from_str)
+					tmpmsg=from_str
+					# recognize if channel 
+					
+					is_channel=idb.select('channels',['channel_name'],{'address':['=',"'"+aa+"'"]} )	# aaaddr_to
+					# print('is_channel',is_channel)
+					if len(is_channel)>0:
+						is_channel=True
+					else:
+						is_channel=False # try recognize incoming channel
+						try:
+							channel_json=json.loads(tmpmsg)
+							# print(channel_json)
+							
+							for tt in ['channel_name' , 'channel_owner', 'channel_intro']:
+								if tt in tmpmsg:
+									is_channel=True # also below add to channels !
+									break
+							# print('is_channel2',is_channel)	
+							if is_channel: #'channel_name' in tmpmsg and 'channel_owner' in tmpmsg and 'channel_intro' in tmpmsg:
+								
+								# get view key from table :
+								vk_list=idb.select('view_keys', ["vk"],{'address':['=',"'"+aa+"'"]})
+								vkey=''
+								if len(vk_list)>0:
+									vkey=vk_list[0][0]
+								
+								table={'channels':[{'address':aa, 'vk':vkey, 'creator':channel_json['channel_owner'], 'channel_name':channel_json['channel_name'], 'status':'active', 'own':'False'}]}	
+			
+								idb.insert(table,['address' , 'vk' , 'creator' , 'channel_name' , 'status' , 'own' ])
+								
+						except:
+							# print("Not proper json",tmpmsg)
+							pass
+					
+					table_msg['msgs_inout'][0]['is_channel']=str(is_channel)
+					# print(table_msg)
+					# if is channel - add sender to anon addr book to mark same name each time : self name + init hash 
+						
+					idb.insert(table_msg,['proc_json','type','addr_ext','txid','tx_status','date_time', 'msg','uid','in_sign_uid','addr_to','is_channel'])
+				
+				
+				
+				# print(362,from_str)
+				# print(365,init_table) # dt vs datetime ??? 
 				table={}
 				table['tx_history']=[{'Category':"outindex"+init_table['outindex'] # "outindex" not to miss some amounts!
 										, 'Type':'in'
@@ -320,7 +399,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 					
 					table['notifications']=[{'opname':tmpopname,'datetime':init_table['dt'],'status':'Confirmed','details':txid,'closed':'False','orig_json':tmpjson
 											,'uid':'auto'}]
-								
+					# print(398,table)	
 					idb.insert(table,['opname','datetime','status','details', 'closed','orig_json' ,'uid'])
 				
 		return len(table_history_notif)		
@@ -375,6 +454,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 		disp_dict['confirmed']=self.confirmed
 		disp_dict['all_unspent']=self.all_unspent	
 		disp_dict['addr_list']=self.addr_list
+		disp_dict['external_addr']=self.external_addr
 		
 		
 		return disp_dict
@@ -427,6 +507,10 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 			self.total_balance+=am_unc
 			self.total_unconf+=am_unc
 			
+			
+			
+			
+			
 	def clear_memo(self,initmem):
 		tmpmemo=initmem.replace('\\xf6','').replace('\\x00','').replace("b''",'') 
 		
@@ -450,6 +534,10 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 			return ''
 			
 		return tmpmemo[:lastii].strip()
+		
+		
+		
+		
 		
 	def update_unspent(self ): 
 	
@@ -506,7 +594,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 					if tmptxid not in self.confirmed:
 						self.confirmed[tmpadr][tmptxid]={'amount':tmpam,'conf':tmpconf,'own':tmpspendable}
 			
-		return fresh_tx
+		return fresh_tx #[{"address","txid","amount"},..]
 	
 	
 	
@@ -563,9 +651,17 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 			gi=app_fun.run_process(self.cli_cmd,"getinfo")
 			gi=json.loads(gi)
 			if toprint:
-				print(gi)
+				print(566,gi)
 			
-			return { "name":gi["name"],"errors":gi["errors"],"KMDversion":gi["KMDversion"],"synced":gi["synced"],"notarized":gi["notarized"],"blocks":gi["blocks"],"longestchain":gi["longestchain"],"tiptime":gi["tiptime"],"connections":gi["connections"]}
+			
+			kv_tmp=["name","errors","synced","notarized","blocks","longestchain","tiptime","connections"]
+			gtmpstr={}
+			for dd in kv_tmp:
+				if dd in gi:
+					gtmpstr[dd]=gi[dd]
+			
+			return gtmpstr
+			# { "name":gi["name"],"errors":gi["errors"],"KMDversion":gi["KMDversion"],"synced":gi["synced"],"notarized":gi["notarized"],"blocks":gi["blocks"],"longestchain":gi["longestchain"],"tiptime":gi["tiptime"],"connections":gi["connections"]}
 		except:
 			print('wallet api getinfo')
 			return { "name":'exception',"errors":'',"KMDversion":'',"synced":'',"notarized":'',"blocks":'',"longestchain":'',"tiptime":'',"connections":''}
@@ -576,14 +672,27 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 	def update_all_addr(self):
 	
 		self.addr_list=[]
+		self.external_addr=[]
 					 
 		try:
 			r2=app_fun.run_process(self.cli_cmd,"z_listaddresses")
+			
+			with_external=app_fun.run_process(self.cli_cmd,"z_listaddresses true")
+			
+			a3=json.loads(with_external)
+			
 			a2=json.loads(r2)
 			# print(403,r2,a2)
 
 			for aa in a2:
 				self.addr_list.append(aa)
+			
+			for ee in a3:
+				if ee not in self.addr_list:
+					self.external_addr.append(ee)
+					
+			# print('\n\n\nwith_external',self.external_addr)
+				
 		except:
 			print('wallet api update_all_addr')
 			return
@@ -621,14 +730,25 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 			return 'cannot export'
 		
 		
-	def imp_view_key(self,zaddr,vkey,rescan="whenkeyisnew",startHeight=996000):
+	def imp_view_key(self,zaddr,vkey,rescan="whenkeyisnew",startHeight=1375757 ): #996000
 
-		# print('Importing viewing key may take a while (rescan) from height '+str(startHeight) ) hex
+		# print('Importing viewing key may take a while (rescan) from height '+str(startHeight) ) 
+		# print(zaddr,vkey)
+		tmpnewaddr=''
 		
-		tmpnewaddr=app_fun.run_process(self.cli_cmd,["z_importviewingkey",vkey,rescan,str(startHeight),zaddr])
+		tmpnewaddr=app_fun.run_process(self.cli_cmd,["z_importviewingkey",vkey,rescan,str(startHeight),zaddr]) #,zaddr
+		
+		if 'error' in tmpnewaddr:
+			return {'error':tmpnewaddr}
+		
+		# print(json.loads(tmpnewaddr))
 		# deamon.run_subprocess(self.cli_cmd,["z_importviewingkey",vkey,rescan,str(startHeight),zaddr], 64 ) 
 		self.refresh_wallet()
-		return json.loads(tmpnewaddr) 
+		# print('wallet refreshed')
+		if tmpnewaddr.strip()=='': # current api vs future api	
+			return {'address':zaddr, 'type':'sapling'} #'type' in tmpresult and tmpresult['type']=='sapling':
+		
+		return json.loads(tmpnewaddr) #future api	
 		# print('Done')	
 		
 		
