@@ -30,20 +30,27 @@ class DeamonInit(gui.QObject):
 	wallet_status_update = gui.Signal(list)
 	update_addr_book = gui.Signal()
 	refresh_msgs_signal = gui.Signal()
+	send_viewkey = gui.Signal(str,str )
+	
 
 	def update_wallet(self,*args): # syntetic args passed auto by elem
 		
 		idb=localdb.DB(self.db)
 		if self.started:
+			# print('update_wallet',38)
 			utxo_change=self.the_wallet.refresh_wallet()
+			# print('update_wallet',40,utxo_change)
 			
 			if True: #utxo_change>0:
 			
 				disp_dict=self.the_wallet.display_wallet() 
+				# print('update_wallet',45)
 				date_str=app_fun.now_to_str(False)
+				# print('update_wallet',47)
 				table={}
 				table['jsons']=[{'json_name':"display_wallet", 'json_content':json.dumps(disp_dict), 'last_update_date_time':date_str}]
 				idb.upsert(table,['json_name','json_content','last_update_date_time'],{'json_name':['=',"'display_wallet'"]})
+				# print('update_wallet',51)
 				
 				# self.refreshed_results['wallet']=
 			if utxo_change>0:
@@ -87,6 +94,7 @@ class DeamonInit(gui.QObject):
 		cc=aes.Crypto()		
 
 		gitmp=app_fun.run_process(self.cli_cmd,'getinfo')
+		# print(90,gitmp)
 		
 		y=json.loads(gitmp)
 		notar=y["notarized"]
@@ -190,14 +198,19 @@ class DeamonInit(gui.QObject):
 			if rr[3]=='import_view_key': #json.dumps({'addr':tmpaddr,'viewkey':tmpvk})
 				adrvk=json.loads(rr[4])
 				tmpresult=self.the_wallet.imp_view_key( adrvk['addr'],adrvk['viewkey'] )
+				# print(tmpresult)
 				table={}
-				table['queue_done']=[{"type":rr[0],"wait_seconds":rr[1],"created_time":rr[2],"command":rr[3],"json":rr[4],"id":rr[5],"result":tmpresult,'end_time':app_fun.now_to_str(False)}]
-				
+				table['queue_done']=[{"type":rr[0],"wait_seconds":rr[1],"created_time":rr[2],"command":rr[3],"json":rr[4],"id":rr[5],"result":json.dumps(tmpresult),'end_time':app_fun.now_to_str(False)}]
+				# print('inserting')
 				idb.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
 				
 				table={}
-				if 'type' in tmpresult and tmpresult['type']=='sapling':
-					table['addr_book']=[{ 'viewkey_verif':1 }]
+				if 'type' in tmpresult :
+					if tmpresult['type']=='sapling':
+						table['addr_book']=[{ 'viewkey_verif':1 }]
+						
+						table_vk={'view_keys':[{'address':adrvk['addr'], 'vk':adrvk['viewkey'] }]}
+						idb.insert(table_vk,['address','vk'])
 				else:
 					table['addr_book']=[{ 'viewkey_verif':-1 }]
 					
@@ -315,16 +328,22 @@ class DeamonInit(gui.QObject):
 					
 				time.sleep(3)
 				
-
+			elif rr[3]=='get_viewkey':
+			
+				ddict=json.loads(rr[4])
+				tmpresult=self.the_wallet.exp_view_key(ddict['addr'])
+			
+				self.send_viewkey.emit(ddict['addr'],tmpresult)
+			
 			elif rr[3]=='export_viewkey':
 				ddict=json.loads(rr[4])
 				tmpresult=self.the_wallet.exp_view_key(ddict['addr'])
-				tmptitle='View key display. Address\n\n'+ddict['addr']+'\n\nView key:\n\n'+tmpresult
+				tmptitle='View key display'
 				
 				pto='screen'
 				if ddict['password']=='':
 					# gui.output_copy_input(None,'View key display' ,('Address  '+ddict['addr']+'\n\nView key '+tmpresult,))
-					self.msg_signal.emit(tmptitle,'',tmpresult)
+					self.msg_signal.emit(tmptitle,'','Address\n\n'+ddict['addr']+'\n\nView key:\n\n'+tmpresult)
 					
 				else:
 					tmppass=cc.rand_password(32)
@@ -424,6 +443,7 @@ class DeamonInit(gui.QObject):
 					idb=localdb.DB(self.db)
 					table={}
 					dt,ts=app_fun.now_to_str(False,ret_timestamp=True)
+					# print('notif details',details,'dt',dt,'json',tmpjson)
 					table['notifications']=[{'opname':'send','datetime':dt,'status':'Failed','details':details,'closed':'False','orig_json':tmpjson,'uid':'auto'}]
 					
 					idb.insert(table,['opname','datetime','status','details', 'closed','orig_json' ,'uid'])
@@ -431,8 +451,10 @@ class DeamonInit(gui.QObject):
 				
 			
 				ddict=json.loads(rr[4])
+				# print(453,ddict)
 				exceptions=[]
 				total_conf_per_addr=self.wallet_display_set.amount_per_address[ddict['fromaddr']]
+				# print(453,total_conf_per_addr)
 				
 				sum_cur_spending=0
 					
@@ -458,10 +480,11 @@ class DeamonInit(gui.QObject):
 					time.sleep(1)
 				
 					merged_queue_done=[]
-					if rr[0]!='message':
+					msg_chnl=['message','channel']
+					if rr[0] not in msg_chnl:
 						for jj,ss in enumerate(waiting):
 							# print(jj,ss)
-							if ss[3]!='send' or jj==ii or ss[0]=='message':
+							if ss[3]!='send' or jj==ii or ss[0] in msg_chnl: #=='message':
 								continue 
 							if ss[6]!='waiting':
 								continue
@@ -483,7 +506,7 @@ class DeamonInit(gui.QObject):
 							merged_queue_done.append(ss)
 							ddict['to']=ddict['to']+ddict2['to']
 					
-					tostr=[]
+					sending_summary=[]
 					memo_orig=[]
 					
 					for to in ddict['to']:
@@ -507,17 +530,18 @@ class DeamonInit(gui.QObject):
 							insert_notification('Not valid amount '+str(to['a'])+' - ignoring.' ,{'fromaddr':ddict['fromaddr'],'to':[to]})
 							continue
 						
-						tostr.append({"address":to['z'], "amount":float(to['a']), "memo":to['m'].encode('utf-8').hex() })
+						sending_summary.append({"address":to['z'], "amount":float(to['a']), "memo":to['m'].encode('utf-8').hex() })
 						
 						memo_orig.append([to['m'],float(to['a']),to['z']]) 
+					
 					
 					tmpres={}
 					tmpres['opid']=''
 					tmpres['result_details']='Bad amounts or not valid addresses.'
 					tmpres["result"]='Failed - Nothing to process.'
 					tmpres['exceptions']= '\n'.join(exceptions)	
-					if len(tostr)>0:
-						tostr=json.dumps(tostr)
+					if len(sending_summary)>0:
+						tostr=json.dumps(sending_summary)
 						# print(ddict['fromaddr'],tostr)
 						tmpres['opid']=str(self.the_wallet.send(ddict['fromaddr'],tostr))
 						tmpres['opid']=tmpres['opid'].strip()
@@ -590,18 +614,22 @@ class DeamonInit(gui.QObject):
 							time.sleep(5)
 							
 							
-							
+						# print(613,'sent',tmpres)
 						if tmpres["result"]=='success': # insert tx out:
 							table={}
 							txid=''
 							if 'txid' in opj["result"]:
 								txid=opj["result"]['txid']
 								
+							# print(620,'memoorig',memo_orig)
 							for mmii,mm in enumerate(memo_orig):
 								mm0=mm[0].split('@zUnderNet')
 								memo_orig[mmii][0]=mm0[0]
 								
 							dt,ts=app_fun.now_to_str(False,ret_timestamp=True)
+							# print(630,dt,ts)
+							
+							# print(620,'tx_history', 'fromaddr',ddict['fromaddr'],'to_str',str(memo_orig))
 							table['tx_history']=[{'Category':'send'
 												, 'Type':'out'
 												, 'status':'sent'
@@ -621,24 +649,27 @@ class DeamonInit(gui.QObject):
 							
 							txid_utf8=txid 
 							if rr[0]!='message':
+								# print(644,'msg')
 								for mmii,mm in enumerate(memo_orig):
-									
-									table=self.the_wallet.prep_msgs_inout(txid_utf8,mm,'out',dt)
+									# print(mmii,mm,sending_summary[mmii])
+									table=self.the_wallet.prep_msgs_inout(txid_utf8,mm,'out',dt,addr_to=sending_summary[mmii]["address"] ) #tostr.append({"address":to['z']
 									if table['msgs_inout'][0]['msg']=='':
 										table['msgs_inout'][0]['msg']='Sent amount '+str(round(sum_cur_spending,8))
 									# if table=={}:
 										# continue
 																	 
-									idb.insert(table,['proc_json','type','addr_ext','txid','tx_status','date_time', 'msg', 'uid','in_sign_uid'])
-							else: #'message':
+									idb.insert(table,['proc_json','type','addr_ext','txid','tx_status','date_time', 'msg', 'uid','in_sign_uid','addr_to'])
+							else: #'message': msg_chnl
 								mmm=['',0,memo_orig[0][2]]
 								for mmii,mm in enumerate(memo_orig):
 									mmm[0]+=mm[0]
 									mmm[1]+=mm[1]
 									
-								table=self.the_wallet.prep_msgs_inout(txid_utf8,mmm,'out',dt)
-								if table!={}:
-									idb.insert(table,['proc_json','type','addr_ext','txid','tx_status','date_time', 'msg', 'uid','in_sign_uid'])
+								# also for channels?
+								if True: #rr[0]=='message':
+									table=self.the_wallet.prep_msgs_inout(txid_utf8,mmm,'out',dt,addr_to=sending_summary[0]["address"])
+									if table!={}:
+										idb.insert(table,['proc_json','type','addr_ext','txid','tx_status','date_time', 'msg', 'uid','in_sign_uid','addr_to'])
 									
 						# self.messages.update_msgs()
 						
@@ -690,8 +721,8 @@ class DeamonInit(gui.QObject):
 		# do not delete if awaiting balance or waiting or command is send (delete in another thread time based) or command is autom merge - cancelled manually
 		
 		# print('after delete')	
-		
-		list_emit=['cmd_queue']
+		self.process_queue_iter+=1
+		list_emit=['cmd_queue','demon_loop',int(self.process_queue_iter)]
 		if count_task_done>0:
 			list_emit.append('task_done')
 		if new_notif_count>0:
@@ -705,6 +736,7 @@ class DeamonInit(gui.QObject):
 		if 'notif_update' in list_emit or 'tx_history_update' in list_emit:
 			self.refresh_msgs_signal.emit()
 		
+		# print('b4 sleep')
 		# if count_task_done>0:
 			# self.task_done.emit()
 			
@@ -783,7 +815,7 @@ class DeamonInit(gui.QObject):
 				gitmp=app_fun.run_process(self.cli_cmd,'getinfo')
 				gi=json.loads(gitmp)
 				# print('\nupdate_status 700',gi)
-				kv_tmp=[{"name":"Chain: "},{"synced":"Synced: "},{"blocks":"\nCurrent block: " }, {"longestchain":"\nLongest chain: "}, {"notarized":"\nNotarized: "}, {"connections":"\nConnections: "}]
+				kv_tmp=[{"name":"Chain: "},{"synced":"\nSynced: "},{"blocks":"\nCurrent block: " }, {"longestchain":"\nLongest chain: "}, {"notarized":"\nNotarized: "}, {"connections":"\nConnections: "}]
 				tmpstr=""
 				for dd in kv_tmp:
 					for kk,vv in dd.items():
@@ -809,6 +841,7 @@ class DeamonInit(gui.QObject):
 				modv=46 # about 15 sec
 				
 				if xx%modv==modv-1 and self.started:
+					# print(818,'modv',xx)
 					self.update_wallet()
 					ret_val.append('wallet')
 				# print('\nupdate_status 721',ret_val)
@@ -845,6 +878,7 @@ class DeamonInit(gui.QObject):
 		self.insert_block_time=0
 		self.the_wallet=None
 		self.deamon_started_ok=False
+		self.process_queue_iter=0
 		
 		# self.msg_queue = queue.Queue()	
 		# self.refreshed_results={}
@@ -963,6 +997,8 @@ class DeamonInit(gui.QObject):
 		self.wallet_status_update.emit(['set',ostr]) #
 		# self.walletTab.stat_lab.setText(ostr)
 	
+		# error: couldn't connect to server: timeout reached (code 0)
+# (make sure server is running and you are connecting to the correct RPC port)
 		
 	@gui.Slot()	
 	def run_subprocess(self,CLI_STR,cmd_orig,sleep_s=2 ):
@@ -1005,6 +1041,8 @@ class DeamonInit(gui.QObject):
 			if cmd_orig=='start':
 			
 				gitmp=app_fun.run_process(cli_cmd,'getinfo')
+				
+				# print(1010,gitmp)
 				
 				if deamon_warning in gitmp:
 					self.output(gitmp)
@@ -1062,7 +1100,7 @@ class DeamonInit(gui.QObject):
 							if hoursleft>1:
 								timeleft+='\nConsider downloading bootstrap for faster sync.'
 							
-						tmpstr='Syncing ... \nLoaded blocks: '+str(y["blocks"])+' of '+str(y["longestchain"])+' ('+str(int(100*y["blocks"]/y["longestchain"]))+'%)' +'\nBlocks to catch up: '+str(y["longestchain"]-y["blocks"])+'\n'+timeleft+'\n'
+						tmpstr='Syncing ... \nLoaded blocks: '+str(y["blocks"])+' of '+str(y["longestchain"])+' ('+str(int(100*y["blocks"]/y["longestchain"]))+'%)' +'\nBlocks left: '+str(y["longestchain"]-y["blocks"])+'\n'+timeleft+'\n'
 						
 						
 						self.output(tmpstr)
@@ -1071,7 +1109,7 @@ class DeamonInit(gui.QObject):
 						self.output(gtmpstr)
 						
 				else:
-					self.output(gitmp)
+					self.output('1074 getinfo output: '+gitmp)
 					
 			if sleep_s>4:
 				sleep_s=int(sleep_s-2)
@@ -1093,6 +1131,8 @@ class DeamonInit(gui.QObject):
 			
 			tend=time.time()
 			tdiff=int(tend-t0)
+			gitmp=app_fun.run_process(cli_cmd,'getinfo')
+			# print(1100,gitmp)
 			y = json.loads(gitmp)
 			
 			loaded_block=y["blocks"]
