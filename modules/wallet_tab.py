@@ -61,14 +61,18 @@ class Worker(gui.QObject):
 			# print(87,self.dmn.started,flush=True)
 			vemit=[]
 			if self.dmn.started:
+				# print('worker update status')
 				vemit=self.dmn.update_status(xx)
+				# print('after worker update status')
+				vemit.append('worker_loop')
+				vemit.append(xx)
 				# print(63,vemit)
 				if 'CONNECTED' not in vemit:
 					self.block_closing=True
 				else:
 					self.block_closing=False
 			else:
-				vemit.append('cmd_queue')
+				vemit=['cmd_queue','worker_loop',xx]
 				self.block_closing=False
 				# print(self.init_app.autostart)
 				if self.init_app.autostart!='no':
@@ -124,7 +128,7 @@ class WalletTab:
 	def display_message(self,title,content,to_copy):
 		# print('display_message')
 		if to_copy!='':
-			gui.output_copy_input(self.tabs1,title,(to_copy,))
+			gui.output_copy_input(None,title,(to_copy,))
 	
 		else:
 			strtitle_split=title.split('.')
@@ -135,7 +139,7 @@ class WalletTab:
 				tmptitle= strtitle_split[0]
 				tmpcont='.'.join(strtitle_split[1:])
 			
-			gui.messagebox_showinfo(tmptitle,tmpcont,self.tabs1)
+			gui.messagebox_showinfo(tmptitle,tmpcont,None)
 			
 			if title=='New address created':
 				self.wds.wallet_copy_progress()
@@ -178,7 +182,7 @@ class WalletTab:
 		
 		self.locked=True
 		try:
-		
+		# if True:
 		
 			if  'wallet'  in wallet_part :
 				self.wds.set_disp_dict()
@@ -195,6 +199,26 @@ class WalletTab:
 				# print(grid_lol4)
 				self.queue_status.updateTable(grid_lol4)
 				# self.wds.queue_frame_buttons( grid_lol4,self.queue_status)
+				
+			if 'demon_loop' in 	wallet_part :
+				ii=wallet_part.index('demon_loop')
+				tmptt=self.tab_corner_widget.text().replace('Loops [','').replace(']','')
+				stt=tmptt.split('/')
+				newtt='Loops ['+str(wallet_part[ii+1])+'/'+stt[1]+']'
+				self.tab_corner_widget.setText(newtt)
+				self.tab_corner_widget.setToolTip(newtt)
+				# =tab_corner #crnwdg=gui.Label(None,'Loops [0/0]')
+				# print()
+				
+			if 'worker_loop' in wallet_part:
+				# print(wallet_part,self.tab_corner_widget.text())
+				ii=wallet_part.index('worker_loop')
+				tmptt=self.tab_corner_widget.text().replace('Loops [','').replace(']','')
+				stt=tmptt.split('/')
+				newtt='Loops ['+stt[0]+'/'+str(wallet_part[ii+1])+']'
+				self.tab_corner_widget.setText(newtt)
+				self.tab_corner_widget.setToolTip(newtt)
+			
 				
 			if 'task_done' in wallet_part :	
 				if hasattr(self,'tahi'):
@@ -215,13 +239,13 @@ class WalletTab:
 			# print('updateWalletDisplay done')
 		
 		except:
-			print('wallet locked?')
+			print('Exception 235 wallet locked?')
 			self.locked=False
 			
 			
 			
 			
-	def __init__(self,autostart,queue_start_stop,wds=None):
+	def __init__(self,autostart,queue_start_stop,wds=None ):
 	
 		self.locked=False
 		self.update_status_locked=False
@@ -230,8 +254,23 @@ class WalletTab:
 		self.wds.set_format()
 		
 		self.tabs1=gui.Tabs(None)
+		
+		
+		pTabCornerWidget = gui.QWidget(self.tabs1)
+		# pTabCornerWidget.setStyleSheet("QWidget {margin:0px;padding:0px;}")
+		pHLayout = gui.QHBoxLayout()
+		pHLayout.setContentsMargins(0,0,0,0)
+		pTabCornerWidget.setLayout(pHLayout)
+		self.tab_corner_widget=gui.Label(pTabCornerWidget,'Loops [0/0]',transparent=False)
+		# self.tab_corner_widget.setMinimumHeight(32)
+		self.tab_corner_widget.setStyleSheet("QLabel {font-size:12px;color:#aaa}")#;margin-top:-50px;padding-top:-50px;
+		pHLayout.addWidget(self.tab_corner_widget)
+		self.tabs1.setCornerWidget(pTabCornerWidget, gui.Qt.TopRightCorner)
+		
 		frame01=gui.ContainerWidget(self.tabs1,gui.QGridLayout())
 		self.tabs1.insertTab(tab_dict={'My Balance':frame01}  )
+		
+		# self.tab_corner_widget=tab_corner #crnwdg=gui.Label(None,'Loops [0/0]')
 		
 		
 		#
