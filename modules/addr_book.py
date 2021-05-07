@@ -1,3 +1,5 @@
+# TODO: limit historical tx display
+
 # show button for not validated addresses to validate again 
 # there should be id validation if cancelled - show button
 
@@ -124,8 +126,43 @@ class AddressBook:
 		
 		gui.CustomDialog(btn,[filter_frame,list_frame], title='Select address to send to')
 			
+			
+			
+			# idb.select('msgs_inout',['type','addr_ext','date_time','msg', 'in_sign_uid','uid','tx_status','txid','is_channel'],{'proc_json':['=',"'False'"]},orderby=[{'date_time':'asc'}])
+			
+	def displayHistoricalTXs(self,btn,alias,addr):
+		# print('displayHistoricalTXs',alias,addr)
+		# get from msg table - all incl channel
+		# display
+		colnames=['Date Time', 'Message' ]
+		grid_lol_msg=[]
+		
+		idb=localdb.DB(self.db)
+		
+		sel_view=idb.select('msgs_inout',[ 'date_time', 'msg' ],{'addr_to':['=',"'"+addr+"'"]}, orderby=[{'date_time':'desc'}] )
+		
+		if len(sel_view)>0:
+			# print(sel_view)
+		
+			for ii,rr in enumerate(sel_view):  
+				tmpdict={'rowk':str(ii), 'rowv':[{'T':'LabelV', 'L':str(rr[0]) } , 
+										{'T':'LabelV', 'L':rr[1] }  
+										]}
+				grid_lol_msg.append(tmpdict)
+	
+			tx_tbl=gui.Table(None,{'dim':[len(grid_lol_msg),len(colnames)],'updatable':1, 'toContent':1}) #flexitable.FlexiTable(rootframe,grid_settings)
+			tx_tbl.updateTable(grid_lol_msg,colnames)
+	
+			gui.CustomDialog(btn,tx_tbl, title='View key messages')
+		else:
+			gui.messagebox_showinfo('No transactions ...','No transactions yet for this view key.',btn)
+	
+	
+	
 	
 	def addr_book_view(self):
+	
+		# print('refresh addr book')
 		colnames=[ 'Usage','Category','Alias','Full address','Valid','View Key','Valid','','','','','']
 		grid_lol_select=[]
 					
@@ -133,15 +170,18 @@ class AddressBook:
 		
 		sel_addr_book=idb.select('addr_book',[ 'Category','Alias','Address','ViewKey','usage','addr_verif','viewkey_verif'], orderby=[{'usage':'desc'},{'Category':'asc'},{'Alias':'asc' }] )
 		
+		# print(170,sel_addr_book)
+		
 		cur_addr=[]
 		if len(sel_addr_book)>0:
 		
 			for ii,rr in enumerate(sel_addr_book):
+			
+				# print(rr)
 				tmpdict={}
 				uid_tmp=rr[2]
 				tmpdict['rowk']=str(uid_tmp)
-				
-				
+						
 				
 				cur_addr.append(rr[2])
 				
@@ -149,9 +189,13 @@ class AddressBook:
 				uid_tmp=rr[2]
 				# fsize=24
 				tmpnott={'T':'QLabel', 'L':'-',   'tooltip':'No view key', 'style':' text-align:center;padding-left:10px;margin:3px;' } #u"\u2612" , 'fontsize':fsize
+				
+				# print(190,rr[3])
 				if rr[3].strip()!='':
 					tmphasvk=True
-					tmpnott={'T':'QLabel', 'L':'+',  'tooltip':rr[3].strip(), 'style':'background-color:lightgreen;color:white;text-align:center;padding-left:10px;margin:3px;' } #u"\u2611"
+					
+					# tmpnott={'T':'Button', 'L':"\U0001F441", 'fun':self.displayHistoricalTXs,'args':(rr[1],rr[2]),  'tooltip':rr[3].strip(), 'style':'background-color:lightgreen;color:white;text-align:center; font-size:22px;' } #u"\u2611"
+					tmpnott={'T':'QLabel', 'L':'+',  'tooltip':rr[3].strip(), 'style':'background-color:lightgreen;color:white;text-align:center;padding-left:10px;margin:3px; font-size:22px;font-weight:bold;' } #u"\u2611"
 					
 				addrvalid='...' #	u"\U0001F550" #'Waiting'
 				addr_valid_tt='Waiting for validation'
@@ -159,11 +203,11 @@ class AddressBook:
 				if rr[5]==-1:
 					addrvalid='N' #u"\u2612" #'No'
 					addr_valid_tt='Not valid'
-					addr_color='background-color:red;color:yellow;text-align:center;padding-left:10px;margin:3px;'
+					addr_color='background-color:red;color:yellow;text-align:center; margin:3px;font-size:22px;font-weight:bold;'
 				elif rr[5]==1:
 					addrvalid='Y' #u"\u2611" #'Yes'
 					addr_valid_tt='Address valid'
-					addr_color='background-color:lightgreen;color:white;text-align:center;padding-left:10px;margin:3px;'
+					addr_color='background-color:lightgreen;color:white;text-align:center; margin:3px;font-size:22px;font-weight:bold;'
 					
 				
 				viewk_valid='-'
@@ -172,11 +216,14 @@ class AddressBook:
 				if rr[6]==-1:
 					viewk_valid=='N' #u"\u2612" #'No'
 					viewk_valid_tt='Not valid'
-					viewk_color='background-color:red;color:yellow;text-align:center;padding-left:10px;margin:3px;'
-				elif rr[6]==-1:
+					viewk_color='background-color:red;color:yellow;text-align:center; margin:3px;font-size:22px;font-weight:bold;'
+				elif rr[6]==1:
 					viewk_valid='Y' #u"\u2611" #'Yes'
 					viewk_valid_tt='Valid'
-					viewk_color='background-color:lightgreen;color:white;text-align:center;padding-left:10px;margin:3px;'
+					viewk_color='background-color:lightgreen;color:white;text-align:center; margin:3px;font-size:22px;font-weight:bold;'
+					
+					tmpnott={'T':'Button', 'L':"\U0001F441", 'fun':self.displayHistoricalTXs,'args':(rr[1],rr[2]),  'tooltip':rr[3].strip(), 'style':'background-color:lightgreen;color:white;text-align:center; font-size:22px;' } #u"\u2611"
+					
 				elif rr[6]==0:
 					viewk_valid='...' #	u"\U0001F550" #'Waiting'
 					viewk_valid_tt='Waiting for validation'
@@ -215,6 +262,8 @@ class AddressBook:
 				idb.delete_where('addr_book',{'Address':['=',"'"+addr+"'"]})
 				grid_settings,colnames,cur_addr=self.addr_book_view()
 				self.main_table.updateTable(grid_settings,colnames)
+				
+				self.cur_addr.remove(addr)
 				
 			
 		def subcopy( addr ):
@@ -326,7 +375,7 @@ class AddressBook:
 			categ=self.main_table.item(kk,1).text()
 			viewk=''
 			
-			if self.main_table.cellWidget(kk,5).text()==u"\u2611"  : #'True': #'tooltip' in vv[5]:
+			if self.main_table.cellWidget(kk,5).text() in ['+',"\U0001F441"] : #u"\u2611"  : #'True': #'tooltip' in vv[5]:
 				viewk=self.main_table.cellWidget(kk,5).toolTip() 
 				
 			self.main_table.cellWidget(kk,7).set_fun(True,edit_addr, addr,alias,categ,viewk ) 
@@ -421,41 +470,47 @@ class AddressBook:
 		
 		
 		
-
+		# vk_valid=-2 not processesd vk_valid=0 empty no need to process 
 		def save_new():
 			# global idb, form_grid, grid_settings
 			# table={}
 			idb=localdb.DB(self.db)
-			tmpaddr=self.form_table.cellWidget(3,1).text() #.get_value('addr').strip()
-			
+			tmpaddr=self.form_table.cellWidget(3,1).text().strip() #.get_value('addr').strip()
+			# print(468,tmpaddr)
 			if tmpaddr=='':
 				return
 				
-			tmpvk=self.form_table.cellWidget(4,1).text() #.get_value('viewkey').strip()
-			tmpcat=self.form_table.cellWidget(1,1).text() #.get_value('cat').strip()
-			tmpalia=self.form_table.cellWidget(2,1).text() #.get_value('alia').strip()
+			tmpvk=self.form_table.cellWidget(4,1).text().strip() #.get_value('viewkey').strip()
+			tmpcat=self.form_table.cellWidget(1,1).text().strip() #.get_value('cat').strip()
+			tmpalia=self.form_table.cellWidget(2,1).text().strip() #.get_value('alia').strip()
 			
 			sel_addr_book=idb.select('addr_book',[ 'ViewKey','addr_verif','viewkey_verif'],{'Address':['=',"'"+tmpaddr+"'"]})
+			# print(477,sel_addr_book)
+			# print(tmpvk)
+			
 			tmpaddr_valid=0
 			tmpvk_valid=-2
 			if len(sel_addr_book)>0:
-				if sel_addr_book[0][0]!=tmpvk and tmpvk!='':
+				if tmpvk=='':# no need for validation
 					tmpvk_valid=0
+				# elif sel_addr_book[0][0]!=tmpvk : #not empty and new - need t ovalidate
+					# tmpvk_valid=-2
 				else:
 					tmpaddr_valid=sel_addr_book[0][1]
-					tmpvk_valid=sel_addr_book[0][2]
+					tmpvk_valid=-2 #sel_addr_book[0][2]
 			
 			
 			table={}
+			# print('self.cur_addr',self.cur_addr,tmpvk_valid,tmpvk)
 			if tmpaddr in self.cur_addr:
 				table['addr_book']=[{'Category':tmpcat,'Alias':tmpalia,'Address':tmpaddr,'ViewKey':tmpvk,'addr_verif':tmpaddr_valid,'viewkey_verif':tmpvk_valid }] 
 				idb.upsert(table,[ 'Category','Alias','Address','ViewKey','addr_verif','viewkey_verif' ],{'Address':['=',"'"+tmpaddr+"'"]})
 				
-				if tmpvk_valid==0: # if not valid add validation 
+				if tmpvk_valid==-2: # if not valid add validation 
 					table={}
 					tmpjson=json.dumps({'addr':tmpaddr,'viewkey':tmpvk})
 					table['queue_waiting']=[localdb.set_que_waiting(command='import_view_key',jsonstr=tmpjson, wait_seconds=0)]
-					idb.upsert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ],{'command':['=',"'"+import_view_key+"'"],'json':['=',"'"+tmpjson+"'"] })
+					idb.upsert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ],{'command':['=',"'import_view_key'"],'json':['=',"'"+tmpjson+"'"] })
 			else:
 				table['addr_book']=[{'Category':tmpcat,'Alias':tmpalia,'Address':tmpaddr,'ViewKey':tmpvk,'usage':0,'addr_verif':tmpaddr_valid,'viewkey_verif':tmpvk_valid}]  
 				idb.insert(table,[ 'Category','Alias','Address','ViewKey','usage','addr_verif','viewkey_verif'])
@@ -506,7 +561,7 @@ class AddressBook:
 			# if len(tmpval)>0:
 			def whilewaiting(tmpval2,zpath):
 				# global zpath
-				# print(zpath,tmpval2)
+				# print(547,zpath,tmpval2)
 				if tmpval2[0]==' ':
 					return
 				cc=aes.Crypto()
