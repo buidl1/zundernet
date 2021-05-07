@@ -1,7 +1,5 @@
 
-# add solution to easy update columns in db 
-# check if table exist
-# check if columns exist 
+# each folder per different chain!  
 
 import sqlite3 as sql
 import modules.app_fun as app_fun
@@ -19,12 +17,25 @@ def init_init():
 	table['busy']={"fun_name":'text','ts':'real' }
 	table['block_time_logs']={'uid':'int', 'ttime':'real','block':'int' }
 	
+	# idb.drop_table('block_time_logs')
+	# nearest_time=idb.select_min_val('block_time_logs','ttime',where={'block':['>=', 1377250]} )
+	# print('nearest_time',nearest_time)
+	
+	# zxc=idb.select('block_time_logs',['uid' , 'ttime' ,'block' ])
+	# for zz in zxc:
+		# print('zz',zz)
+	# tt=zxc[-1][1]
+	# tt2=app_fun.timestamp_to_datetime(tt)
+	# bb=zxc[-1][2]
+	# print('\n\nblock_time_logs\n\n',tt,tt2,bb,time.time()-tt )
+	
+	
 	idb.create_table(table) # creates if not exist 
 	
 	indexes={}
-	indexes['busy']={'idx_name':'busy_idx','cname':['ts','fun_name']}
-	indexes['block_time_logs']={'idx_name':'time_logs_idx','cname':['block','ttime']}
-	indexes['block_time_logs']={'idx_name':'time_logs_idx2','cname':['ttime']}
+	indexes['busy']=[{'idx_name':'busy_idx','cname':['ts','fun_name']}]
+	indexes['block_time_logs']=[{'idx_name':'time_logs_idx','cname':['block','ttime']}]
+	indexes['block_time_logs'].append({'idx_name':'time_logs_idx2','cname':['ttime']})
 	
 	idb.create_indexes(indexes)
 	
@@ -97,6 +108,9 @@ def init_tables(dbfname): #localdb.init_tables()
 	idb=DB(dbfname)
 	
 	table={}
+	table['view_keys']={'address':'text', 'vk':'text' }
+	table['channels']={'address':'text', 'vk':'text', 'creator':'text', 'channel_name':'text', 'status':'text', 'own':'text' }
+	
 	table['address_category']={'address':'text', 'category':'text', 'last_update_date_time':'text' }
 	table['deamon_start_logs']={'uid':'int', 'time_sec':'int', 'ttime':'real','loaded_block':'int' }
 	table['jsons']={'json_name':'text', 'json_content':'text', 'last_update_date_time':'text' }
@@ -110,7 +124,7 @@ def init_tables(dbfname): #localdb.init_tables()
 	
 	table['in_signatures']={'hex_sign':'text','n':'int','addr_from_book':'text','uid':'auto'}
 	
-	table['msgs_inout']={'proc_json':'text','type':'text','addr_ext':'text','txid':'text','tx_status':'text','date_time':'text', 'msg':'text','uid':'auto','in_sign_uid':'int'}
+	table['msgs_inout']={'proc_json':'text','type':'text','addr_ext':'text','txid':'text','tx_status':'text','date_time':'text', 'msg':'text','uid':'auto','in_sign_uid':'int','addr_to':'text','is_channel':'text'}
 	
 	
 	# tmptmp=idb.select('tx_history',{'Category':['=',"'send'"]})
@@ -142,40 +156,44 @@ def init_tables(dbfname): #localdb.init_tables()
 	
 	idb.delete_where('queue_done',{'command':[' in ',"('show_bills','new_addr','export_viewkey')"]})
 	
-	table={'msgs_inout':[{'txid':''}]}
-	idb.update( table,['txid'  ], {'date_time':['<', app_fun.today_add_days(-7)], 'proc_json':['=',"'True'"] })
+	# table={'msgs_inout':[{'txid':''}]}
+	# idb.update( table,['txid'  ], {'date_time':['<', app_fun.today_add_days(-7)], 'proc_json':['=',"'True'"] })
 	
-	table={'notifications':[{'details':''}]}
-	idb.update( table,['details'  ], {'datetime':['<', app_fun.today_add_days(-7)], 'opname':['=',"'received'"], 'closed':['=',"'True'"]	})
+	# table={'notifications':[{'details':''}]}
+	# idb.update( table,['details'  ], {'datetime':['<', app_fun.today_add_days(-7)], 'opname':['=',"'received'"], 'closed':['=',"'True'"]	})
 	
 	indexes={}
 	
-	indexes['queue_done']={'idx_name':'queue_done_id','cname':['id']}
-	indexes['queue_waiting']={'idx_name':'queue_waiting_id','cname':['id','status']}
-	indexes['queue_waiting']={'idx_name':'queue_waiting_id','cname':['status','command']}
+	indexes['queue_done']=[{'idx_name':'queue_done_id','cname':['id']}]
+	indexes['queue_waiting']=[{'idx_name':'queue_waiting_id','cname':['id','status']}]
+	indexes['queue_waiting'].append({'idx_name':'queue_waiting_id','cname':['status','command']})
 	
-	indexes['addr_book']={'idx_name':'addr_book_id','cname':['Address']}
+	indexes['addr_book']=[{'idx_name':'addr_book_id','cname':['Address']}]
 	
-	indexes['deamon_start_logs']={'idx_name':'deamon_start_logs_id','cname':['uid']}
+	indexes['deamon_start_logs']=[{'idx_name':'deamon_start_logs_id','cname':['uid']}]
 	
-	indexes['tx_history']={'idx_name':'tx_history_idx_type','cname':['Type','Category']}
-	indexes['tx_history']={'idx_name':'tx_history_idx_block','cname':['block']}
-	indexes['tx_history']={'idx_name':'tx_history_idx_from','cname':['from_str','txid'],'where':{'Category':['=',"'send'"], 'Type':['=',"'out'"]} }
-	indexes['tx_history']={'idx_name':'tx_history_idx_to','cname':['to_str','txid'],'where':{'Category':['=',"'incoming'"], 'Type':['=',"'in'"]} }
-	indexes['tx_history']={'idx_name':'tx_history_idx_timestamp','cname':['timestamp']}
-	indexes['tx_history']={'idx_name':'tx_history_idx_txid','cname':['txid']}
-	indexes['tx_history']={'idx_name':'tx_history_idx_status','cname':['status']}
+	indexes['tx_history']=[{'idx_name':'tx_history_idx_type','cname':['Type','Category']}]
+	indexes['tx_history'].append({'idx_name':'tx_history_idx_block','cname':['block']})
+	indexes['tx_history'].append({'idx_name':'tx_history_idx_from','cname':['from_str','txid'],'where':{'Category':['=',"'send'"], 'Type':['=',"'out'"]} })
+	indexes['tx_history'].append({'idx_name':'tx_history_idx_to','cname':['to_str','txid'],'where':{'Category':['=',"'incoming'"], 'Type':['=',"'in'"]} })
+	indexes['tx_history'].append({'idx_name':'tx_history_idx_timestamp','cname':['timestamp']})
+	indexes['tx_history'].append({'idx_name':'tx_history_idx_txid','cname':['txid']})
+	indexes['tx_history'].append({'idx_name':'tx_history_idx_status','cname':['status']})
 	
 	
-	indexes['out_signatures']={'idx_name':'tx_signatures_idx','cname':['addr']}
+	indexes['out_signatures']=[{'idx_name':'tx_signatures_idx','cname':['addr']}]
 	
-	indexes['in_signatures']={'idx_name':'tx_insignatures_idx','cname':[ 'hex_sign']}
+	indexes['in_signatures']=[{'idx_name':'tx_insignatures_idx','cname':[ 'hex_sign']}]
 	
-	indexes['msgs_inout']={'idx_name':'msg_idx1','cname':['proc_json' ]}
-	indexes['msgs_inout']={'idx_name':'msg_idx2','cname':['addr_ext']}
-	indexes['msgs_inout']={'idx_name':'msg_idx3','cname':['txid' ]}
-	indexes['msgs_inout']={'idx_name':'msg_idx4','cname':['in_sign_uid']}
+	indexes['msgs_inout']=[{'idx_name':'msg_idx1','cname':['proc_json' ]}]
+	indexes['msgs_inout'].append({'idx_name':'msg_idx2','cname':['addr_ext']})
+	indexes['msgs_inout'].append({'idx_name':'msg_idx3','cname':['txid' ]})
+	indexes['msgs_inout'].append({'idx_name':'msg_idx4','cname':['in_sign_uid']})
+	indexes['msgs_inout'].append({'idx_name':'msg_idx5','cname':['addr_to']})
 	
+	indexes['view_keys']=[{'idx_name':'vk_idx1','cname':['address' ]} ] 
+	indexes['channels']=[{'idx_name':'chnl_idx1','cname':['address' ]}]  
+	indexes['channels'].append({'idx_name':'chnl_idx2','cname':['creator' ]})  
 	
 	idb.create_indexes(indexes)
 	
@@ -385,12 +403,15 @@ class DB:
 			
 		fname='create_index_s'
 		curs,conn,ts=self.getcursor(fname)
-		for kk,vv in indexes.items():
-			str_tmpl="CREATE INDEX IF NOT EXISTS _index_name_ ON _table_name_ (_columns_)".replace('_index_name_',vv['idx_name']).replace('_table_name_',kk)
-			str_tmpl=str_tmpl.replace('_columns_', ','.join(vv['cname'])) 
-			if 'where' in vv:
-				str_tmpl+=self.add_where(vv['where'])
-			curs.execute(str_tmpl)
+		for kk,vva in indexes.items():
+			# print(kk,vva)
+			for vv in vva:
+				# print(kk)
+				str_tmpl="CREATE INDEX IF NOT EXISTS _index_name_ ON _table_name_ (_columns_)".replace('_index_name_',vv['idx_name']).replace('_table_name_',kk)
+				str_tmpl=str_tmpl.replace('_columns_', ','.join(vv['cname'])) 
+				if 'where' in vv:
+					str_tmpl+=self.add_where(vv['where'])
+				curs.execute(str_tmpl)
 	
 		self.close_connection(curs,conn,fname,ts)
 		
@@ -773,13 +794,20 @@ def blocks_to_datetime(blknr):
 		if nearest_time[0][0]!=None:
 	
 			nearest_block=idb.select_min_val('block_time_logs','block',where={'block':['>=',blknr]} )
-			
+			# print('blknr',blknr,nearest_block,blknr-nearest_block[0][0])
+			# print('nearest_time[0][0]',nearest_time[0][0])
+			# print('nearest_time[0][0]','nearest_block',nearest_time[0][0],nearest_block)
+			# print(app_fun.timestamp_to_datetime(nearest_time[0][0]),datetime.timedelta( minutes=blknr-nearest_block[0][0] ))
 			dt=app_fun.timestamp_to_datetime(nearest_time[0][0]) + datetime.timedelta( minutes=blknr-nearest_block[0][0] )
+			# print('blocks_to_datetime dt',dt)
 			return app_fun.date2str(dt)
 			
 	return app_fun.now_to_str(False)
 
 
+	
+	
+	
 
 def set_que_waiting( command,jsonstr='', wait_seconds=0):
 	initdb= DB('init.db')
@@ -925,3 +953,94 @@ def set_last_addr_from( addr, ttype):  # ttype "'last_book_from_addr'", "'last_m
 	table={'jsons':[{'json_content':json.dumps({'addr':addr}), 'json_name':ttype.replace("'","")}]}
 	idb.upsert(table,['json_content','json_name' ],{'json_name':['=',ttype]} )
 
+
+	
+	
+	
+
+def get_msg_parts( mm):	
+
+	def splitutf8_512bytes(mm):
+
+		if len(mm.encode('utf-8') )<513:
+			return [mm ,len(mm.encode('utf-8') )], ''
+			
+		cur_ii=len(mm)//2
+		cur_vv=len(mm[:cur_ii].encode('utf-8') )
+		cur_step=cur_ii
+		cur_diff=512-cur_vv
+		tmpabs=abs(cur_diff)
+		
+		while cur_vv>511 or tmpabs>4:
+		
+			if tmpabs>cur_step:
+				new_step=max(min(cur_step//2+1,tmpabs),1)
+			else:
+				new_step=max(min(cur_step//2,tmpabs),1)
+				
+			if new_step<cur_step:
+				cur_step=new_step
+				
+			if cur_diff==0:
+				break
+			
+			elif cur_diff<0:
+				cur_ii=cur_ii-cur_step
+			else:
+				cur_ii=cur_ii+cur_step
+				
+			cur_vv=len(mm[:cur_ii].encode('utf-8') )
+			new_diff=512-cur_vv
+			
+			cur_diff=new_diff
+			tmpabs=abs(cur_diff)
+
+		return [mm[:cur_ii],cur_vv], mm[cur_ii:]
+
+		
+	ar=[]
+
+	while len(mm)>0:
+		m1,mm=splitutf8_512bytes(mm)
+		ar.append(m1)
+		
+	return ar
+
+
+
+
+
+def prep_msg( mm,addr):
+		
+	got_bad_char=False
+	total_bytes=0
+	
+	try:
+		total_bytes=len(mm.encode('utf-8')) #sys.getsizeof(mm.encode('utf-8'))
+	
+	except:
+		badc=''
+		bad_ii=-1
+		for ii,cc in enumerate(mm):
+			try:
+				cc.encode('utf-8')
+			except:
+				badc=cc
+				bad_ii=ii
+				got_bad_char=True
+				break
+		
+		# gui.showinfo('Bad character in memo input', 'This input contains bad character ['+badc+']:\n'+mm+'\n position: '+str(bad_ii))
+		return got_bad_char, ['Bad character in memo input', 'This input contains bad character ['+badc+']:\n'+mm+'\n position: '+str(bad_ii)]
+		
+	msg_parts= get_msg_parts(mm)
+	tmpsignature= get_addr_to_hash(addr)
+	
+	if msg_parts[-1][1]+len(tmpsignature)<513:
+		msg_parts[-1]=[msg_parts[-1][0]+tmpsignature , msg_parts[-1][1]+len(tmpsignature) ]
+	else:
+		msg_parts.append([tmpsignature,len(tmpsignature)])
+		
+	msg_parts=[mm[0] for mm in msg_parts]
+	
+	return got_bad_char, msg_parts
