@@ -149,7 +149,9 @@ def run_process( CLI_STR,cmd):
 		cmdtmp=cmd.split()
 		cmd=[cmdii for cmdii in cmdtmp]
 		
+	# print('final cmd',CLI_STR+cmd)
 	zxc=subprocess.run(CLI_STR+cmd,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+	# print('init result',zxc,'\n',zxc.stdout)
 	
 	return zxc.stdout.decode('utf-8') 
 	
