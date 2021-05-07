@@ -246,7 +246,7 @@ def copy(btn,txt):
 	cli=QApplication.clipboard()
 	cli.setText(txt)
 	messagebox_showinfo('Value ready in clipboard','Value ready in clipboard:\n'+txt,btn)
-	
+	# print(btn)
 	if btn!=None:
 		xtmp=btn
 		for ii in range(5):
@@ -255,7 +255,7 @@ def copy(btn,txt):
 					xtmp=xtmp.parent()
 			else:
 				break
-				
+		# print('close?')
 		xtmp.close()	
 	
 	# if hasattr(btn,'parent'):
@@ -584,9 +584,11 @@ class Tabs(QTabWidget):
 			# v.setParent(self)
 		
 
+		
+		
 class Combox(QComboBox):		
 
-	def __init__(self,parent ,items_list=[],actionFun=None,every_click=False): #item_list=[{'text'}]  OR item_list=[{'text','userdata'},{}]
+	def __init__(self,parent ,items_list=[],actionFun=None,every_click=False,args=None): #item_list=[{'text'}]  OR item_list=[{'text','userdata'},{}]
 		super(Combox, self).__init__(parent)
 		
 		self.orig_items_list=items_list.copy()
@@ -611,10 +613,21 @@ class Combox(QComboBox):
 			self.fun=actionFun
 			# self.currentIndexChanged.connect(lambda: actionFun(self))	# self.currentText() self.currentData(Qt.UserRole) inside actionFun will get our values 
 			if self.every_click:
-				self.activated.connect(lambda: actionFun(self))
+				# self.activated.connect(lambda: actionFun(self))
+				
+				if args!=None:
+					self.activated.connect(lambda  : actionFun(self,*args))
+				else:
+					self.activated.connect(lambda : actionFun(self ))
 			else:
-				self.currentTextChanged.connect(lambda: actionFun(self))	# self.currentText() self.currentData(Qt.UserRole) inside actionFun will get our values 
+				if args!=None:
+					# self.activated.connect(lambda  : actionFun(self,*args))
+					self.currentTextChanged.connect(lambda: actionFun(self,*args))
+				else:
+					# self.activated.connect(lambda : actionFun(self ))
+					self.currentTextChanged.connect(lambda: actionFun(self))	# self.currentText() self.currentData(Qt.UserRole) inside actionFun will get our values 
 		
+		self.setStyleSheet('QComboBox {padding:3px;font-size:13px;}')
 		
 	# currentIndex()	
 	# currentText()
@@ -1275,14 +1288,18 @@ class Table(QTableWidget):
 				# print('UPDATED COMBOBOX')
 				return
 		
+			tmpargs=None
+			if 'args'  in w:
+				tmpargs=w['args']
+		
 			tmpfun=None
 			if 'fun' in w:
 				tmpfun=w['fun']
 				
 			if 'every_click' in w:
-				self.setCellWidget( ii,jj, Combox( None,w['V'],tmpfun,every_click=True ) )
+				self.setCellWidget( ii,jj, Combox( None,w['V'],tmpfun,every_click=True,args=tmpargs ) )
 			else:
-				self.setCellWidget( ii,jj, Combox( None,w['V'],tmpfun ) )
+				self.setCellWidget( ii,jj, Combox( None,w['V'],tmpfun,args=tmpargs ) )
 				
 			self.cellWidget(ii,jj).setProperty("rowii",ii)
 			self.cellWidget(ii,jj).adjustSize()
