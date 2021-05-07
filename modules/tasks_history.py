@@ -127,12 +127,12 @@ class TasksHistory:
 			tmpdict['rowk']=rr[7]
 			tmpdict['rowv']=[{'T':'LabelV', 'L':rr[0], 'uid':'cat'+str(rr[7]), 'visible':visible } , 
 							{'T':'LabelV', 'L':rr[1], 'uid':'cmd'+str(rr[7]) , 'visible':visible} , 
-							{'T':'InputL', 'L':rr[2], 'uid':'json'+str(rr[7]) , 'visible':visible, 'width':24} , 
+							{'T':'LineEdit', 'V': rr[2], 'uid':'json'+str(rr[7]) , 'visible':visible, 'width':24} , 
 							{'T':'LabelV', 'L':rr[3], 'uid':'ctime'+str(rr[7]) , 'visible':visible} , 
 							{'T':'LabelV', 'L':rr[4], 'uid':'etime'+str(rr[7]), 'visible':visible} , 
 							{'T':'LabelV', 'L':short_result, 'uid':'res'+str(rr[7]) , 'visible':visible, 'style':sstyle} , 
 							{'T':'LabelV', 'L':str(rr[6]), 'uid':'wait'+str(rr[7]) , 'visible':visible} , 
-							{'T':'InputL', 'L':rr[5], 'uid':'details'+str(rr[7]), 'visible':visible, 'width':32 } #app_fun.json_to_str(rr[5] )
+							{'T':'LineEdit', 'V': rr[5], 'uid':'details'+str(rr[7]), 'visible':visible, 'width':32 } #app_fun.json_to_str(rr[5] )
 							]	
 							
 			self.grid_settings.append(tmpdict)
