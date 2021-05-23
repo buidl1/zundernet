@@ -46,6 +46,7 @@ Install the following dependencies to run Zundernet properly:
 sudo apt-get install python3-pip
 pip3 install pycryptodome
 pip3 install pyside2
+pip3 install psutil
 ```
 ## Run Zundernet
 When all above conditions are met you should run:
