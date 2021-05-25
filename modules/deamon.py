@@ -1043,8 +1043,9 @@ class DeamonInit(gui.QObject):
 		
 		tsyncing=None
 		blocksinit=None
+		gitmp=''
 		
-		while pp.poll()==None:
+		while pp.poll() is None: #==None:
 		
 			# print('deamon  while')
 		
@@ -1134,7 +1135,9 @@ class DeamonInit(gui.QObject):
 				
 				self.wallet_status_update.emit(['append',' .']) #self.walletTab.stat_lab.setText(self.walletTab.stat_lab.text()+' .') #.set_textvariable(None,self.statustable.get()+' .')
 				time.sleep(1)
-		 
+				
+				
+		print('pp.poll()',pp.poll(),'gitmp',gitmp)
 		
 		if cmd_orig=='start':		
 			self.the_wallet=wallet_api.Wallet(self.cli_cmd,self.get_last_load(),self.db)
@@ -1142,14 +1145,20 @@ class DeamonInit(gui.QObject):
 			tend=time.time()
 			tdiff=int(tend-t0)
 			gitmp=app_fun.run_process(cli_cmd,'getinfo')
-			if 'error' in gitmp:
+			y={}
+			try:
+				y = json.loads(gitmp)
+			except:
+				pass
+				
+			if 'error' in gitmp and 'errors' not in y:
 				print('ERROR doing getinfo for CLI STR',CLI_STR)
 				print('getinfo:',gitmp)
 				
 				self.output('Unclassified error:\n'+gitmp)
 				
 			else:
-				y = json.loads(gitmp)
+				
 				
 				loaded_block=y["blocks"]
 				
