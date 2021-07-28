@@ -317,10 +317,10 @@ class InitApp:
 			idb.insert(dict_set,["komodo","datadir","data_files" ]) #,"password_on"
 			
 		elif not komodod_ok:
-			gui.messagebox_showinfo('Path for komodo deamon is wrong', deamon +'\n - no komodod/pirated/verusd file !')
+			gui.messagebox_showinfo('Path for komodo deamon is wrong', deamon +'\n - no komodod/pirated file !')
 			exit()
 		elif  not komodo_cli_ok:
-			gui.messagebox_showinfo('Path for komodo-cli is wrong', data +'\n - no komodo-cli/pirate/verus file !')
+			gui.messagebox_showinfo('Path for komodo-cli is wrong', data +'\n - no komodo-cli/pirate file !')
 			exit()
 		elif not new_wallet:
 			gui.messagebox_showinfo('Path for blockchain data is wrong', data +'\n - no wallet file !')
