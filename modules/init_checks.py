@@ -317,10 +317,10 @@ class InitApp:
 			idb.insert(dict_set,["komodo","datadir","data_files" ]) #,"password_on"
 			
 		elif not komodod_ok:
-			gui.messagebox_showinfo('Path for komodo deamon is wrong', deamon +'\n - no komodod/pirated file !')
+			gui.messagebox_showinfo('Path for pirate deamon is wrong', deamon +'\n - no pirated file !')
 			exit()
 		elif  not komodo_cli_ok:
-			gui.messagebox_showinfo('Path for komodo-cli is wrong', data +'\n - no komodo-cli/pirate file !')
+			gui.messagebox_showinfo('Path for pirate-cli is wrong', data +'\n - no pirate-cli file !')
 			exit()
 		elif not new_wallet:
 			gui.messagebox_showinfo('Path for blockchain data is wrong', data +'\n - no wallet file !')
@@ -374,7 +374,7 @@ class InitApp:
 			
 			
 		automate_rowids=[ [{'T':'LabelV', 'L':'Set proper paths, otherwise the deamon may freeze and you may need to kill the process manually.', 'span':3},{  }, {  } ] ,
-						[{'T':'LabelC', 'L':'Select deamon and cli path \n(komodod and komodo-cli inside)', 'width':32}, {'T':'Button','L':'Komodo path:','uid':'p1', 'width':15}, {'T':'LabelV', 'L':preset[0],'uid':'deamon', 'width':60} ],
+						[{'T':'LabelC', 'L':'Select deamon and cli path \n(pirated and pirate-cli inside)', 'width':32}, {'T':'Button','L':'Pirated path:','uid':'p1', 'width':15}, {'T':'LabelV', 'L':preset[0],'uid':'deamon', 'width':60} ],
 						[{'T':'LabelC', 'L':'Select data directory', 'width':32}, {'T':'Button','L':'Data dir path:','uid':'p2', 'width':15}, {'T':'LabelV', 'L':preset[1],'uid':'data', 'width':60} ] ,
 						[{'T':'LabelC', 'L':'Select wallet', 'width':32}, {'T':'Combox','V':tmpwallet,'uid':'cs2', 'width':15 }, { } ],
 						# [{'T':'LabelC', 'L':'Start blockchain', 'width':32}, {'T':'Combox','V':['no','yes'],'uid':'cs2', 'width':15 }, { } ],
