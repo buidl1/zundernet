@@ -268,8 +268,42 @@ class DeamonInit(gui.QObject):
 			
 			elif rr[3]=='new_addr':
 			
+				# print(rr[4])
+				addr_opt=json.loads(rr[4])
+				addr_count= addr_opt['addr_count'] 
+				addr_cat=addr_opt['addr_cat']
+				addr_cat_counter=addr_opt['addr_cat_counter'] # yes / no
+			
+				# table={}
+				
 				# 2 create results / wallet api
-				tmpresult=self.the_wallet.new_zaddr()
+				new_addr_list=[]
+				date_str=app_fun.now_to_str(False)
+				for nal in range(addr_count):
+					# print(nal,addr_count)
+					tmpresult=self.the_wallet.new_zaddr()
+					# print(tmpresult)
+					new_addr_list.append(tmpresult)
+					
+					# add category
+					if addr_cat!='':
+						tmp_cat=addr_cat
+						if addr_cat_counter:
+							tmp_cat+='_'+str(nal+1)
+						
+						table={'address_category':[{'address':tmpresult, 'category':tmp_cat, 'last_update_date_time':date_str}]}			
+						# print(table)
+						idb.insert(table,['address','category','last_update_date_time']) #,{'address':['=',"'"+tmpresult+"'"]})
+					
+					# update msg
+					table={}
+					table['queue_waiting']=[{'status':'processing '+str(nal+1)+'/'+str(addr_count)}]
+					idb.update( table,['status'],{'id':[ '=',rr[5] ]})
+					self.sending_signal.emit(['cmd_queue'])
+					time.sleep(0.01)
+					
+				# addr_cat_test=idb.select('address_category',['address','category'] )	
+				# print('test\n\n',addr_cat_test)
 				
 				# 3 insert result to queue done
 				table={}
@@ -278,7 +312,7 @@ class DeamonInit(gui.QObject):
 				idb.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
 				count_task_done+=1
 				
-				self.msg_signal.emit('New address created','New address:\n\n'+tmpresult,'')
+				self.msg_signal.emit('New address(es) created','New address(es):\n\n'+'\n'.join(new_addr_list),'')
 				# idb.select('queue_done', [ "id" ])
 				
 			elif rr[3]=='export_wallet':
@@ -1137,7 +1171,7 @@ class DeamonInit(gui.QObject):
 				time.sleep(1)
 				
 				
-		print('pp.poll()',pp.poll(),'gitmp',gitmp)
+		# print('pp.poll()',pp.poll(),'gitmp',gitmp)
 		
 		if cmd_orig=='start':		
 			self.the_wallet=wallet_api.Wallet(self.cli_cmd,self.get_last_load(),self.db)
