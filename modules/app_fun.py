@@ -1,6 +1,6 @@
 
 import os
-
+import ssd
 import sys, multiprocessing, time
 
 import datetime
@@ -185,12 +185,18 @@ def json_to_str(dd,tt=''):
 	
 
 # https://stackoverflow.com/questions/17455300/python-securely-remove-file
+
+
 def secure_delete(path, passes=5): #app_fun.secure_delete(self.tmp_err)
-	with open(path, "ba+") as delfile:
-		length = delfile.tell()
-		for ii in range(passes):
-			delfile.seek(0)
-			delfile.write(os.urandom(length))
+	# print(path,ssd.is_ssd(path))
+	if not ssd.is_ssd(path): #overwite make sens only for hdd not ssd
+	
+		with open(path, "ba+") as delfile:
+			length = delfile.tell()
+			for ii in range(passes):
+				delfile.seek(0)
+				delfile.write(os.urandom(length))
+				
 	os.remove(path)
 
 
