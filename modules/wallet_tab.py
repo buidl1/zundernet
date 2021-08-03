@@ -141,7 +141,7 @@ class WalletTab:
 			
 			gui.messagebox_showinfo(tmptitle,tmpcont,None)
 			
-			if title=='New address created':
+			if title=='New address(es) created':
 				self.wds.wallet_copy_progress()
 				self.wds.update_addr_cat_map()
 				self.updateWalletDisplay(['wallet'])
@@ -192,6 +192,7 @@ class WalletTab:
 				self.wallet_summary_frame.updateTable( gridS )
 				if len(gridD)>0:
 					self.wallet_details.updateTable(gridD)
+				# print('gridD updated!')
 					
 			if 'cmd_queue' in wallet_part :	
 				
