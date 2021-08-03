@@ -523,7 +523,11 @@ class Button(QPushButton):
 			self.clicked.connect(lambda:  actionFun(self,*args))
 	# def keyPressEvent(self,event):
 		# self.fun(self,args)
-		
+	
+	# def __lt__(self,other): 
+		# if str(self.text()) <  str(other.text()) :
+			# return True
+		# return False
 
 
 class TextEdit(QTextEdit):			
@@ -824,8 +828,15 @@ class TableCell(QTableWidgetItem):
 		# self.setSizePolicy(QSizePolicy.Minimum,QSizePolicy.Minimum)
 		
 	def __lt__(self,other):
-		if self.typedvalue <  other.typedvalue :
+	
+		if self.ttype==str:
+			if self.typedvalue.lower() < other.typedvalue.lower() :
+				# if self.typedvalue <  other.typedvalue :
+				return True
+	
+		elif self.typedvalue <  other.typedvalue :
 			return True
+			
 		return False
 		
 
@@ -942,12 +953,18 @@ class Table(QTableWidget):
 	# colnames getting zeroed 
 	# update which column currently  sorted in canse of insert to be in correct order 
 	def clickDetected(self):
+		# print('click',self.sender().metaObject().className())
 		if hasattr(self,'col_names') and self.sender().metaObject().className()==QHeaderView.staticMetaObject.className():
 			tmpsender=self.sender()
 			# print(self.col_names)
 			# print(tmpsender)
 			# print(tmpsender.sortIndicatorSection())
 			self.sort_col=self.col_names[tmpsender.sortIndicatorSection()]
+			# print(self.sort_col)
+			
+			# sortidx=self.col_names.index(self.sort_col)
+			# tmpord=self.horizontalHeader().sortIndicatorOrder()
+			# self.sortByColumn(sortidx, tmpord)
 			# print(tmpsender.sortIndicatorOrder(),self.sort_col)
 		
 		
@@ -1248,6 +1265,7 @@ class Table(QTableWidget):
 				
 			# print('button',w['L'],tmpfun,tmpargs)
 			# print('ii,jj,rows',ii,jj,self.rowCount())
+			self.setItem(ii,jj,TableCell(str(w['L']),ttype=str) )
 				
 			bbb=Button( None,w['L'],tmpfun,tmpargs,str(tmptt) )
 			if 'IS' in w:
