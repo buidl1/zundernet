@@ -704,7 +704,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 		try:
 			tmpnewaddr=app_fun.run_process(self.cli_cmd,"z_getnewaddress")
 			self.refresh_wallet()
-			return str(tmpnewaddr) 
+			return str(tmpnewaddr).strip()
 		except:
 			print('wallet api no addr exception')
 			return 'no addr exception'
