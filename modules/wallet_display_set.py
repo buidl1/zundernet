@@ -43,9 +43,9 @@ class WalDispSet(gui.QObject):
 		addr_cat=idb.select('address_category',['address','category'] )
 		self.addr_cat_map={}
 		for rr in addr_cat:
-			self.addr_cat_map[rr[0]]=rr[1]
+			self.addr_cat_map[rr[0].strip()]=rr[1]
 			
-		# print(self.addr_cat_map)
+		# print('self.addr_cat_map',self.addr_cat_map)
 			
 			
 				
@@ -1037,16 +1037,60 @@ class WalDispSet(gui.QObject):
 		# if correct - create new addr
 		# after which - ask to select path to backup wallet 
 	
+		# add number and cat selection and counter
 		
-		table={}
-		table['queue_waiting']=[localdb.set_que_waiting('new_addr' ) ]
+		
+		############### new addr setup
+		
+		
+		automate_rowids=[ [{'T':'LabelV', 'L':'Number of addresses to create: ',  'style':{'bgc':'#eee','fgc':'red'} },{'T':'LineEdit', 'V':'1','valid':{'ttype':int, 'rrange':[1,9999]}} ] ,
+						[{'T':'LabelV', 'L':'Category for new addresses: ', 'style':{'bgc':'#eee','fgc':'red'} },{'T':'LineEdit', 'V':''} ],
+						[{'T':'LabelV', 'L':'Set category counter' },{'T':'Combox','V':['No','Yes'] } ] ,
+						[{'T':'Button', 'L':'Create', 'span':2}   ] 
+						]
+		
+		tw=gui.Table( params={'dim':[4,2],"show_grid":False, 'colSizeMod':[ 'toContent','toContent'], 'rowSizeMod':['toContent','toContent' ]})		
+		tw.updateTable(automate_rowids)
+		
+		
+		def create_addr(btn_c,addr_num,addr_cat,addr_cat_counter):
+		
+			addr_num,addr_cat,addr_cat_counter=addr_num.text().strip(),addr_cat.text().strip(),addr_cat_counter.currentText()
+		
+			idb=localdb.DB(self.db)
+			
+			if addr_cat_counter=='No':
+				addr_cat_counter=False
+			else:
+				addr_cat_counter=True
+				
+			table={}
+			table['queue_waiting']=[localdb.set_que_waiting('new_addr', json.dumps({'addr_count':int(addr_num),'addr_cat':addr_cat,'addr_cat_counter':addr_cat_counter}) ) ]
+ 
+			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 
-		idb=localdb.DB(self.db)
-		idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
-		# self.wallet_copy_progress(table['queue_waiting'][0]['id'])
-		# return 
-		# self.queue_com.put([ ,'Creating new address\n',self.message_asap_tx_done ])
+			btn_c.parent().parent().parent().close() #.destroy()
+			
+		tw.cellWidget(3,0).set_fun(False, create_addr, tw.cellWidget(0,1), tw.cellWidget(1,1), tw.cellWidget(2,1)) 
+		
+		gui.CustomDialog(btn,tw, title='New address setup', defaultij=[3,0])
+		
+		
+		##############3
+		
+		
+		
+		
+		
+		
+		
+		
+		# table={}
+		# table['queue_waiting']=[localdb.set_que_waiting('new_addr' ) ]
 
+		# idb=localdb.DB(self.db)
+		# idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
+		
 		
 	
 	def prepare_queue_frame(self,init=False):	
@@ -1512,6 +1556,9 @@ class WalDispSet(gui.QObject):
 		
 		
 	def prepare_byaddr_frame(self,init=False,selecting=False,selecting_to=False):	
+	
+		# print('prepare_byaddr_frame')
+	
 		colnames=self.get_header(selecting)
 		grid_lol3=[]
 		tmpdict2={}
@@ -1524,6 +1571,7 @@ class WalDispSet(gui.QObject):
 			sorting='usage'
 			
 		if len(self.disp_dict)>0:
+			# print('len(self.disp_dict)>0')
 		
 			uu=usb.USB()
 			
@@ -1545,6 +1593,8 @@ class WalDispSet(gui.QObject):
 				# sorting_lol=sorted(sorting_lol, key = operator.itemgetter(3, 1, 2), reverse=True )
 			
 			addr_cat=self.addr_cat_map 
+			
+			# print('1593 addr_cat',addr_cat)
 					
 			for i in sorting_lol: 
 			
@@ -1559,9 +1609,11 @@ class WalDispSet(gui.QObject):
 				self.amount_per_address[ddict['wl'][ii]['addr']]=tmp_confirmed
 				
 				tmpcurcat='Edit'
+				# print('testing',ddict['wl'][ii]['addr'],' in addr cat')
 				if ddict['wl'][ii]['addr'] in addr_cat:
 					tmpcurcat=addr_cat[ddict['wl'][ii]['addr']]
-				
+					
+				# print( 'addr/cat',ddict['wl'][ii]['addr'] , tmpcurcat )
 				
 				tmp_unconfirmed=0
 				if 'unconfirmed' in ddict['wl'][ii]:			
@@ -1687,3 +1739,6 @@ class WalDispSet(gui.QObject):
 		tw.cellWidget(3,0).set_fun(True,retv,btn,tw.cellWidget(1,0)) 
 		
 		gui.CustomDialog(btn,tw, title='Edit category', defaultij=[3,0])
+		
+		
+
