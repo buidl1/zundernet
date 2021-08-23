@@ -11,6 +11,8 @@ import psutil
 import threading
 import modules.aes as aes
 
+import modules.usb as usb
+
 def listProd(ll):
 	iv=ll[0]
 	for l in ll[1:]:
@@ -189,6 +191,14 @@ def json_to_str(dd,tt=''):
 
 def secure_delete(path, passes=5): #app_fun.secure_delete(self.tmp_err)
 	# print(path,ssd.is_ssd(path))
+	usb_tmp=usb.USB()
+	
+	# special windows handling
+	if usb_tmp.os=='windows':
+		import pythoncom
+		pythoncom.CoInitialize()
+		# print('pythoncom.CoInitialize()')
+	
 	if not ssd.is_ssd(path): #overwite make sens only for hdd not ssd
 	
 		with open(path, "ba+") as delfile:
