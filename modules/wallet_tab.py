@@ -10,7 +10,7 @@ import modules.localdb as localdb
 
 from modules.tasks_history import TasksHistory
 from modules.tx_history import TransactionsHistory
-from modules.frame_settings import Settings
+# from modules.frame_settings import Settings
 from modules.notifications import Notifications
 import modules.addr_book as addr_book
 
@@ -20,6 +20,7 @@ import traceback
 class Worker(gui.QObject):
 	finished = gui.Signal()
 	refreshed = gui.Signal(list)
+	# main_window_block_closing = gui.Signal(bool)
 	
 	
 	def __init__(self,init_app,queue_start_stop,dmn): #init_app,wallet_display_set,queue_com,queue_start_stop,dmn,queue_status):
@@ -35,12 +36,13 @@ class Worker(gui.QObject):
 	def run(self):
 		"""Long-running task."""
 		# print('run?',self.init_app.close_thread)
+		if self.init_app.is_started:
+			# print('is_started deamon')
+			self.dmn.start_deamon( ) 
+			
 		xx=0
 		while not self.init_app.close_thread:
-
-			# if xx % 19 ==1:
-				# print('thread working',xx,self.init_app.close_thread,flush=True)
-			# print(45,self.queue_start_stop.qsize())
+			
 			if self.queue_start_stop.qsize(): # start stop blockchain ON/OFF
 				
 				try:
@@ -49,9 +51,14 @@ class Worker(gui.QObject):
 					# print(48,cmd)
 					if len(cmd)>0:
 						if cmd['cmd']=='stop_deamon':
-							# print('stoping?')
+							
+							self.block_closing=True
 							self.dmn.stop_deamon()
+							# un block main window closing
+							self.block_closing=False
 						elif cmd['cmd']=='start_deamon':
+							# print('why start?',cmd)
+							# self.dmn.start_stop_enable.emit(False)
 							self.dmn.start_deamon(cmd['addrescan'] )
 				except : #Queue.Empty:
 					print('Queue exception bug?')
@@ -69,24 +76,19 @@ class Worker(gui.QObject):
 				# print(63,vemit)
 				if 'CONNECTED' not in vemit:
 					self.block_closing=True
+					print('connection problem?? vemit',vemit)
 				else:
 					self.block_closing=False
+					# if xx<5: self.dmn.start_stop_enable.emit(True)
 			else:
 				vemit=['cmd_queue','worker_loop',xx]
 				self.block_closing=False
-				# print(self.init_app.autostart)
-				if self.init_app.autostart!='no':
-					self.init_app.autostart='no'
-					self.dmn.start_deamon( )
-			
+				
 			
 			# print('before vemit',vemit)
 			self.refreshed.emit(vemit)
 			time.sleep(0.3) # change to 0.3
 			xx+=1
-			# print('after sleep')
-			
-		# print(self.init_app.close_thread)
 			
 		self.finished.emit()
 
@@ -142,9 +144,9 @@ class WalletTab:
 			gui.messagebox_showinfo(tmptitle,tmpcont,None)
 			
 			if title=='New address(es) created':
-				self.wds.wallet_copy_progress()
 				self.wds.update_addr_cat_map()
 				self.updateWalletDisplay(['wallet'])
+				self.wds.wallet_copy_progress()
 	
 	
 	@gui.Slot(list)
@@ -155,7 +157,7 @@ class WalletTab:
 			
 		self.update_status_locked=True
 	
-		# print(' update status')
+		# print(' update status',ll)
 		if len(ll)==2:
 			if ll[0]=='append':
 				self.stat_lab.setText(self.stat_lab.text()+ll[1]) 
@@ -169,6 +171,7 @@ class WalletTab:
 				
 	@gui.Slot(bool)
 	def enableStartStop(self,bl):
+		# print('set enableStartStop',bl)
 		self.bstartstop.setEnabled(bl)
 		
 		
@@ -176,51 +179,60 @@ class WalletTab:
 	def updateWalletDisplay(self,wallet_part=[]):
 	
 		# print('updateWalletDisplay',wallet_part)
+		cc=3
 		while self.locked:
 			# print('waiting, locked')
 			time.sleep(2)
+			cc=cc-1
+			if cc<0: return
 		
 		self.locked=True
 		try:
 		# if True:
 		
-			if  'wallet'  in wallet_part :
-				self.wds.set_disp_dict()
+			if  'wallet'  in wallet_part : # refreshed inside deamon / currently signal missing, and inside worke from deamon -> update_status ret_val.append('wallet')
+				# print('\n\n\nupdateWalletDisplay',wallet_part)
+				self.wds.set_disp_dict() #HERE OK SOMTIMES NOT REFRESHING PROPERLY ?? 
 				
 				gridS,cols=self.wds.prepare_summary_frame()
+				self.summary_frame={'grid':gridS,'columns':cols}
+				# print('updating wallet prepare_byaddr_frame' )
 				gridD,col3=self.wds.prepare_byaddr_frame()
+				self.byaddr_frame={'grid':gridD,'columns':col3}
+				# print(gridD)
 				self.wallet_summary_frame.updateTable( gridS )
 				if len(gridD)>0:
-					self.wallet_details.updateTable(gridD)
+					# for gg in gridD:
+						# print(gg['rowk'],gg['rowv'][1]['L'],gg['rowv'][2]['L'],gg['rowv'][3]['L'],gg['rowv'][5]['L'] )
+					self.wallet_details.updateTable(gridD, doprint=False)
 				# print('gridD updated!')
 					
 			if 'cmd_queue' in wallet_part :	
 				
 				grid_lol4,col4=self.wds.prepare_queue_frame()
+				self.queue_frame={'grid':grid_lol4,'columns':col4}
 				# print(grid_lol4)
 				self.queue_status.updateTable(grid_lol4)
 				# self.wds.queue_frame_buttons( grid_lol4,self.queue_status)
 				
-			if 'demon_loop' in 	wallet_part :
-				ii=wallet_part.index('demon_loop')
+			if 'demon_loop' in 	wallet_part or 'worker_loop' in wallet_part:
+				
 				tmptt=self.tab_corner_widget.text().replace('Loops [','').replace(']','')
 				stt=tmptt.split('/')
-				newtt='Loops ['+str(wallet_part[ii+1])+'/'+stt[1]+']'
-				self.tab_corner_widget.setText(newtt)
-				self.tab_corner_widget.setToolTip(newtt)
-				# =tab_corner #crnwdg=gui.Label(None,'Loops [0/0]')
-				# print()
+				newtt=''
+				if 'demon_loop' in 	wallet_part :
+					ii=wallet_part.index('demon_loop')
+					
+					newtt='Loops ['+str(wallet_part[ii+1])+'/'+stt[1]+']'
+					
+					
+				if 'worker_loop' in wallet_part:
+					ii=wallet_part.index('worker_loop')
+					
+					newtt='Loops ['+stt[0]+'/'+str(wallet_part[ii+1])+']'
 				
-			if 'worker_loop' in wallet_part:
-				# print(wallet_part,self.tab_corner_widget.text())
-				ii=wallet_part.index('worker_loop')
-				tmptt=self.tab_corner_widget.text().replace('Loops [','').replace(']','')
-				stt=tmptt.split('/')
-				newtt='Loops ['+stt[0]+'/'+str(wallet_part[ii+1])+']'
 				self.tab_corner_widget.setText(newtt)
-				self.tab_corner_widget.setToolTip(newtt)
-			
-				
+					
 			if 'task_done' in wallet_part :	
 				if hasattr(self,'tahi'):
 					self.tahi.update_history_frame()
@@ -233,26 +245,34 @@ class WalletTab:
 				if hasattr(self,'txhi'):
 					self.txhi.update_history_frame()
 					
-			# if 'tx_history_update' in wallet_part  or 'notif_update' in wallet_part:
-				
-				
-			self.locked=False
-			# print('updateWalletDisplay done')
 		
 		except:
 			print('Exception 235 wallet locked?')
-			self.locked=False
+			traceback.print_exc()
+			
+		self.locked=False
 			
 			
-			
-			
-	def __init__(self,autostart,queue_start_stop,wds=None ):
+	# def updateSummaryTableValues(self):
+		# value of total amount when new tx or rounding
+		# try updating only first 3 columns - if works !
+		# grid_lol_wallet_sum,col_names=self.wds.prepare_summary_frame( )
+		# self.wallet_summary_frame.updateTable( grid_lol_wallet_sum,col_names )
+		
+		# value of categories in filter when categories edited ...
+		# in this case needs to update the combox ... 
+		# update_addr_cat_map(self)
+		
+	
+	def __init__(self,is_deamon_started,queue_start_stop,wds  ): #autostart
 	
 		self.locked=False
 		self.update_status_locked=False
 		self.wds=wds
 		self.wds.set_disp_dict()
-		self.wds.set_format()
+		# print(' set_disp_dict dt',time.time()-t0)
+		# t0=time.time()
+		
 		
 		self.tabs1=gui.Tabs(None)
 		
@@ -279,20 +299,28 @@ class WalletTab:
 		#
 		stat = gui.FramedWidgets(frame01,'Blockchain status',layout=gui.QHBoxLayout())
 		frame01.insertWidget(stat,0,1 ) 
+		# stat.setMaximumHeight(self.filter_table.height())
 		
 		self.stat_lab=gui.Label( stat, 'Blockchain off' )
 		stat.insertWidget(self.stat_lab)			
 		self.bstartstop=gui.Button(frame01) 
 		self.bstartstop.setMaximumWidth(128)
 		stat.insertWidget(self.bstartstop)
-		# print('autostart',autostart)
-		if autostart=='yes':
+		# print('stat size',stat.height(),stat.sizePolicy())
+		
+		# print('autostart', autostart)
+		# to distinguish started and synced ?
+		if is_deamon_started :
 			self.bstartstop.setText('Stop blockchain')
 			self.bstartstop.setEnabled(False) #configure(state='disabled')
+			# print('is_deamon_started',is_deamon_started)
 		else:
 			self.bstartstop.setText('Start blockchain')
 
+			
+		# why did autostart after click stop ??
 		def togglestartstop(elem):
+			# print('elem.text()',elem.text())
 			if elem.text()=='Stop blockchain':
 				elem.setText('Start blockchain')
 				# print('after start chain')
@@ -304,6 +332,7 @@ class WalletTab:
 				elem.setText('Stop blockchain')	
 				elem.setEnabled(False)			 
 				def restart(addrescan):
+					# print(308,addrescan)
 					if addrescan=='No':
 						addrescan=False
 					else:
@@ -322,6 +351,9 @@ class WalletTab:
 		frame01.insertWidget(queue,1,1 ) 
 		
 		grid_lol4, col4=wds.prepare_queue_frame(True)
+		self.queue_frame={'grid':grid_lol4,'columns':col4}
+		# print(' prepare_queue_frame dt',time.time()-t0)
+		
 		self.queue_status=gui.Table(None,params={'dim':[0,5],'sortable':1,'updatable':1,'toContent':1})
 		self.queue_status.updateTable( grid_lol4, col4 ) 
 		queue.insertWidget(self.queue_status)
@@ -332,18 +364,32 @@ class WalletTab:
 		###
 		### FRAME 2 - summary
 		### 
-		summary = gui.FramedWidgets(frame01,'Summary',layout=gui.QHBoxLayout())  
+		# t0=time.time()
+		opt=self.wds.get_options(True)
+		self.summary_options=opt
+		# print(' get_options 1 dt',time.time()-t0,opt)
+		# t0=time.time()
 		
+		self.wds.set_format(opt['rounding']) # format used in prepare summary frame and prepare by addr frame - can be set later !
+		# print(' set_format dt',time.time()-t0)
+		# t0=time.time()
+		
+		summary = gui.FramedWidgets( frame01,'Summary' ,layout=gui.QHBoxLayout() )  #for wallet file: '+wds.data_files['wallet'] 
+		# summary.setMaximumHeight(128)
 		summary.setMaximumHeight(128)
+		
 		frame01.insertWidget(summary,0,0 )  
 		grid_lol_wallet_sum,col_names= wds.prepare_summary_frame( )
+		self.summary_frame={'grid':grid_lol_wallet_sum,'columns':col_names}
+
 		self.summary_colnames=col_names
-		self.wallet_summary_frame=gui.Table(summary,params={'dim':[1,6],'updatable':1,'toContent':1})  #'sortable':1,
+		self.wallet_summary_frame=gui.Table(summary,params={'dim':[1,6],'updatable':1,'toContent':1})  #'sortable':1, ,'rowSizeMod':['toContent']
 		self.wallet_summary_frame.updateTable( grid_lol_wallet_sum, col_names )
 		summary.insertWidget(self.wallet_summary_frame)
 
-	
-	
+		summary.setMinimumHeight(108)
+		
+		
 		
 		###
 		### FRAME 3 - wallet balances
@@ -352,6 +398,9 @@ class WalletTab:
 		frame01.insertWidget(table,1,0 ) 
 		
 		grid_lol3, colnames=wds.prepare_byaddr_frame()
+		self.byaddr_frame={'grid':grid_lol3,'columns':colnames}
+		# print(' prepare_byaddr_frame dt',time.time()-t0)
+		# t0=time.time()
 		self.details_colnames=colnames
 		self.wallet_details=gui.Table(summary,params={'dim':[len(grid_lol3),len(colnames)],'sortable':1 ,'updatable':1,'toContent':1 }) #flexitable.FlexiTable(summary,grid_lol_wallet_sum)
 		# print(len(grid_lol3) )
@@ -359,26 +408,18 @@ class WalletTab:
 		self.wallet_details.updateTable( grid_lol3,colnames ) #update_frame(grid_lol3)
 		table.insertWidget(self.wallet_details)
 		
-		# def set_summary_cmd():
-		
-			# opt=self.wds.get_options(True)
-			# self.wallet_summary_frame.cellWidget(0,3).setIndexForText(opt['rounding'] )
-			# self.wallet_summary_frame.cellWidget(0,3).set_fun(save_wallet_display,'rounding')
-			
-		
 		
 		
 		def save_wallet_display(btn,opt,*evnt):
 			 
-			idb=localdb.DB(self.wds.db)
-			table={}
-			
-			# vv=wallet_summary_frame.get_value(opt.replace('ing','')) # name similar to uid hence hack 
 			vv=btn.currentText()
-			# print(opt,vv)
-			table['wallet_display']=[{'option':opt, 'value':vv  }]
-			idb.upsert(table,['option','value'],{'option':['=',"'"+opt+"'"]})
-			
+			if len(evnt)==0 or evnt[-1]!='init':
+				idb=localdb.DB(self.wds.db)
+				table={}
+				table['wallet_display']=[{'option':opt, 'value':vv  }]
+				idb.upsert(table,['option','value'],{'option':['=',"'"+opt+"'"]})
+				
+				self.summary_options[opt]=vv
 			while self.wds.is_locked():
 				# print('locked')
 				time.sleep(1)
@@ -387,27 +428,24 @@ class WalletTab:
 			
 			if opt=='rounding':
 				self.wds.set_format( format_str_value=vv)
-				# print('rround',rround)
-			
+				
 			grid_lol_wallet_sum,col_names=self.wds.prepare_summary_frame( )
-			self.wallet_summary_frame.updateTable( grid_lol_wallet_sum,col_names ) #update_frame(grid_lol_wallet_sum)
-			# set_summary_cmd()
+			self.wallet_summary_frame.updateTable( grid_lol_wallet_sum,col_names  ) #update_frame(grid_lol_wallet_sum)
 			
 			if opt=='filtering':
 				# print('filtering ',vv)
 				self.wallet_details.filtering( 'widget',0,vv )
 			else:
 				grid_lol3, colnames=self.wds.prepare_byaddr_frame( )
-				new_rows=self.wallet_details.updateTable( grid_lol3,colnames ) #update_frame(grid_lol3)
-				# print('save_wallet_display: prepare_byaddr_button_cmd',opt)
-				# self.wds.prepare_byaddr_button_cmd(grid_lol3,self.wallet_details)
-			
+				self.byaddr_frame={'grid':grid_lol3,'columns':colnames}
+				new_rows=self.wallet_details.updateTable( grid_lol3,colnames )  
+				 
 			self.wds.unlock_basic_frames()
 			
 			
-		opt=self.wds.get_options(True)
+		
 		self.wallet_summary_frame.cellWidget(0,4).setIndexForText(opt['filtering'] )
-		self.wallet_summary_frame.cellWidget(0,4).set_fun(save_wallet_display,'filtering') # only for summary to sum displayed !!! 
+		self.wallet_summary_frame.cellWidget(0,4).set_fun(save_wallet_display, 'filtering'  ) # only for summary to sum displayed !!! 
 		
 		def walletActions(cbtn):
 			if cbtn.currentText()=='New address':
@@ -423,36 +461,34 @@ class WalletTab:
 		
 		self.wallet_summary_frame.cellWidget(0,5).set_fun( walletActions)
 		
-		# self.wallet_summary_frame.cellWidget(0,5).set_fun(False,self.wds.new_addr)
-		# self.wallet_summary_frame.cellWidget(0,6).set_fun(False,self.wds.export_wallet)
-		# set_summary_cmd()
-		
-		opt=self.wds.get_options(True)
 		self.wallet_summary_frame.cellWidget(0,3).setIndexForText(opt['rounding'] )
-		self.wallet_summary_frame.cellWidget(0,3).set_fun(save_wallet_display,'rounding')
+		self.wallet_summary_frame.cellWidget(0,3).set_fun(save_wallet_display, 'rounding'  )
 		
-		save_wallet_display(self.wallet_summary_frame.cellWidget(0,4),'filtering' )
-		
-		
+		save_wallet_display(self.wallet_summary_frame.cellWidget(0,4),'filtering', 'init' )
 		
 	
 	
-	def init_additional_tabs(self,addr_book):
+	def init_additional_tabs(self,addr_book,init_app):
 		
 		self.notif=Notifications(addr_book)
+		init_app.notif_grid=self.notif.grid_notif # pointer to object for next init ?
+		
 		self.tabs1.insertTab(tab_dict={'Notifications': self.notif.parent_frame}  )
 		
-		# transaction history 
 		self.txhi=TransactionsHistory(self.wds.db)
+		init_app.tx_grid=self.txhi.grid_settings # pointer to object for next init ?
 		self.tabs1.insertTab(tab_dict={'TX History': self.txhi.parent_frame}  )
 		
-		# tasks history
 		self.tahi=TasksHistory(self.wds.db)
+		init_app.task_grid=self.tahi.grid_settings # pointer to object for next init ?
+		init_app.distinct_task_commands=self.tahi.distinct_task_commands # pointer to object for next init ?
 		self.tabs1.insertTab(tab_dict={'Tasks History': self.tahi.parent_frame}  )
 		
 		# SETTINGS
-		self.settings=Settings( self.wds)
-		self.tabs1.insertTab(tab_dict={'Settings': self.settings.parent_frame}  )
+		# self.grid_settings
+		# self.settings=Settings( self.wds, init_app)
+		# self.tabs1.insertTab(tab_dict={'Settings': self.settings.parent_frame}  )
+		# print(' Settings dt',time.time()-t0) #0.74
+		# t0=time.time()
 		
-		# notifications, tasks history, transaction history 
 	
