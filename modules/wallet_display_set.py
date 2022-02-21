@@ -35,7 +35,11 @@ class WalDispSet(gui.QObject):
 		self.addr_cat_map={}
 		self.update_addr_cat_map()
 		self.alias_map={}
+		self.grid_lol_select=[]
 		self.addr_book_data_refresh()
+		self.disp_dict=[]
+		self.addr_book_category_alias={}
+		self.addr_amount_dict={}
 		
 		
 	def update_addr_cat_map(self):
@@ -67,42 +71,25 @@ class WalDispSet(gui.QObject):
 	# run after new addr created !
 	def wallet_copy_progress(self ):
 	
-		uu=usb.USB()
-		while len(uu.locate_usb())==0:
-			gui.showinfo('Please insert USB/pendrive','To create new address wallet backup to pendrive is required. ')
-
+		idb=localdb.DB('init.db')
+		tt=idb.select('init_settings',columns=[ "datadir" ])  
+		src=os.path.join(tt[0][0],self.wallet)
 		
-		pathu=uu.locate_usb()
-		pathu=pathu[0]
-		tmpinitdir=os.getcwd()
-			
-		if sys.platform=='win32':
-			if os.path.exists(pathu):
-				tmpinitdir=pathu
-				
-		elif sys.platform!='win32':
-			curusr=getpass.getuser()
-			if os.path.exists('/media/'+curusr+'/'):
-				tmpinitdir='/media/'+curusr+'/'
+		if app_fun.wallet_copy_progress( src_dir=tt[0][0], add_msg=['Please insert USB/pendrive','To create new address wallet backup to pendrive is required. '], wallet_name=self.data_files['wallet'], gui=gui ):
+			# save new hash 
+			dat_file=src
+			cc=aes.Crypto()
+			db=localdb.DB(self.db)
+			last_wallet_hash=db.select('jsons', ['json_content'],{'json_name':['=',"'backup_wallet_hash'"]})
+			last_wallet_hash_arr=json.loads(last_wallet_hash[0][0])
+			cur_dat_hash= cc.hash2utf8_1b( cc.read_bin_file( dat_file),1)
+			last_wallet_hash_arr.append(cur_dat_hash)
 		
-		path=''
-		while path==None or path=='':
-		# if True:
-			path=gui.get_file_dialog('Select directory on your pendrive' ,init_path=tmpinitdir, name_filter='dir') #filedialog.askdirectory(initialdir=os.getcwd(), title="")
-			if uu.verify_path_is_usb(path):
-				
-				dest=os.path.join(path,self.wallet.replace('.','_'+app_fun.now_to_str()+'.') )   # 'wallet_'+app_fun.now_to_str()+'.dat')
-				idb=localdb.DB('init.db')
-				tt=idb.select('init_settings',columns=[ "datadir" ])  
-				src=os.path.join(tt[0][0],self.wallet)
-				
-				deftxt='Wallet backup to '+path+'\n'
-				path=gui.copy_progress(path,deftxt,src,dest)
-				
-			else:
-				gui.showinfo('Wrong path','Selected path is not USB drive, please try again' )
-				path=''
-		
+			# print('Inserting hash at addr creation after backup',cur_dat_hash) 
+			table={}
+			table['jsons']=[{'json_name':"backup_wallet_hash", 'json_content':json.dumps(last_wallet_hash_arr), 'last_update_date_time': app_fun.now_to_str(False)}]
+			db.upsert(table,['json_name','json_content','last_update_date_time'],{'json_name':['=',"'backup_wallet_hash'"]})
+		 
 
 		
 
@@ -118,7 +105,13 @@ class WalDispSet(gui.QObject):
 				tmpcat=self.addr_book_category_alias[addr]['category']
 				tmpalia=self.addr_book_category_alias[addr]['alias']
 			
-		initlabel=gui.Label(None,'Sending to '+tmpcat+', '+tmpalia+'\nAddress: '+addr+'\n')
+		tmp_to=''
+		if tmpcat!='':
+			tmp_to=tmpcat+', '
+		if tmpalia!='':
+			tmp_to+=tmpalia
+				
+		initlabel=gui.Label(None,'Sending to '+tmp_to+'\nAddress: '+addr+'\n')
 		
 		automate_rowids=[ #[{},{},{},{}] ,
 							[{'T':'LabelC', 'L':'From address' },{'T':'LabelC', 'L':'Set max','width':9 },{'T':'LabelC', 'L':'Amount','width':9 },{'T':'LabelC', 'L':'Message (max '+str(int(512-len(tmpsignature)))+' bytes)' },{}] ,
@@ -148,7 +141,13 @@ class WalDispSet(gui.QObject):
 				send_from.cellWidget(1,1).setText( str(round(tmpmaxv,8)))
 				send_from.cellWidget(1,0).setToolTip(last_addr)
 
-				send_from.cellWidget(1,0).setText(self.addr_cat_map[last_addr]+','+self.alias_map[last_addr])
+				# print(last_addr)
+				# print(self.alias_map)
+				# print(self.addr_cat_map)
+				tmpcat=''
+				if last_addr in self.addr_cat_map :
+					tmpcat=self.addr_cat_map[last_addr]
+				send_from.cellWidget(1,0).setText(tmpcat +','+self.alias_map[last_addr] )
 		
 
 		
@@ -174,7 +173,7 @@ class WalDispSet(gui.QObject):
 
 			
 			addr_list_frame=gui.ContainerWidget(None,layout=gui.QVBoxLayout()) #,'Addresses list')
-			# print('parent3',filtbox.parent())
+			print('prepare_byaddr_frame 199' )
 			
 			grid_lol_select,colnames=self.prepare_byaddr_frame( True,True)
 			 
@@ -201,8 +200,11 @@ class WalDispSet(gui.QObject):
 		send_from.cellWidget(1,2).setText( str(exampleval))
 		
 		def setmax1(btn,*eventsargs):
-			tmpv=float(send_from.cellWidget(1,1).text())
-			send_from.cellWidget(1,2).setText( str(round(tmpv,8)))
+			try:
+				tmpv=float(send_from.cellWidget(1,1).text())
+				send_from.cellWidget(1,2).setText( str(round(tmpv,8)))
+			except:
+				gui.showinfo("Max amount missing","Please first select sending address!",btn)
 		
 		send_from.cellWidget(1,1).set_fun(False, setmax1)
 								
@@ -306,11 +308,13 @@ class WalDispSet(gui.QObject):
 	
 		return origbytes
 		
-
+	@gui.Slot()	
 	def addr_book_data_refresh(self):
 		self.addr_book_colnames=['','Usage','Category','Alias','Full address']
 		idb=localdb.DB(self.db)
 		sel_addr_book=idb.select('addr_book',[ 'Category','Alias','Address','usage'] ,orderby=[{'usage':'desc'},{'Category':'asc'},{'Alias':'asc' }] )
+		
+		# print('\n\n\n addr_book_data_refresh',sel_addr_book)
 		
 		self.grid_lol_select=[]
 		self.addr_book_unique_categories=['All']
@@ -331,9 +335,13 @@ class WalDispSet(gui.QObject):
 						{'T':'LabelV', 'L':rr[2], 'uid':'Address'+str(ii)  }
 						]
 				self.grid_lol_select.append(tmpdict)
+				
+		# print('self.grid_lol_select',self.grid_lol_select)
 		
 	def addr_book_select(self):
 		
+		self.addr_book_data_refresh()
+		# print('\n\nreturning',self.grid_lol_select, self.addr_book_colnames)
 		return self.grid_lol_select, self.addr_book_colnames
 	
 
@@ -342,6 +350,10 @@ class WalDispSet(gui.QObject):
 		
 		return self.addr_book_unique_categories
 		
+			
+			
+			
+			
 			
 	
 	def send_from_addr(self,btn,addr,addr_total):
@@ -383,6 +395,7 @@ class WalDispSet(gui.QObject):
 				addr_list_frame=gui.ContainerWidget(None,layout=gui.QVBoxLayout()) #,'Addresses list')
 				# print('parent3',filtbox.parent())
 				
+				# print('prepare_byaddr_frame 411' )
 				grid_lol_select,colnames=self.prepare_byaddr_frame( True,True, True)
 				 
 				select_table=gui.Table(None,{'dim':[len(grid_lol_select),len(colnames)], 'toContent':1})
@@ -407,7 +420,7 @@ class WalDispSet(gui.QObject):
 				# print('parent4',filtbox.parent())
 				
 			else:
-				# address book  categories_filter
+				# print('# address book  categories_filter')
 				filtbox=gui.Combox(None,self.categories_filter()) #ttk.Combobox(filter_frame,textvariable='All',values=self.categories_filter(), state="readonly")
 				filter_frame.insertWidget(filtbox)
 				
@@ -560,15 +573,7 @@ class WalDispSet(gui.QObject):
 		# w3=gui.Label(None,'')
 		w4=gui.Button(None,'Import')
 		w4.setMaximumWidth(128)
-							
-		# automate_rowids=[ 
-							# [{'T':'LabelV' }  ] 
-							
-						# ]
-						# [{'T':'Button', 'L':'Import'  }, {}] 
-				
-		# impo=gui.Table(None,{'dim':[1,1],'toContent':1}) #flexitable.FlexiTable(rootframe,grid_settings)
-		# impo.updateTable(automate_rowids)
+			
 		
 		def setfile(btn2,lbl,lblk):	
 			gui.set_file( lbl , dir=False,parent=btn2 , title="Select file with private keys")
@@ -697,6 +702,7 @@ class WalDispSet(gui.QObject):
 		
 		addr_list_frame=gui.FramedWidgets(None,'Select addresses to merge FROM',layout=gui.QVBoxLayout()) 
 		
+		# print('prepare_byaddr_frame 726' )
 		grid_lol_select,colnames=self.prepare_byaddr_frame( True,True, True)
 		 
 		select_table=gui.Table(None,{'dim':[len(grid_lol_select),len(colnames)], 'toContent':1})
@@ -1027,18 +1033,12 @@ class WalDispSet(gui.QObject):
 		
 		
 	def new_addr(self,btn):
-	
-		# first ask to enter usb pendrive
+		
 		uu=usb.USB()
 		
 		while len(uu.locate_usb())==0:
 			if not gui.msg_yes_no('Please insert USB pendrive','To create new address wallet backup to pendrive is required. Click [yes] when you are read or [no] co cancel.',btn):
 				return
-		# if correct - create new addr
-		# after which - ask to select path to backup wallet 
-	
-		# add number and cat selection and counter
-		
 		
 		############### new addr setup
 		
@@ -1054,7 +1054,7 @@ class WalDispSet(gui.QObject):
 		
 		
 		def create_addr(btn_c,addr_num,addr_cat,addr_cat_counter):
-		
+			# print ('create_addr wds ')
 			addr_num,addr_cat,addr_cat_counter=addr_num.text().strip(),addr_cat.text().strip(),addr_cat_counter.currentText()
 		
 			idb=localdb.DB(self.db)
@@ -1075,21 +1075,6 @@ class WalDispSet(gui.QObject):
 		
 		gui.CustomDialog(btn,tw, title='New address setup', defaultij=[3,0])
 		
-		
-		##############3
-		
-		
-		
-		
-		
-		
-		
-		
-		# table={}
-		# table['queue_waiting']=[localdb.set_que_waiting('new_addr' ) ]
-
-		# idb=localdb.DB(self.db)
-		# idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 		
 		
 	
@@ -1207,6 +1192,16 @@ class WalDispSet(gui.QObject):
 			
 		return format_str
 
+		
+	# set_format->	get_rounding_str -> idb -> set_rounding_str
+	def set_format(self,format_str_value=''):
+		# print('setting format',format_str_value)
+		self.format_str=self.get_rounding_str(direct_value=format_str_value)
+		# print('setting format',self.format_str)
+	
+			
+		
+		
 	def get_rounding_str(self,strval=False,direct_value=''): # if direct value dont take from db 
 		format_str=",.0f"
 		
@@ -1229,9 +1224,11 @@ class WalDispSet(gui.QObject):
 		return format_str
 		
 		
+		
+		
 	def get_options(self,strval=False):
 		idb=localdb.DB(self.db)
-		retdict={'sorting':'amounts','filtering': 'All','rounding':",.0f"}
+		retdict={'sorting':'amounts','filtering': 'All','rounding':",.4f"}
 		opt=idb.select('wallet_display',['option','value'],{'option':[' in ',"('sorting','filtering','rounding')"]} )
 		for oo in opt:
 			retdict[ oo[0] ] = oo[1]
@@ -1242,22 +1239,6 @@ class WalDispSet(gui.QObject):
 		return retdict
 		
 		
-	def get_sorting(self):
-		idb=localdb.DB(self.db)
-		if idb.check_table_exist('wallet_display'):
-			sorting=idb.select('wallet_display',['value'],{'option':['=',"'sorting'"]})
-			if len(sorting)>0:
-				return sorting[0][0]
-		return 'amounts'
-
-	def get_filtering(self):
-		
-		idb=localdb.DB(self.db)
-		if idb.check_table_exist('wallet_display'):
-			filtering=idb.select('wallet_display',['value'],{'option':['=',"'filtering'"]})
-			if len(filtering)>0:
-				return filtering[0][0]
-		return 'All'
 		
 	
 
@@ -1265,31 +1246,16 @@ class WalDispSet(gui.QObject):
 
 	def own_wallet_categories(self):
 	
-		all_cat_unique=[]
-		all_cat=self.addr_cat_map.values() 
+		all_cat_unique=['Excluded','Not hidden','All','Hidden','Edit']
+		all_cat=list(set(self.addr_cat_map.values() ))
 		# print(all_cat)
 		for rr in all_cat: 
-			all_cat_unique.append(rr )
+			if rr not in all_cat_unique:
+				
+				all_cat_unique.append(rr )
+			 
 			
-		if 'Excluded' not in all_cat_unique:
-			all_cat_unique=['Excluded']+all_cat_unique 
-			
-		if 'Not hidden' not in all_cat_unique:
-			all_cat_unique=['Not hidden']+all_cat_unique 
-		
-		if 'All' not in all_cat_unique:
-			all_cat_unique=['All']+all_cat_unique 
-			
-		if 'Hidden' not in all_cat_unique:
-			all_cat_unique=all_cat_unique + ['Hidden']
-			
-		if 'Edit' not in all_cat_unique:
-			all_cat_unique=all_cat_unique+['Edit']
-			
-		# print(self.addr_cat_map.values() )
-		# print(all_cat_unique)
-			
-		return all_cat_unique
+		return sorted(all_cat_unique)
 
 
 	
@@ -1308,12 +1274,12 @@ class WalDispSet(gui.QObject):
 	def set_disp_dict(self):
 		idb=localdb.DB(self.db)
 		self.disp_dict=idb.select('jsons',['json_content','last_update_date_time'],{'json_name':['=',"'display_wallet'"]})
+		if len(self.disp_dict)==0: return
+		tmp_disp_dict=json.loads(self.disp_dict[0][0])
+		self.alias_map=tmp_disp_dict['aliasmap']
 		
-		
-	def set_format(self,format_str_value=''):
-		self.format_str=self.get_rounding_str(direct_value=format_str_value)
+		self.addr_amount_dict=tmp_disp_dict['addr_amount_dict'] #=self.addr_amount_dict #self.addr_amount_dict[aa]={'confirmed':amount_init,'unconfirmed':am_unc,'#conf':cc_conf,'#unconf':cc_unc}
 	
-		
 		
 		
 	def prepare_summary_frame(self ):	
@@ -1330,21 +1296,24 @@ class WalDispSet(gui.QObject):
 				
 		if len(self.disp_dict)>0:
 			disp_dict=json.loads(self.disp_dict[0][0])
-			self.alias_map=disp_dict['aliasmap']
 			
 			tmpdict={}
 			tmpdict['rowk']='summary'
 			tmpdict['rowv']=[{'T':'LabelV', 'L':format(disp_dict['top']['Total'] , self.format_str).replace(',',"'")  , 'uid':'Total'}  , 
 										{'T':'LabelV', 'L':format(disp_dict['top']['Confirmed'] , self.format_str).replace(',',"'")  , 'uid':'Confirmed'}, 
-										{'T':'LabelV', 'L':format(disp_dict['top']['Pending'] , self.format_str).replace(',',"'")  , 'uid':'Pending'},
-										# {'T':'LabelV', 'L':' ', 'uid':'space'},
-										# {'T':'Combox','V':['amounts','bills','usage'], 'uid':'sort', 'width':7}, # enter this function!
+										{'T':'LabelV', 'L':format(disp_dict['top']['Pending'] , self.format_str).replace(',',"'")  , 'uid':'Pending'}, 
 										{'T':'Combox', 'uid':'round', 'V':['1','0.1','0.01','0.001','0.0001','off'], 'width':6},
 										{'T':'Combox', 'uid':'filter', 'V':all_cat, 'width':6, 'tooltip':'Special categories:\nHidden - allows to hide address on the list,\n Excluded - allows to exclude address from UTXO/bills auto maintenance when it is ON.'},
-										{'T':'Combox', 'V':wallet_opt }
-										#{'T':'Button', 'L':'+', 'uid':'addaddr', 'tooltip':'Create new address'}
-										# ,{'T':'Button', 'L':'Export', 'uid':'export' }
+										{'T':'Combox', 'V':wallet_opt } 
 										]
+			# if part=='Numbers':
+				# for ii,vv in enumerate(tmpdict['rowv']):
+					# if ii>2: tmpdict['rowv'][ii]['T']='excludeupdate-'+tmpdict['rowv'][ii]['T']
+					
+			# elif part=='Categries':
+				# for ii,vv in enumerate(tmpdict['rowv']):
+					# if ii<>4: tmpdict['rowv'][ii]['T']='excludeupdate-'+tmpdict['rowv'][ii]['T']
+					
 			grid_lol_wallet_sum.append(tmpdict )	
 			
 		else:
@@ -1352,14 +1321,10 @@ class WalDispSet(gui.QObject):
 			tmpdict['rowk']='summary'
 			tmpdict['rowv']=[{'T':'LabelV', 'L':'', 'uid':'Total'}  , 
 										{'T':'LabelV', 'L':'', 'uid':'Confirmed'}, 
-										{'T':'LabelV', 'L':'', 'uid':'Pending'},
-										# {'T':'LabelV', 'L':' ', 'uid':'space'},
-										# {'T':'Combox','V':['amounts','bills','usage'], 'uid':'sort', 'width':7}, # enter this function!
+										{'T':'LabelV', 'L':'', 'uid':'Pending'}, 
 										{'T':'Combox', 'uid':'round', 'V':['1','0.1','0.01','0.001','0.0001','off'], 'width':6},
 										{'T':'Combox', 'uid':'filter', 'V':all_cat, 'width':6},
-										{'T':'Combox', 'V':wallet_opt }
-										#{'T':'Button', 'L':'+', 'uid':'addaddr', 'tooltip':'Create new address'}
-										#,{'T':'Button', 'L':'Export', 'uid':'export' }
+										{'T':'Combox', 'V':wallet_opt } 
 										]
 			grid_lol_wallet_sum.append(tmpdict )	
 			
@@ -1369,23 +1334,39 @@ class WalDispSet(gui.QObject):
 		return grid_lol_wallet_sum, col_names
 		
 		
+		
+		
+		
+		
+		
 # 1. insert into channel table:
 			# owner nickname, owner init hash, title, channel name, init content
+	@gui.Slot(str,str)
 	def set_channel(self,addr,vkey):
+		# check if channels active:
+		idb=localdb.DB(self.db)
+		xx=idb.select_max_val( 'channels',['address' ], groupby=[ ])
+		
+		if len(xx)==0 or xx[0][0]==None:
+			gui.messagebox_showinfo('Channels not yet active','Please activate channels in Channels tab!\n Will be active after view key is validated.',None)
+			return
+	
 		# print('set_channel',addr,vkey)
-		select_addr_str='Select address to send initial tx'
+		select_addr_str='Select address to send initial tx from'
 		automate_rowids=[ 
 							[{'T':'LabelC', 'L':'Channel for address: ','span':2  } , { } ] ,
 							[{'T':'LabelC', 'L':addr ,'span':2} , { } ] ,
 							[{'T':'LabelC', 'L':'Your nickname: ' } , {'T':'LineEdit' } ] ,
 							[{'T':'LabelC', 'L':'Channel name: ' } , {'T':'LineEdit' } ] ,
+							[{'T':'LabelC', 'L':'Channel type: ' } , {'T':'Combox', 'V':['Forum' ] } ] ,
 							[{'T':'LabelC', 'L':'Introduction: ' } , {'T':'LineEdit' } ] ,
 							[{'T':'Button', 'L':select_addr_str,'span':2  }, {}] ,
 							[{'T':'Button', 'L':'Enter','span':2}, {}] 
 						]
-
+# {'T':'Combox', 'V':['Select:','address','view key','set channel'],'fun':self.export_or_create_channel,'args':(tmpaddr,), 'every_click':1  }
+									
 										
-		expo=gui.Table(None,{'dim':[7,2], 'toContent':1}) #flexitable.FlexiTable(rootframe,grid_settings)
+		expo=gui.Table(None,{'dim':[8,2], 'toContent':1}) #flexitable.FlexiTable(rootframe,grid_settings)
 		expo.updateTable(automate_rowids)
 		# rootframe.insertWidget(expo)
 		
@@ -1398,7 +1379,7 @@ class WalDispSet(gui.QObject):
 				
 				total_amount=float(total_amount)-0.0001
 				
-				expo.cellWidget(5,0).setText(selz) 
+				expo.cellWidget(6,0).setText(selz) 
 				btn3.parent().parent().parent().parent().close()
 				
 			filter_frame=gui.FramedWidgets(None,'Filter')
@@ -1409,6 +1390,7 @@ class WalDispSet(gui.QObject):
 			addr_list_frame=gui.ContainerWidget(None,layout=gui.QVBoxLayout()) #,'Addresses list')
 			# print('parent3',filtbox.parent())
 			
+			# print('prepare_byaddr_frame 1446' )
 			grid_lol_select,colnames=self.prepare_byaddr_frame( True,True)
 			 
 			select_table=gui.Table(None,{'dim':[len(grid_lol_select),len(colnames)], 'toContent':1})
@@ -1433,10 +1415,13 @@ class WalDispSet(gui.QObject):
 		# send_from.cellWidget(1,0).set_fun(False,select_addr)s
 		
 		
-		expo.cellWidget(5,0).set_fun(False,select_addr) #set_cmd( 'enter',[],enter)
+		expo.cellWidget(6,0).set_fun(False,select_addr) #set_cmd( 'enter',[],enter)
 		
 		
-
+		# steps:
+		# 1. send msg with channel params
+		# 2. save channel to channels table
+		# 3. update addr category (infrmative!)
 		def enter(btn2): 
 			# print('save data')
 			
@@ -1450,7 +1435,7 @@ class WalDispSet(gui.QObject):
 				gui.messagebox_showinfo('Channel name must not be empty','Channel name must not be empty',btn2)
 				return
 				
-			if expo.cellWidget(5,0).text()==select_addr_str:
+			if expo.cellWidget(6,0).text()==select_addr_str:
 				gui.messagebox_showinfo('You must select address','You must select address for init transaction of the channel',btn2)
 				return
 				
@@ -1459,11 +1444,14 @@ class WalDispSet(gui.QObject):
 			
 			
 			# sending INIT TX 
-			z=expo.cellWidget(5,0).text()
+			z=expo.cellWidget(6,0).text()
 			# a='0.0001'
-			initcontent=expo.cellWidget(4,1).text().strip()
+			initcontent=expo.cellWidget(5,1).text().strip()
 			
-			msg=json.dumps({'channel_name':chname,'channel_owner':creator, 'channel_intro':initcontent})
+			# print(expo.cellWidget(4,1))
+			ch_type=expo.cellWidget(4,1).text().strip() #.currentText()
+			
+			msg=json.dumps({'channel_name':chname,'channel_owner':creator, 'channel_intro':initcontent, 'channel_type':ch_type })
 			got_bad_char, msg_arr=localdb.prep_msg(msg,addr)
 			
 			if got_bad_char:
@@ -1482,16 +1470,17 @@ class WalDispSet(gui.QObject):
 			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])	
 			
 			# all went through - save channel
-			table={'channels':[{'address':addr, 'vk':vkey, 'creator':creator, 'channel_name':chname, 'status':'active', 'own':'True'}]}	
-			
+			# table['channels']={'address':'text', 'vk':'text', 'creator':'text', 'channel_name':'text', 'channel_intro':'text', 'status':'text', 'own':'text', 'channel_type':'text' }
+			table={'channels':[{'address':addr, 'vk':vkey, 'creator':creator, 'channel_name':chname, 'status':'active', 'own':'True',   'channel_intro':initcontent , 'channel_type':ch_type}]}	
+			# print('1507 CREATING CHANNEL\n',table)
 			# idb=localdb.DB(self.db)
-			idb.insert(table,['address' , 'vk' , 'creator' , 'channel_name' , 'status' , 'own' ])
+			idb.insert(table,['address' , 'vk' , 'creator' , 'channel_name' , 'status' , 'own',   'channel_intro' , 'channel_type' ])
 			gui.showinfo('Channel created','Channel created.\nTo start using it - export channel view key and share with others.')
 			
 			# update addr category
 			
 			date_str=app_fun.now_to_str(False)
-			table={'address_category':[{'address':addr, 'category':tmp, 'last_update_date_time':date_str}]}			
+			table={'address_category':[{'address':addr, 'category':'Channel '+chname, 'last_update_date_time':date_str}]}			
 			idb.upsert(table,['address','category','last_update_date_time'],{'address':['=',"'"+addr+"'"]})
 			
 			# wallet_details.update_frame(self.prepare_summary_frame()) # update categories
@@ -1500,11 +1489,14 @@ class WalDispSet(gui.QObject):
 			self.update_addr_cat_map()
 			self.sending_signal.emit(['wallet'])
 			
+			table={'channel_signatures':[{'addr':addr,'signature':creator}]} 
+			idb.upsert( table, [ 'addr' ,'signature' ], {'addr':['=',  "'"+addr+"'" ] } )
+			
 				
 			expo.parent().close() 
 
 
-		expo.cellWidget(6,0).set_fun(False,enter) #set_cmd( 'enter',[],enter)
+		expo.cellWidget(7,0).set_fun(False,enter) #set_cmd( 'enter',[],enter)
 
 		gui.CustomDialog(None,expo, title='Creating channel')
 		
@@ -1529,11 +1521,11 @@ class WalDispSet(gui.QObject):
 		elif btn.currentText()=='view key':
 			self.export_viewkey(btn,addr)
 		elif btn.currentText()=='set channel':
-			print(btn.currentText())
-			ddict={'addr':addr,
-						'path':'',
-						'password':''
-						}
+			# print(btn.currentText())
+			ddict={'addr':addr} #,
+						# 'path':'',
+						# 'password':''
+						# }
 			table={}	
 			table['queue_waiting']=[localdb.set_que_waiting('get_viewkey',jsonstr=json.dumps(ddict)) ]
 			idb=localdb.DB(self.db)
@@ -1563,12 +1555,10 @@ class WalDispSet(gui.QObject):
 		grid_lol3=[]
 		tmpdict2={}
 		
-		opt=self.get_options()
-		
-		sorting=opt['sorting'] #self.get_sorting()
-		
-		if selecting:
-			sorting='usage'
+		# opt=self.get_options() # ??? need getoption every time ??
+		# sorting=opt['sorting'] #self.get_sorting()
+		# if selecting:
+			# sorting='usage'
 			
 		if len(self.disp_dict)>0:
 			# print('len(self.disp_dict)>0')
@@ -1606,6 +1596,7 @@ class WalDispSet(gui.QObject):
 				if tmp_confirmed==None:
 					tmp_confirmed=0
 					
+				# print('updating',ii,ddict['wl'][ii]['addr'],tmp_confirmed, ddict['wl'][ii]['confirmed'])
 				self.amount_per_address[ddict['wl'][ii]['addr']]=tmp_confirmed
 				
 				tmpcurcat='Edit'
@@ -1682,6 +1673,8 @@ class WalDispSet(gui.QObject):
 									]
 				grid_lol3.append(tmpdict2) 
 
+		# print('1724 ,grid_lol3\n',self.amount_per_address)
+				
 		return grid_lol3, colnames
 		
 		
