@@ -32,7 +32,6 @@ class USB:
 		if self.os in ['linux','osx'] :
 			self.located_usbs=self.lin_locate_usb()
 			
-			#print('self.located_usbs',self.located_usbs)
 			
 		else:
 			self.located_usbs=self.win10_locate_usb()
