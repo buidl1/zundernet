@@ -961,7 +961,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 			return 'cannot export'
 		
 	# "yes", "no" or "whenkeyisnew"
-	def imp_view_key(self,zaddr,vkey,rescan="whenkeyisnew",startHeight=1780000 ): #996000 1575757 1780000
+	def imp_view_key(self,zaddr,vkey,rescan="whenkeyisnew",startHeight=1700000 ): #996000 1575757 1780000
 
 		rescan="yes"
 		tmpnewaddr=''
