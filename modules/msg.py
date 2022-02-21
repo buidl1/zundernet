@@ -1,4 +1,6 @@
-# add user name in signatures for use only in channels ? or generalize if not assign addr book ?
+# to work with signals need:
+# Msg(gui.QObject)
+# super(Msg, self).__init__()
 
 import os
 # import datetime
@@ -8,10 +10,14 @@ import modules.localdb as localdb
 import modules.app_fun as app_fun
 
 import modules.aes as aes
+import traceback
 import modules.gui as gui
 
-class Msg:
-
+class Msg(gui.QObject):
+	refreshChannels= gui.Signal()
+	refreshTxHistory= gui.Signal()
+	refreshNotifications= gui.Signal()
+	
 	def match_sign(self,fsign,sender=''): 
 		if len(fsign)==0:
 			return -1,''
@@ -27,7 +33,9 @@ class Msg:
 			sign2=cry.utf8_1b2hash( fsign['sign2'] )
 			sign2_n=fsign['sign2_n']
 			
+		# print('\n\nentering sign',sign1_n,sign1)
 		ss=idb.select('in_signatures', ['hex_sign','n','uid','addr_from_book'],{'n':['>', sign1_n] },orderby=[{'n':'asc'}]) #
+		# print('searching sign in ',ss)
 		
 		n_init=sign1_n
 		tmphash=''
@@ -37,37 +45,49 @@ class Msg:
 		
 		for s in ss:
 			
+			# print('\t n_init tmpsign1',n_init,tmpsign1)
 			ntimes=s[1]-n_init
+			# print('\tchecking s ntimes',s,ntimes)
 			if ntimes>0:
 				tmphash=cry.hash(tmpsign1,ntimes)
 			else:
 				tmphash=tmpsign1
+				
+			# print('\ttmphash',tmphash)
 			
-			n_init=s[1]
+			n_init=s[1] # saving to speed up some calculation and utilize already calculated hashes 
 			tmpsign1=tmphash
 			
 			if tmphash==s[0]:
+				# print('\t found ',tmphash,s[0],'uid',s[2])
 				new_uid=s[2]
 				
 				if s[3]!=None:
 					addr_from_book=s[3]
+					# print('\t addr from book',addr_from_book)
 					
 				break
 			tmphash=''
 			
 		tuid=idb.select('in_signatures',['uid' ], {'hex_sign':['=',"'"+sign1+"'"],'n':['=',sign1_n]}   ) #
+		# print('select tuid',tuid)
 		
 		if len(tuid)>0: # this should be new hash - should be no other before like this one - if other detected - return 
 			return -666,''
 		
 		if tmphash=='': # new sender 
-			
+			# print('# new sender ')
 			table={}
 			table['in_signatures']=[{'hex_sign':sign1,'n':sign1_n ,'uid':'auto' }]
 			insert_arr=['hex_sign','n','uid'  ]
-			if sender!='':
+			
+			if sender!='': # for channels exception: insert addr book here as incoming name 
+				# print('hcannel ')
 				insert_arr.append('addr_from_book')
-				addr_from_book=sender+fsign[:4] # channel sender name = sender nickname + init hash 4 chars
+				
+				hex2alpha=cry.hex2alpha(sign1)
+				addr_from_book=sender+'-'+hex2alpha[:6] # channel sender name = sender nickname + init hash 4 chars
+				# print('new sender addr_from_book',addr_from_book)
 				table['in_signatures'][0]['addr_from_book']=addr_from_book
 				
 			idb.insert(table,insert_arr)
@@ -203,29 +223,51 @@ class Msg:
 		idb=localdb.DB(self.db)
 		
 		mio=idb.select('msgs_inout',['type','addr_ext','date_time','msg', 'in_sign_uid','uid','tx_status','txid','is_channel'],{'proc_json':['=',"'False'"]},orderby=[{'date_time':'asc'}]) #
+		# print('processing msg ',mio)	
 		
 		if len(mio)==0:
 			return
 			
+		refrsh_hist,refrsh_notif,refrsh_chnl =0,0,0
+		
 		for mm in mio:
 		
 			mm1=mm[1]
 			tmpmsg=mm[3]
 			tmp_sender=''
 			
+			# unfinished ?
 			if mm[8]=='True': # if channel 
-				try:
-					tmp_str=json.loads(tmpmsg) #'channel_name':chname,'channel_owner':creator, 'channel_intro'
-					if 'channel_name' in tmp_str:
-						tmp_sender=tmp_str['channel_owner']
-						tmpmsg='Channel name: '+tmp_str['channel_name']+ '\nOwner: '+tmp_str['channel_owner']+ '\nIntroduction: '+tmp_str['channel_name']
-					elif 'txt' in tmp_str:					
-						tmpmsg=tmp_str['txt']
-						if 'sender' in tmp_str:
-							if tmp_str['sender'].strip()!='':
+				# print('\nanalizing msg for channel',mm)
+				refrsh_chnl+=1
+				if ('txt' in tmpmsg or 'channel_name' in tmpmsg) and 'CHANNEL ABUSE DETECTED SPOOFING CHANNEL INFO' not in tmpmsg:	
+					try: #decode regular message
+						tmp_str=json.loads(tmpmsg) #'channel_name':chname,'channel_owner':creator, 'channel_intro'
+						# table_msg['msgs_inout'][0]['msg']='Channel name: '+channel_json['channel_name']+'\nOwner: '+channel_json['channel_owner']+'\nType: '+channel_json['channel_type']+'\nIntro: '+channel_json['channel_intro']
+							
+						if 'channel_name' in tmp_str: # channel creation
+							tmp_sender=tmp_str['channel_owner']
+							# tmpmsg='Channel name: '+tmp_str['channel_name']+ '\nOwner: '+tmp_str['channel_owner']+ '\nIntroduction: '+tmp_str['channel_intro']
+							tmpmsg='Channel name: '+tmp_str['channel_name']+'\nOwner: '+tmp_str['channel_owner']+'\nType: '+tmp_str['channel_type']+'\nIntro: '+tmp_str['channel_intro']
+							
+						elif 'txt' in tmp_str:				
+						
+							tmpmsg=tmp_str['txt']
+							
+							# sender recognition needed ?
+							if 'sender' in tmp_str:
 								tmp_sender=tmp_str['sender'].strip()
-				except:
-					print('Bad channel json 222 ',tmpmsg)
+								
+							if tmp_sender=='':
+								tmp_sender='@'
+								
+								
+					except: # OR print channel init 
+						# tmpmsg=mm[3]
+						traceback.print_exc()
+				else:
+					print('nit proper channel json - simple text msg')
+			############## unfinished ?
 			
 			if mm[0]=='out':
 				table={'msgs_inout':[{'proc_json':'True' }]} 
@@ -236,13 +278,20 @@ class Msg:
 				fsign=json.loads(mm1 )
 				
 				uid,addr_from_book=self.match_sign( fsign, tmp_sender ) #mio
+				# print('\n\n\nfound match',uid,addr_from_book)
+				
+				# TODO FOR CHANNLE:
+				# if externa l channel detected link with addr book zaddr
+				# ELSE ?? channel message first time - new sender otherwise detect uid 
 				
 				addr_ext=''
 				if uid>-1:
 					tmpalias='uid_'+str(uid)
 					if mm[8]=='True': # if channel 
 						tmpalias=addr_from_book
-						tmpmsg=json.dumps({'sender':addr_from_book, 'txt':tmpmsg}) #addr_from_book+':\n'+tmpmsg
+						tmpmsg=tmpmsg #json.dumps({'sender':addr_from_book, 'txt':tmpmsg}) #addr_from_book+':\n'+tmpmsg
+						addr_ext=addr_from_book
+						# tmpalias=addr_from_book
 					
 					elif addr_from_book!='':
 						addr_ext=addr_from_book
@@ -255,13 +304,21 @@ class Msg:
 					table_h={}
 					uidtmp=tmpalias+';uid='+str(uid)+': '
 					table_h['tx_history']=[{'from_str':uidtmp+mm[3]}]
-					idb.update(table_h,['from_str' ],{'txid':['=',"'"+mm[7]+"'"]})
+					# one more condition - addr to/from ... 
+					# if addr t ois self do not change
+					# print('# from_str, aa: aa in from_str')
+					idb.update(table_h,['from_str' ], {'txid':['=',"'"+mm[7]+"'"],'Type':[' not in ',"('in/change','out')"]} )
+					refrsh_hist+=1
+					# print('update history ok')
 					
-					table_n={}
+					
 					orig_json=idb.select('notifications',['orig_json'],{'details':['=',"'"+mm[7]+"'"]})
-					uidtmp='From '+tmpalias+';uid='+str(uid)+': '+orig_json[0][0]
-					table_n['notifications']=[{'orig_json':uidtmp }]
-					idb.update(table_n,['orig_json' ],{'details':['=',"'"+mm[7]+"'"]})
+					if len(orig_json)>0:
+						table_n={}
+						uidtmp='From '+tmpalias+';uid='+str(uid)+': '+orig_json[0][0]
+						table_n['notifications']=[{'orig_json':uidtmp }]
+						idb.update(table_n,['orig_json' ],{'details':['=',"'"+mm[7]+"'"]})
+						refrsh_notif+=1
 					
 					if tmpmsg=='':
 						tmpmsg='Received '+orig_json[0][0]
@@ -282,8 +339,13 @@ class Msg:
 				
 				
 				idb.update(table,['type','proc_json', 'in_sign_uid','addr_ext','msg' ],{'uid':['=',mm[5]]})
-				
-		
+			# self.refresh_msgs_signal.emit()	
+		if refrsh_chnl>0:
+			self.refreshChannels.emit()	
+		if refrsh_hist>0: 
+			self.refreshTxHistory.emit()	
+		if refrsh_notif>0: 
+			self.refreshNotifications.emit()	
 		
 			
 			
@@ -326,7 +388,7 @@ class Msg:
 				return
 			
 			
-			to=tmpaddr
+			to=self.cur_addr
 			if tmpaddr=='':
 				to=msg_table.cellWidget(1,1).toolTip() #.get_value( 'addr')
 				
@@ -364,20 +426,22 @@ class Msg:
 		
 	
 			
-		
+	# TODO: test live new sorting and msgs_inout
+	
 	def __init__(self,addr_book ): # notebook_parent : in case of new msg - adj tab title 
+		super(Msg, self).__init__()
 		self.update_in_progress=False
 		self.db=addr_book.db
 		
 		self.max_block=0
-		self.proc_inout()
+		# self.proc_inout()
 		
 		self.addr_book=addr_book
 		
 		self.parent_frame=gui.ContainerWidget(None,layout=gui.QVBoxLayout() )
 		
 		frame0=gui.FramedWidgets(None,'Filter')  
-		frame0.setMaximumHeight(128)
+		# frame0.setMaximumHeight(128)
 		self.parent_frame.insertWidget(frame0) #ttk.LabelFrame(parent_frame,text='Options')  
 		
 		tmpdict={}
@@ -395,6 +459,7 @@ class Msg:
 		self.filter_table=gui.Table(None,params={'dim':[1,5],'updatable':1} )  #, 'toContent':1
 		self.filter_table.updateTable(grid_filter)
 		frame0.insertWidget(self.filter_table)
+		frame0.setMaximumHeight(self.filter_table.height())
 		
 		self.filter_table.cellWidget(0,1).set_fun( self.update_tread_frame) #bind_combox_cmd('thr',[], self.update_tread_frame )	
 		self.filter_table.cellWidget(0,3).set_fun( self.update_msg_frame) #.bind_combox_cmd('msg',[], self.update_msg_frame )	
@@ -408,23 +473,23 @@ class Msg:
 		self.parent_frame.insertWidget(self.msg_thrd_frame)
 				
 		self.frame1= gui.FramedWidgets(None,'Threads') #ttk.LabelFrame(parent_frame,text='Threads')  
-		self.frame1.setMaximumWidth(256)
-		self.frame1.setMinimumWidth(256)
+		self.frame1.setMaximumWidth(196)
+		self.frame1.setMinimumWidth(128)
 		self.msg_thrd_frame.insertWidget(self.frame1)
 		
-		self.update_threads()
-		
-		self.thr_table=gui.Table(None,params={'dim':[len(self.grid_threads),1],'updatable':1} )  
-		
-		self.thr_table.updateTable(self.grid_threads)
+		# self.update_threads() 
+		self.thr_table=gui.Table(None,params={'dim':[len(self.grid_threads),2],'updatable':1,'default_sort_col': 'sorting_datetime','hideColumns':['sorting_datetime' ],'hideColNames':1} )  #['sorting_datetime']
+		 
+		# self.thr_table.updateTable(self.grid_threads,['buttons','sorting_datetime'])
 		self.frame1.insertWidget(self.thr_table)
-		self.set_actions()
+		# self.set_actions()
 		
-		self.update_list()
 		self.frame2= gui.FramedWidgets(None,'Selected thread',layout=gui.QVBoxLayout())
 		self.action_buttons=gui.ContainerWidget(None,layout=gui.QHBoxLayout() )
 		self.frame2.insertWidget(self.action_buttons)	
+		self.maxMsgColWidth=self.action_buttons.width()
 		
+		# self.update_list()
 		
 		
 		self.msg_thrd_frame.insertWidget(self.frame2)	
@@ -432,15 +497,22 @@ class Msg:
 		
 		
 		self.main_table=None
-		if len(self.thr_ord )>0:
+		self.main_table_params={ 'updatable':1,'sortable':1,'default_sort_col':'Date time' ,'rowSizeMod':1} 
+		self.cur_uid=-1
+		# if len(self.thr_ord )>0:
 			
-			self.cur_uid=self.valid_uids[0] 
+			# self.cur_uid=self.valid_uids[0] 
+			# self.main_table_params['dim']=[len(self.grid_threads_msg[self.cur_uid]),2] # print('init b4 change self.maxMsgColWidth',self.maxMsgColWidth)
+			# if self.maxMsgColWidth<=640: self.maxMsgColWidth=self.action_buttons.width() 	# print('init after change self.maxMsgColWidth',self.maxMsgColWidth)
 			
-			self.main_table=gui.Table(None,params={'dim':[len(self.grid_threads_msg[self.cur_uid]),2],'updatable':1,'toContent':1,'sortable':1,'default_sort_col':'Date time'} ) 
-			self.main_table.updateTable(self.grid_threads_msg[self.cur_uid],['Date time','Messages']) #+'_'
-			self.set_edit_drop_reply(self.cur_uid)
+			# self.main_table_params['colSizeMod']=[80,self.maxMsgColWidth-100]
 			
-			self.frame2.insertWidget(self.main_table)	
+			# self.main_table=gui.Table(None,params=self.main_table_params) #{'dim':[len(self.grid_threads_msg[self.cur_uid]),2],'updatable':1,'toContent':1,'sortable':1,'default_sort_col':'Date time'} ) 
+			# self.main_table.updateTable(self.grid_threads_msg[self.cur_uid],['Date time','Messages']) #+'_'
+			# self.set_edit_drop_reply(self.cur_uid)
+			
+			# self.frame2.insertWidget(self.main_table)	
+			# self.main_table.setMinimumWidth(self.maxMsgColWidth)
 			
 		self.updating_threads=False
 		self.updating_chat=False
@@ -480,6 +552,7 @@ class Msg:
 		if 'uid_' in self.cur_addr:
 			self.cur_addr=''
 		
+		# print(curid,self.grid_threads_msg)
 		tmpalias=self.grid_threads_msg[curid][0]['rowv'][1]['uid']
 		citems=self.action_buttons.layout().count()
 		# print('citems',citems)
@@ -513,7 +586,7 @@ class Msg:
 		
 		
 	# threads : different correspondents
-	def update_tread_frame(self ):
+	def update_tread_frame(self,*args ):
 	
 		while self.updating_threads:
 			time.sleep(1)
@@ -525,8 +598,12 @@ class Msg:
 			self.proc_inout()
 			self.update_threads()
 			# print(self.grid_threads)
-			self.thr_table.updateTable(self.grid_threads)
-			self.set_actions()
+			tmpcolumns=[]
+			if not hasattr(self.thr_table,'col_names'):
+				tmpcolumns=['buttons','sorting_datetime']
+				
+			self.thr_table.updateTable(self.grid_threads, tmpcolumns, doprint=False)
+			# self.set_actions()
 			self.updating_threads=False
 			# when assigning - should refresh messages too !
 		except:
@@ -543,16 +620,20 @@ class Msg:
 	
 	def update_msg_frame(self,*evargs):
 	
-		
+		# print('update msg chat')
 		while self.updating_chat:
 			time.sleep(1)
 			
 		self.updating_chat=True
 		
+		if len(evargs)>0:
+			# print('updating cur uid',evargs[-1])
+			self.cur_uid=evargs[-1]
+		
 		try:
 		# if True:
 			self.proc_inout()
-			self.update_list()
+			
 			
 			if len(self.thr_ord )>0:
 				if self.cur_uid not in self.valid_uids:
@@ -561,63 +642,70 @@ class Msg:
 				# if len(self.thr_ord )>0:
 					# self.cur_uid=self.valid_uids[0] 
 				
-			if hasattr(self,'cur_uid'):
-			
+			# if hasattr(self,'cur_uid'): # and self.cur_uid>-1:
+				# print('has attr cur id',self.cur_uid)
+				# self.set_edit_drop_reply(self.cur_uid)
+				# print('b4 change self.maxMsgColWidth',self.maxMsgColWidth)
+				if self.maxMsgColWidth<=640: self.maxMsgColWidth=self.action_buttons.width()
+				# print('after change self.maxMsgColWidth',self.maxMsgColWidth)
+				self.update_list()
+				tmpcolnames=[]
 				if self.main_table==None:
-					self.main_table=gui.Table(None,params={'dim':[len(self.grid_threads_msg[self.cur_uid]),2],'updatable':1,'toContent':1,'sortable':1,'default_sort_col':'Date time'} ) 
+				
+					# self.maxMsgColWidth=self.action_buttons.width()
+					self.main_table_params['colSizeMod']=[80,self.maxMsgColWidth-100]
+					self.main_table_params['dim']=[len(self.grid_threads_msg[self.cur_uid]),2]
+					self.main_table=gui.Table(None,params=self.main_table_params ) 
+					self.main_table.setMinimumWidth(self.maxMsgColWidth) # increasing this does not help 
+					# self.main_table=gui.Table(None,params={'dim':[len(self.grid_threads_msg[self.cur_uid]),2],'updatable':1,'toContent':1,'sortable':1,'default_sort_col':'Date time'} ) 
 					self.frame2.insertWidget(self.main_table)	
+					tmpcolnames=['Date time','Messages']
+				else:
+					for ii,mm in enumerate([80,self.maxMsgColWidth-100]):
+						self.main_table.setColumnWidth(ii,mm)
 					
-				self.main_table.updateTable(self.grid_threads_msg[self.cur_uid],['Date time','Messages']) #+'_'
+				# print('update msg chat with cur id ',self.cur_uid,self.grid_threads_msg[self.cur_uid])
+				self.main_table.updateTable(self.grid_threads_msg[self.cur_uid],tmpcolnames) #+'_'
 				
 				self.set_edit_drop_reply(self.cur_uid)
 				
 			self.updating_chat=False
 		except:
-			# print('update_msg_frame')
+			print('update_msg_frame exception')
+			traceback.print_exc()
 			self.updating_chat=False
 	
 	
-	
+	@gui.Slot()	
 	def update_msgs(self):
-		self.update_tread_frame()
-		# self.proc_inout()
-		# self.update_threads()
-		# self.thr_table.update_frame(self.grid_threads)
-		self.set_actions()
-
-		# self.update_list()
-		self.update_msg_frame()
+		self.update_tread_frame() # grid ready 
+		 
+		self.update_msg_frame() 
+			
 		
-		# if len(self.thr_ord )>0:
-			# if self.cur_uid not in self.valid_uids:
-				# self.cur_uid = self.valid_uids[0] 
-			
-		# if hasattr(self,'cur_uid'):
-			# if self.main_table==None:
-				# self.main_table=flexitable.FlexiTable(self.frame1,self.grid_threads_msg[self.cur_uid], min_canvas_width=700,force_scroll=True)
-			# else:
-				# self.main_table.update_frame(self.grid_threads_msg[ self.cur_uid ],-1)
-				
-			# self.set_edit_alias_action(self.cur_uid)
-			
-			
-			
-			
-	
+
 	def update_threads(self):
-	
+		# print('\n\n\n\n update_threads msg')
+		
+		
 		idb=localdb.DB(self.db)
+		
+		
+		# mio=idb.select('msgs_inout',['type','addr_ext','date_time','msg', 'in_sign_uid','uid','tx_status','txid','is_channel'],{'date_time':['>=',"'"+app_fun.today_add_days(-30)+"'"],'proc_json':['=',"'True'"]},orderby=[{'date_time':'asc'}]) #
+		# print('processing msg ',mio)	
 			
 		thr_filter=self.filter_table.cellWidget(0,1).currentText() #get_value('thr')
-		wwhere={} #'Last 7 days','Last 30 days','All'
+		wwhere={'in_sign_uid':['>',-2],'is_channel':[['=',"'False'"],[' is ',"null"]]} #'Last 7 days','Last 30 days','All'
 		if thr_filter=='Last 7 days':
-			wwhere={'date_time':['>=',"'"+app_fun.today_add_days(-7)+"'"], 'in_sign_uid':['>',-2],'is_channel':['=',"'False'"]} #
+			wwhere={'date_time':['>=',"'"+app_fun.today_add_days(-7)+"'"], 'in_sign_uid':['>',-2],'is_channel':[['=',"'False'"],[' is ',"null"]]} #
 		elif thr_filter=='Last 30 days':
-			wwhere={'date_time':['>=',"'"+app_fun.today_add_days(-30)+"'"], 'in_sign_uid':['>',-2],'is_channel':['=',"'False'"]}
+			wwhere={'date_time':['>=',"'"+app_fun.today_add_days(-30)+"'"], 'in_sign_uid':['>',-2],'is_channel':[['=',"'False'"],[' is ',"null"]]}
 			
-		adr_date=idb.select_max_val( 'msgs_inout',['in_sign_uid','date_time'],where=wwhere,groupby=['addr_ext'])
+		adr_date=idb.select_max_val( 'msgs_inout',['in_sign_uid','date_time' ],where=wwhere,groupby=['addr_ext'])
 		if hasattr(self,"adr_date") and self.adr_date==adr_date:
 			return 0
+			
+		# print(adr_date) # hcannel address will be here ! why external address is known ??
 			
 		self.adr_date=adr_date
 		
@@ -633,8 +721,9 @@ class Msg:
 			tmpaddr=ad[0]
 			tmpuid= str(ad[0])
 			if ad[0]!=None and ad[0]!='': # all out + some in
-				
+				# print('ad note empty',ad[0])
 				alias_from_book=idb.select('addr_book', [ 'Alias'],{'Address':['=',  "'"+ad[0]+"'" ] } ) #
+				# print('alias_from_book',alias_from_book)
 				if len(alias_from_book)>0: 
 					if alias_from_book[0][0]!=None and alias_from_book[0][0]!='': 
 						tmpalias=alias_from_book[0][0]
@@ -642,10 +731,12 @@ class Msg:
 						tmpalias=ad[0][3:9]
 						
 				else:
+					# print('preping tmpalias')
 					if 'uid' == ad[0][:3]: # if addr may be not in a book
 						tmpalias=ad[0]
 					else:
 						tmpalias=ad[0][3:9]
+					# print('preping tmpalias',tmpalias)
 					
 			else: 
 				if ad[1]>-1: #got signature
@@ -663,6 +754,7 @@ class Msg:
 			else:
 				same_date_count[ad[2]]=same_date_count[ad[2]]+1
 				
+			# threads_aa[ad[2] ] = [tmpaddr,tmpalias,tmpuid ] 
 			threads_aa[ad[2]+'__'+str(same_date_count[ad[2]])] = [tmpaddr,tmpalias,tmpuid ] 
 		
 		self.threads_aa=threads_aa
@@ -670,10 +762,16 @@ class Msg:
 		self.valid_uids=[]
 		
 		for k in self.thr_ord:
-			tmpdict={'rowk':k, 'rowv':[{'T':'Button', 'L':threads_aa[k][1], 'uid':threads_aa[k][2], 'tooltip':threads_aa[k][0]}]}
-			
+			tmpdict={'rowk':threads_aa[k][1], 'rowv':[ {'T':'Button', 'L':threads_aa[k][1], 'uid':threads_aa[k][2], 'tooltip':threads_aa[k][0] , 'fun':self.update_msg_frame, 'args':(threads_aa[k][2],)} 
+										, {'T':'LabelV', 'L':k  } #'sorting_by_datetime' , 'ttype':gui.QDateTime
+										] }
+			# self.thr_table.cellWidget(ii,0).set_fun(True,display_thread,r[0]['uid'] )  # self.update_msg_frame(uid )
+			# {'T':'Button', 'L':tmpcurcat,  'tooltip':'Edit category for address '+tmpaddr, 'fun':self.edit_category, 'args':(tmpalias,tmpaddr) }, 
 			self.grid_threads.append(tmpdict) 
 			self.valid_uids.append(threads_aa[k][2]) #+'_')
+			
+		# print('updating threads',self.grid_threads)
+		# print('self.valid_uids',self.valid_uids)
 		
 		return 1
 		
@@ -699,17 +797,18 @@ class Msg:
 			
 			wwhere={}
 			if threads_aa[k][0]=='unknown':
-				wwhere={'proc_json':['=',"'True'"],'type':['=',"'in'"],'in_sign_uid':['<',0],'is_channel':['=',"'False'"] }				
+				wwhere={'proc_json':['=',"'True'"],'type':['=',"'in'"],'in_sign_uid':['<',0],'is_channel':[['=',"'False'"],[' is ',"null"]] }				
 
 			elif 'uid_' in threads_aa[k][1]:
 			
-				wwhere={'proc_json':['=',"'True'"],'in_sign_uid':['=', threads_aa[k][0].replace('uid_','') ],'is_channel':['=',"'False'"] } # ? int()
+				wwhere={'proc_json':['=',"'True'"],'in_sign_uid':['=', threads_aa[k][0].replace('uid_','') ],'is_channel':[['=',"'False'"],[' is ',"null"]] } # ? int()
 			
 			else: #if threads_aa[k][1]!='unknown':
-				wwhere={'proc_json':['=',"'True'"],'addr_ext':['=',"'"+threads_aa[k][0]+"'"], 'in_sign_uid':['>',-2],'is_channel':['=',"'False'"] }
+				wwhere={'proc_json':['=',"'True'"],'addr_ext':['=',"'"+threads_aa[k][0]+"'"], 'in_sign_uid':['>',-2],'is_channel':[['=',"'False'"],[' is ',"null"]] }
 				
-			tmp_msg=idb.select('msgs_inout', ['type','msg','date_time','uid','in_sign_uid' ],where=wwhere, orderby=[ {'date_time':'desc'}], limit=llimit)
-			
+			# print('wwhere',wwhere)
+			tmp_msg=idb.select('msgs_inout', ['type','msg','date_time','uid','in_sign_uid','is_channel' ],where=wwhere, orderby=[ {'date_time':'desc'}], limit=llimit)
+			# print('tmp_msg',tmp_msg)
 			msg_flow=[]
 			
 						
@@ -723,8 +822,8 @@ class Msg:
 					writer='[me]: '
 					sstyle1=" background-color:#ddd;color:black; padding:5px "
 					sstyle2="background-color:#ddd;color:black; min-width:768px;max-width:768px;padding:5px  "
-					
-				tmpdict={'rowk':tm[2], 'rowv':[{'T':'QLabel', 'L':tm[2] ,  'style':sstyle1,'ttype':gui.QDateTime  }, {'T':'QLabel', 'L': writer+tm[1], 'uid':str(threads_aa[k][1]),  'style':sstyle2  }] } #, 'pads':[tmppadx,0] 
+					# tmpdict={'rowk':tm[2], 'rowv':[{'T':'QLabel', 'L':tm[2] ,  'style':sstyle1,'ttype':gui.QDateTime  }, {'T':'TextEdit', 'L': tmptoinsert, 'uid':str(threads_aa[k][0]),  'style':sstyle2, 'readonly':1,'width': (self.maxMsgColWidth-80)  }] } 
+				tmpdict={'rowk':tm[2], 'rowv':[{'T':'QLabel', 'L':tm[2] ,  'style':sstyle1,'ttype':gui.QDateTime  }, {'T':'TextEdit', 'L': writer+tm[1], 'uid':str(threads_aa[k][1]),  'style':sstyle2, 'readonly':1,'width': (self.maxMsgColWidth-100)  }] } #, 'pads':[tmppadx,0] 
 				msg_flow.append(tmpdict)
 				
 			self.grid_threads_msg[tmpuid]=msg_flow 
@@ -778,23 +877,23 @@ class Msg:
 		if tmptxt!=btn.text():
 			self.selecting_addr_from_book_set_and_destroy(btn.toolTip(),uid) #+'_' 
 		
-		
-		
-		 
-	def set_actions(self):	
+
+
+	# def set_actions(self):	
 	
-		def display_thread(uid, *evargs):
+		# def display_thread(uid, *evargs): # bad uid for new entry 
+			# print('clicked uid',uid)
+			# self.cur_uid=uid
+			# self.update_msg_frame( )
 			
-			self.cur_uid=uid
-			self.update_msg_frame( )
 			
+		# for ii,rr in enumerate(self.grid_threads):
 			
-		for ii,rr in enumerate(self.grid_threads):
-			
-			r=rr['rowv']
-			if 'T' in r[0]:
-				if r[0]['T']=='Button':
-					self.thr_table.cellWidget(ii,0).set_fun(True,display_thread,r[0]['uid'] ) 
+			# r=rr['rowv']
+			# if 'T' in r[0]:
+				# if r[0]['T']=='Button':
+					# print('thr assing button action',ii,r[0]['uid'],self.thr_table.cellWidget(ii,0).text())
+					# self.thr_table.cellWidget(ii,0).set_fun(True,display_thread,r[0]['uid'] )  # self.update_msg_frame(uid )
 					
 						
 						
