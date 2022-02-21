@@ -1,4 +1,4 @@
-# encryption aes
+
 
 import json, sys, os
 from base64 import b64encode, b64decode,a85decode,a85encode
@@ -13,6 +13,24 @@ import modules.gui as gui
 
 class Crypto:
 
+	def hex2alpha(self,intstr):
+
+		if type(intstr)!=type(int(1)):
+			intstr=int(intstr,16)
+			
+		alpha_set= [ "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",   "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"]
+		
+	
+		base=len(alpha_set)
+		ustr=''
+		while intstr>0:
+			tmp=intstr % base
+			ustr+=alpha_set[tmp]
+			intstr=intstr//base
+			
+		return ustr
+		
+		
 	# max nn=126*126-1
 	
 	# sha224 59 chars -> 33 chars of 1 byte utf-8
@@ -36,7 +54,9 @@ class Crypto:
 		n=0
 		for jj in range((len(ustr)-1),-1,-1):
 			try:
+				# print('ustr',ustr[jj])
 				ii=self.utf8_127.index(ustr[jj])
+				# print('pos',ii)
 				n=n*base+ii
 			except:
 				return -1
@@ -44,13 +64,17 @@ class Crypto:
 		return n
 
 
-	def __init__(self,hashalgo=256):
+	def __init__(self,hashalgo=256,charset_opt=1):
 		self.principal4="Individuals security and privacy on the internet are fundamental and must not be treated as optional."
 		self.hashalgo=SHA256
 		if hashalgo==224:
 			self.hashalgo=SHA224
 		# 126
 		self.utf8_127= ["\u0000", "\u0001", "\u0002", "\u0003", "\u0004", "\u0005", "\u0006", "\u0007", "\b", "\t", "\u000b", "\f", "\r", "\u000e", "\u000f", "\u0010", "\u0011", "\u0012", "\u0013", "\u0014", "\u0015", "\u0016", "\u0017", "\u0018", "\u0019", "\u001a", "\u001b", "\u001c", "\u001d", "\u001e", "\u001f", " ", "!", "\"", "#", "$", "%", "&", "'", "(", ")", "*", "+", ",", "-", ".", "/", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", ":", "<", "=", ">", "?", "@", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "[", "\\", "]", "^", "_", "`", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "{", "|", "}", "~", "\u007f"]
+		
+		if charset_opt==2:
+			self.utf8_127= [ "_", "-", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",   "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"]
+		
 		
 		
 	def hash(self,ddata,times=1):
@@ -74,19 +98,49 @@ class Crypto:
 		return hash_object
 		
 		
-	
-	def rand_slbls(self,slbls_count):
-		c1=[ "B", "C", "D",  "F", "G", "H",  "J", "K", "L", "M", "N",  "P",  "R", "S", "T",  "V",  "Z"] #17
-		c2=["a",   "e",  "i",   "o",  "u",  "y" ] # 6
 		
+	def rand_slbls(self,slbls_count):
+	
 		retv=''
-		for ii in range(slbls_count):
-			ri=random.randint(0,len(c1)-1)
-			retv+=c1[ri]
-			ri=random.randint(0,len(c2)-1)
-			retv+=c2[ri]
+		if slbls_count<1: return ''
+			
+		c12=[ ["b", "c", "d",  "f", "g", "h",  "j", "k", "l", "m", "n",  "p",  "r", "s", "t",  "v",  "z"], ["a",   "e",  "i",   "o",  "u",  "y"] ]
+		# c1=[ "b", "c", "d",  "f", "g", "h",  "j", "k", "l", "m", "n",  "p",  "r", "s", "t",  "v",  "z"] #17
+		# c2=["a",   "e",  "i",   "o",  "u",  "y" ] # 6
+		c1=random.randint(0,1)
+		c2=(c1+1)%2
+		l1=len(c12[c1])-1
+		l2=len(c12[c2])-1
+		
+		while slbls_count>0: 
+			ri=random.randint(0,l1-1)
+			retv+=c12[c1][ri]
+			if len(retv)==1:
+				retv=retv.upper()
+			ri=random.randint(0,l2-1)
+			retv+=c12[c2][ri]
+			slbls_count-=1
+			
+		# for ii in range(slbls_count):
+			# ri=random.randint(0,len(c1)-1)
+			# retv+=c1[ri]
+			# ri=random.randint(0,len(c2)-1)
+			# retv+=c2[ri]
 			
 		return retv
+	
+	# def rand_slbls(self,slbls_count):
+		# c1=[ "B", "C", "D",  "F", "G", "H",  "J", "K", "L", "M", "N",  "P",  "R", "S", "T",  "V",  "Z"] #17
+		# c2=["a",   "e",  "i",   "o",  "u",  "y" ] # 6
+		
+		# retv=''
+		# for ii in range(slbls_count):
+			# ri=random.randint(0,len(c1)-1)
+			# retv+=c1[ri]
+			# ri=random.randint(0,len(c2)-1)
+			# retv+=c2[ri]
+			
+		# return retv
 		
 		
 	
