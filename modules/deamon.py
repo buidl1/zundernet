@@ -1,12 +1,8 @@
 
-
 import os
 import time
-# import getpass
-# import queue
 
 import sys
-# import psutil
 
 import datetime
 
@@ -31,29 +27,28 @@ class DeamonInit(gui.QObject):
 	update_addr_book = gui.Signal()
 	refresh_msgs_signal = gui.Signal()
 	send_viewkey = gui.Signal(str,str )
-	
-
+	wallet_synced_signal= gui.Signal(bool)
+	 
 	def update_wallet(self,*args): # syntetic args passed auto by elem
 		
 		idb=localdb.DB(self.db)
 		if self.started:
-			# print('update_wallet',38)
+			
 			utxo_change=self.the_wallet.refresh_wallet()
-			# print('update_wallet',40,utxo_change)
 			
-			if True: #utxo_change>0:
+			if 'addr_book' in self.the_wallet.to_refresh:
+				self.update_addr_book.emit()
 			
-				disp_dict=self.the_wallet.display_wallet() 
-				# print('update_wallet',45)
-				date_str=app_fun.now_to_str(False)
-				# print('update_wallet',47)
-				table={}
-				table['jsons']=[{'json_name':"display_wallet", 'json_content':json.dumps(disp_dict), 'last_update_date_time':date_str}]
-				idb.upsert(table,['json_name','json_content','last_update_date_time'],{'json_name':['=',"'display_wallet'"]})
-				# print('update_wallet',51)
-				
-				# self.refreshed_results['wallet']=
-			if utxo_change>0:
+			# this could also be triggered by catgory or alias edit
+			disp_dict=self.the_wallet.display_wallet() 
+			# print('update_wallet disp_dict',disp_dict['wl'])
+			date_str=app_fun.now_to_str(False)
+			# print('update_wallet',47)
+			table={}
+			table['jsons']=[{'json_name':"display_wallet", 'json_content':json.dumps(disp_dict), 'last_update_date_time':date_str}]
+			idb.upsert(table,['json_name','json_content','last_update_date_time'],{'json_name':['=',"'display_wallet'"]})
+			
+			if utxo_change>0 or 'channels' in self.the_wallet.to_refresh:
 				self.sending_signal.emit(['notif_update','tx_history_update'])
 				self.refresh_msgs_signal.emit()
 				
@@ -71,91 +66,43 @@ class DeamonInit(gui.QObject):
 				idb.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
 				idb.delete_where('queue_waiting',{'id':['=',rr[5] ]})
 
+				
 	@gui.Slot()
 	def process_queue(self):
 	
+		# when starting process - lock stop blockchain button return
+		 
 		idb=localdb.DB(self.db)
-		
-		# print('process_queue1')
+		 
 		if not hasattr(self,'counter_15m'):
 			self.counter_15m=datetime.datetime.now()
-			
-			# print('process_queue2')
-			# print(idb.select('queue_waiting', ["type","wait_seconds","created_time","command","json","id","status"] ) )
-			# print(idb.select('queue_waiting', ["type","wait_seconds","created_time","command","json","id","status"],{'command':['=',"'automerge'"]}) )
-			
+			 
 			table={}
 			table['queue_waiting']=[{"created_time":app_fun.now_to_str(False)}]
-			
-			# print('process_queue3',table)
+			 
 			idb.update( table,["created_time"],{'command':[ '=','"automerge"' ]})
-		
-		# print('process_queue4' )
-		cc=aes.Crypto()		
-
-		gitmp=app_fun.run_process(self.cli_cmd,'getinfo')
-		# print(90,gitmp)
-		
-		y=json.loads(gitmp)
-		notar=y["notarized"]
-		
-		tmpwhere={'Type':['=',"'out'"],'Category':['=',"'send'"],'status':['=',"'sent'"],'block':['<',notar] }
-		toupdate=idb.select('tx_history', ["txid",'date_time'],tmpwhere,distinct=True)
-		
-		count_task_done=0
-		new_notif_count=0
-		new_tx_history_count=0
-		
-		# print('toupdate')
-
-		if len(toupdate)>0:
-		
-			for tt in toupdate:
-				txidok=self.the_wallet.z_viewtransaction( tt[0] ) # if not in blocks anymore ? not valid ?
-				
-				tmpwhere2={'Type':['=',"'out'"],'Category':['=',"'send'"],'status':['=',"'sent'"],'block':['<',notar], 'txid':['=',"'"+tt[0]+"'"] }
-				
-				if txidok=='not valid txid' and datetime.datetime.now()>app_fun.datetime_from_str(tt[1])+datetime.timedelta(hours=1):
-		
-					table={}
-					table['tx_history']=[{'status':'reorged'}]
-					idb.update( table,['status'],tmpwhere2)
-					# update notification
-					wwhere={'details':['=','"'+tt[0]+'"'] }
-					table={}
-					table['notifications']=[{'status':'reorged', 'closed':'False' }]
-					idb.update( table,['status', 'closed'],wwhere)
-					
-					# also update msg table: 
-					table={}
-					table['msgs_inout']=[{'tx_status':'reorged'}] #, 'txid':''
-					idb.update( table,['tx_status'  ], {'txid':['=', tt[0] ],'type':['=','sent']})
-					
-				elif txidok!='not valid txid':
-				
-					table={}
-					table['tx_history']=[{'status':'notarized'}]
-					idb.update( table,['status'],tmpwhere2)
-					# update notification
-					wwhere={'details':['=','"'+tt[0]+'"'] }
-					table={}
-					table['notifications']=[{'status':'notarized' }]
-					idb.update( table,['status'],wwhere)
-					# also update msg table: 
-					table={}
-					table['msgs_inout']=[{'tx_status':'notarized' }]
-					idb.update( table,['tx_status'  ], {'txid':['=',  tt[0] ],'type':['=','sent']})
-				
-				new_notif_count+=1
-				new_tx_history_count+=1
-					
-					
+		 
+		history_notif_count=self.update_notarization()
+		 
 		waiting=idb.select('queue_waiting', ["type","wait_seconds","created_time","command","json","id","status"])
 		
-		# print('waiting',waiting)
+		if len(waiting)>0:
+			self.start_stop_enable.emit(False)
+			time.sleep(1)
+		else:
+			self.process_queue_iter+=1 
+			self.sending_signal.emit(['demon_loop',int(self.process_queue_iter)])
+			return
+		
+		cc=aes.Crypto()	
+		
+		new_notif_count=0
+		new_tx_history_count=0		
+		count_task_done=0
+		
 		merged_ii=[]
 		for ii,rr in enumerate(waiting):
-			
+			# print(rr)
 			if ii in merged_ii:
 				continue
 			
@@ -191,14 +138,10 @@ class DeamonInit(gui.QObject):
 				time.sleep(0.3)
 				
 				
-				
-				
-			# print(188,rr[3])
-				
 			if rr[3]=='import_view_key': #json.dumps({'addr':tmpaddr,'viewkey':tmpvk})
 				adrvk=json.loads(rr[4])
 				tmpresult=self.the_wallet.imp_view_key( adrvk['addr'],adrvk['viewkey'] )
-				# print(tmpresult)
+				# print('202tmpresult',tmpresult)
 				table={}
 				table['queue_done']=[{"type":rr[0],"wait_seconds":rr[1],"created_time":rr[2],"command":rr[3],"json":rr[4],"id":rr[5],"result":json.dumps(tmpresult),'end_time':app_fun.now_to_str(False)}]
 				# print('inserting')
@@ -206,21 +149,22 @@ class DeamonInit(gui.QObject):
 				
 				table={}
 				if 'type' in tmpresult :
-					if tmpresult['type']=='sapling':
+					if tmpresult['type'].lower() in ['sapling','z-sapling','zsapling']:
 						table['addr_book']=[{ 'viewkey_verif':1 }]
 						
 						table_vk={'view_keys':[{'address':adrvk['addr'], 'vk':adrvk['viewkey'] }]}
-						idb.insert(table_vk,['address','vk'])
+						idb.insert(table_vk,['address','vk']) # separate viewkey table
 				else:
 					table['addr_book']=[{ 'viewkey_verif':-1 }]
 					
-				idb.update(table,[  'viewkey_verif'],{'Address':['=',"'"+adrvk['addr']+"'"]})
-				self.update_addr_book.emit()
-				count_task_done+=1
-				
+				if table!={}:
+					idb.update(table,[  'viewkey_verif'],{'Address':['=',"'"+adrvk['addr']+"'"]}) # update addr book table 
+					self.update_addr_book.emit()
+					count_task_done+=1 
+					self.sending_signal.emit(['task_done','cmd_queue'])
+					# print('225 done' )	
 				
 			elif rr[3]=='import_priv_keys': #json.dumps({'addr':tmpaddr,'viewkey':tmpvk})
-			
 			
 				tmpjs=json.loads(rr[4])
 				ll=len(tmpjs['keys'])
@@ -235,10 +179,6 @@ class DeamonInit(gui.QObject):
 					# print(199,tmpresult['address'])
 					tmpresult=self.the_wallet.imp_prv_key( kk )
 					added_addr.append(tmpresult['address'])
-					# print(202,added_addr)
-					# self.msg_signal.emit('New address added','Address added from private key. New address:\n\n' ,'')
-					# self.msg_signal.emit('New address added','Address added from private key. New address:\n\n'+tmpresult['address'],'')
-					# time.sleep(1)
 					
 				table={}
 				table['queue_done']=[{"type":rr[0],"wait_seconds":rr[1],"created_time":rr[2],"command":rr[3],"json":rr[4],"id":rr[5],"result":'new addresses: '+str(added_addr),'end_time':app_fun.now_to_str(False)}]
@@ -246,6 +186,7 @@ class DeamonInit(gui.QObject):
 				idb.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
 				 
 				count_task_done+=1
+				self.sending_signal.emit(['task_done','cmd_queue'])
 				
 				
 			elif rr[3]=='validate_addr':
@@ -265,17 +206,16 @@ class DeamonInit(gui.QObject):
 				else:
 					table['addr_book']=[{ 'addr_verif':1 }]  #,'viewkey_verif' 
 				idb.update(table,[  'addr_verif'],{'Address':['=',"'"+adrvk['addr']+"'"]})
+				self.update_addr_book.emit()
+				self.sending_signal.emit(['task_done','cmd_queue'])
 			
 			elif rr[3]=='new_addr':
 			
-				# print(rr[4])
 				addr_opt=json.loads(rr[4])
 				addr_count= addr_opt['addr_count'] 
 				addr_cat=addr_opt['addr_cat']
 				addr_cat_counter=addr_opt['addr_cat_counter'] # yes / no
 			
-				# table={}
-				
 				# 2 create results / wallet api
 				new_addr_list=[]
 				date_str=app_fun.now_to_str(False)
@@ -313,6 +253,7 @@ class DeamonInit(gui.QObject):
 				count_task_done+=1
 				
 				self.msg_signal.emit('New address(es) created','New address(es):\n\n'+'\n'.join(new_addr_list),'')
+				self.sending_signal.emit(['task_done','cmd_queue'])
 				# idb.select('queue_done', [ "id" ])
 				
 			elif rr[3]=='export_wallet':
@@ -361,6 +302,7 @@ class DeamonInit(gui.QObject):
 					self.msg_signal.emit(tmptitle,'',tmppassword)
 					
 				time.sleep(3)
+				self.sending_signal.emit(['task_done','cmd_queue'])
 				
 			elif rr[3]=='get_viewkey':
 			
@@ -368,6 +310,7 @@ class DeamonInit(gui.QObject):
 				tmpresult=self.the_wallet.exp_view_key(ddict['addr'])
 			
 				self.send_viewkey.emit(ddict['addr'],tmpresult)
+				self.sending_signal.emit(['task_done','cmd_queue'])
 			
 			elif rr[3]=='export_viewkey':
 				ddict=json.loads(rr[4])
@@ -394,6 +337,7 @@ class DeamonInit(gui.QObject):
 				idb.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
 				count_task_done+=1
 				time.sleep(1)
+				self.sending_signal.emit(['task_done','cmd_queue'])
 			
 			elif rr[3]=='show_bills': # 
 				ddict=json.loads(rr[4])
@@ -409,6 +353,7 @@ class DeamonInit(gui.QObject):
 						
 				self.msg_signal_list.emit('Bills / utxos',['Amount','Confirm.','Txid'],results_array)
 				time.sleep(1)
+				self.sending_signal.emit(['task_done','cmd_queue'])
 				
 				
 			elif 'merge' in rr[3]: #=='show_bills': # 
@@ -495,10 +440,8 @@ class DeamonInit(gui.QObject):
 				if ddict['fromaddr'] in self.wallet_display_set.amount_per_address :
 					for tt in ddict['to']:
 						sum_cur_spending+=float(tt['a'])
-				
-				if sum_cur_spending>total_conf_per_addr-0.0001: # validate amoaunt to send
-					#
-				
+				if round(sum_cur_spending,8)>round(total_conf_per_addr-0.0001,8): # validate amoaunt to send
+					
 					table={}
 					table['queue_waiting']=[{'status':'awaiting_balance'}]
 					idb.update( table,['status'],{'id':[ '=',rr[5] ]}) # 
@@ -514,7 +457,9 @@ class DeamonInit(gui.QObject):
 					time.sleep(1)
 				
 					merged_queue_done=[]
-					msg_chnl=['message','channel']
+					msg_chnl=['message','channel'] # merging utxo sending only if not msg or chnls
+					
+					# merging should be only for auto sends ?
 					if rr[0] not in msg_chnl:
 						for jj,ss in enumerate(waiting):
 							# print(jj,ss)
@@ -576,7 +521,7 @@ class DeamonInit(gui.QObject):
 					tmpres['exceptions']= '\n'.join(exceptions)	
 					if len(sending_summary)>0:
 						tostr=json.dumps(sending_summary)
-						# print(ddict['fromaddr'],tostr)
+						# print('SENDING',)
 						tmpres['opid']=str(self.the_wallet.send(ddict['fromaddr'],tostr))
 						tmpres['opid']=tmpres['opid'].strip()
 						
@@ -682,8 +627,8 @@ class DeamonInit(gui.QObject):
 							# self.tx_history.update_history_frame()
 							
 							txid_utf8=txid 
-							if rr[0]!='message':
-								# print(644,'msg')
+							if rr[0] not in ['message','channel']: # normal send / not msg
+								# print(711," deamon not in ['message','channel']")
 								for mmii,mm in enumerate(memo_orig):
 									# print(mmii,mm,sending_summary[mmii])
 									table=self.the_wallet.prep_msgs_inout(txid_utf8,mm,'out',dt,addr_to=sending_summary[mmii]["address"] ) #tostr.append({"address":to['z']
@@ -694,16 +639,28 @@ class DeamonInit(gui.QObject):
 																	 
 									idb.insert(table,['proc_json','type','addr_ext','txid','tx_status','date_time', 'msg', 'uid','in_sign_uid','addr_to'])
 							else: #'message': msg_chnl
+								# print('msg or channe')
 								mmm=['',0,memo_orig[0][2]]
 								for mmii,mm in enumerate(memo_orig):
-									mmm[0]+=mm[0]
-									mmm[1]+=mm[1]
+									mmm[0]+=mm[0] # memo txt 
+									mmm[1]+=mm[1] # amount
 									
+								# print('mmm',mmm)
 								# also for channels?
 								if True: #rr[0]=='message':
+									# print('prep msg deamon 731')
 									table=self.the_wallet.prep_msgs_inout(txid_utf8,mmm,'out',dt,addr_to=sending_summary[0]["address"])
+									table['msgs_inout'][0]['is_channel']='False'
+									# print('prep msg deamon 734',rr[0])
+									if rr[0]=='channel':
+									# table['queue_waiting'][0]['type']='channel'
+										# print('prep msg deamon 737')
+										table['msgs_inout'][0]['is_channel']='True'
+										# print('Should mark out channel 709')
+										
 									if table!={}:
-										idb.insert(table,['proc_json','type','addr_ext','txid','tx_status','date_time', 'msg', 'uid','in_sign_uid','addr_to'])
+										# print('prep msg deamon 742\n',table)
+										idb.insert(table,['proc_json','type','addr_ext','txid','tx_status','date_time', 'msg', 'uid','in_sign_uid','addr_to','is_channel'])
 									
 						# self.messages.update_msgs()
 						
@@ -722,8 +679,12 @@ class DeamonInit(gui.QObject):
 							table={}
 							table['queue_waiting']=[{'status':'done'}]
 							idb.update( table,['status'],{'id':[ '=',ss[5] ]})
+							time.sleep(0.3)
 							self.sending_signal.emit(['cmd_queue'])
-							time.sleep(1)
+							time.sleep(0.3)
+							
+						self.update_wallet()
+						time.sleep(0.3)
 					
 					else:
 						
@@ -748,99 +709,92 @@ class DeamonInit(gui.QObject):
 				idb.update( table,['status'],{'id':[ '=',rr[5] ], 'status':[ '=',"'processing'" ],"command":['<>',"'automerge'"]})
 				self.sending_signal.emit(['cmd_queue'])
 				time.sleep(1)
-				# self.task_history.update_history_frame()
+				
+		self.start_stop_enable.emit(True)
 		
-		# print('b4 delete')			
-		idb.delete_where('queue_waiting',{'status':['<>',"'awaiting_balance'"],'status':['<>',"'waiting'"],"command":['<>',"'send'"],"command":['<>',"'automerge'"]  }) 
+		idb.delete_where('queue_waiting',{ 'status':[' not in ',"('awaiting_balance','waiting')"]  }  )  #, "command":[' not in ',"('send','automerge')"]  
+		idb.delete_where('queue_waiting',{ "command":[' not in ',"('send','automerge')"]  }  )  #, "command":[' not in ',"('send','automerge')"]  
+		# idb.delete_where('queue_waiting',{ 'status':['<>',"'awaiting_balance'"], 'status':['<>',"'waiting'"], "command":['<>',"'send'"], "command":['<>',"'automerge'"]  }) 
 		# do not delete if awaiting balance or waiting or command is send (delete in another thread time based) or command is autom merge - cancelled manually
 		
-		# print('after delete')	
 		self.process_queue_iter+=1
-		list_emit=['cmd_queue','demon_loop',int(self.process_queue_iter)]
+		list_emit=['cmd_queue','demon_loop',int(self.process_queue_iter)] # self.sending_signal.emit(list_emit)
 		if count_task_done>0:
 			list_emit.append('task_done')
+			
 		if new_notif_count>0:
 			list_emit.append('notif_update')
 		if new_tx_history_count>0:
 			list_emit.append('tx_history_update')
 			
+		if  new_notif_count + new_tx_history_count >0:
+			list_emit.append('wallet')
 			
 		self.sending_signal.emit(list_emit) # self.sending_signal.emit(['notif_update'])
 		
+		# print('after delete emit')	
 		if 'notif_update' in list_emit or 'tx_history_update' in list_emit:
 			self.refresh_msgs_signal.emit()
 		
-		# print('b4 sleep')
-		# if count_task_done>0:
-			# self.task_done.emit()
-			
 		time.sleep(1)
 		
 	
+	def update_notarization(self): 	#time.time()
 	
-	
-	
-	
-	
-	def update_incoming_tx(self):
-	
-		if not hasattr(self.the_wallet, 'z_viewtransaction'):
-			return
-	
-		try:
-			y=json.loads(app_fun.run_process(self.cli_cmd,'getinfo'))
+		if not hasattr(self , 'update_notarization_time'): # first run - create variable
+			self.update_notarization_time=time.time()
+			
+		elif time.time() - self.update_notarization_time < 30: # next run - measure time each 30 seconds 
+			# print('NOT update_notarization',time.time() - self.update_notarization_time)
+			return 0
 		
+		else:
+			self.update_notarization_time=time.time()
+		
+		notar=0
+		try:
+			y=json.loads(app_fun.run_process(self.cli_cmd,'getinfo'))		
 			notar=y["notarized"]
 		except:
-			print(626,'demon update tx exception')
-			return
+			print(814,'demon update tx exception')
+			return 0
 			
-		tmpwhere={'status':[' not in',"('reorged','notarized')"], 'Type':['=',"'in'"],'block':['<=',notar] }
+		idb=localdb.DB(self.db)	 
+		count_updates=0 
+		tmpwhere={'status':[' not in',"('reorged','notarized')"], 'block':['<=',notar] }
+		toupdate=idb.select('tx_history', ["txid" ],tmpwhere,distinct=True)
+
+		if len(toupdate)>0:
 		
-		idb=localdb.DB(self.db)	
-		toupdate=idb.select('tx_history', ["txid",'date_time'],tmpwhere) #
-		
-		if len(toupdate)>0: # check if update required ()
-		
-			for tt in toupdate:
-		
+			for tt in toupdate: #
 				txidok=self.the_wallet.z_viewtransaction( tt[0] ) # if not in blocks anymore ? not valid ?
-				tmpwhere2={'status':[' not in',"('reorged','notarized')"], 'Type':['=',"'in'"],'block':['<=',notar], 'txid':['=',"'"+tt[0]+"'"] }
+				 
+				if txidok!='not valid txid':
 				
-				if txidok=='not valid txid' and datetime.datetime.now()>app_fun.datetime_from_str(tt[1])+datetime.timedelta(hours=1):
-				
-					table={}
-					table['tx_history']=[{'status':'reorged'}]
-					idb.update( table,['status'],tmpwhere2)
-					
-					table={}
-					table['msgs_inout']=[{'tx_status':'reorged' }]
-					idb.update( table,['tx_status' ], {'txid':['=', "'"+tt[0]+"'" ],'type':['=',"'received'"]})
-					
-				elif txidok!='not valid txid':
 					table={}
 					table['tx_history']=[{'status':'notarized'}]
-					idb.update( table,['status'],tmpwhere2) # updating all, no matter outindex 
+					idb.update( table,['status'], { 'txid':['=',"'"+tt[0]+"'"] } )
 					
-					table={}
+					table={} # update notification 
+					table['notifications']=[{'status':'notarized' }]
+					idb.update( table,['status'], {'details':['=','"'+tt[0]+'"'] } )
+					
+					table={} # update msg table: 
 					table['msgs_inout']=[{'tx_status':'notarized' }]
-					idb.update( table,['tx_status'  ], {'txid':['=', "'"+tt[0]+"'" ],'type':['=',"'received'"]})
-				# else wait
-			# self.tx_history.update_history_frame()
-			self.sending_signal.emit([ 'tx_history_update'])
-			self.refresh_msgs_signal.emit()
-			
+					idb.update( table,['tx_status'  ], {'txid':['=', '"'+tt[0]+'"' ] })
+				 
+				count_updates+=1
 	
+			if count_updates>0:
+				self.sending_signal.emit([ 'tx_history_update','notif_update'])
+				self.refresh_msgs_signal.emit()
 	
-	
-	
-	
-	
-	
+		return count_updates
+		
+		 
 	
 	def update_status(self,xx):
-	
-	
+		
 		ret_val=[]
 		if self.started:
 		
@@ -866,7 +820,8 @@ class DeamonInit(gui.QObject):
 					idbinit.upsert(table,['uid', 'ttime','block'],{'block':['=',gi["blocks"]]})
 				
 				# print('\nupdate_status 709' )
-				self.output(tmpstr)
+				if xx%3==2:
+					self.output(tmpstr)
 				
 				if int(gi["connections"])>0:
 					ret_val.append('CONNECTED')
@@ -874,25 +829,22 @@ class DeamonInit(gui.QObject):
 				# print('\nupdate_status 715' )
 				modv=46 # about 15 sec
 				
-				if xx%modv==modv-1 and self.started:
-					# print(818,'modv',xx)
+				if xx%modv==0 and self.started:
+				# if xx%modv==modv-1 and self.started:
+					# print(818,'\n\n\nmodv',xx)
 					self.update_wallet()
 					ret_val.append('wallet')
 				# print('\nupdate_status 721',ret_val)
 					
 				if xx%modv==modv-1 and self.started:
-					self.update_incoming_tx()
-					
-				
-				# print('\nupdate_status 727' )
+					self.update_notarization()
+					# self.update_incoming_tx()
 					
 				if xx%3==2: # and self.started: # every second
 					# print('process queue')
 					self.process_queue()
 					# print('process queue done')
 					ret_val.append('cmd_queue')
-					
-				# print('\nupdate_status 732' )
 					
 		return 	ret_val
 		
@@ -913,9 +865,6 @@ class DeamonInit(gui.QObject):
 		self.the_wallet=None
 		self.deamon_started_ok=False
 		self.process_queue_iter=0
-		
-		# self.msg_queue = queue.Queue()	
-		# self.refreshed_results={}
 		
 		if deamon_cfg==None:
 			return
@@ -957,33 +906,31 @@ class DeamonInit(gui.QObject):
 	def stop_deamon(self):
 	
 		self.started=False
-		# print('b4 outpost')
+		# print('stopping deamon b4 outpost')
 		self.output('Stopping deamon\n')
 		# print('after outpost')
 		self.run_subprocess(self.cli_cmd,'stop',2)
 		
 
 	@gui.Slot()
-	def start_deamon(self, addrescan=False ):
-	
+	def start_deamon(self, addrescan=False ): # if pirate-cli process exist - do not create another one !
+		# print('new start deamon???')
 		self.started=True
 		
 		tmpcond,tmppid=app_fun.check_deamon_running() # ''.join(self.deamon_par)
+		# print(tmpcond,tmppid)
+		if tmpcond: # if already running
 		
-		if tmpcond:
-		
-			# self.walletTab.bstartstop.setEnabled(True) #.configure(state='normal')
 			self.start_stop_enable.emit(True)
-				# self.msg_queue.put({'cmd_queue':''})
 			
 			gitmp=app_fun.run_process(self.cli_cmd,'getinfo')
+			# print('gitmp',gitmp)
 			time.sleep(1)
 			while 'longestchain' not in gitmp:
 				if 'Loading block index' in gitmp:
 					self.output('Loading block index\n')
 				else:
 					self.output('Awaiting longest chain\n')
-					print(gitmp)
 				
 				for ii in range(4):
 					self.wallet_status_update.emit(['append',' .'])
@@ -991,62 +938,65 @@ class DeamonInit(gui.QObject):
 				
 				gitmp=app_fun.run_process(self.cli_cmd,'getinfo')
 				
-				
 			if self.the_wallet==None: #hasattr(self,'the_wallet')==False or :
 				self.the_wallet=wallet_api.Wallet(self.cli_cmd,self.get_last_load(),self.db)
 		
 			y = json.loads(gitmp)
+			# print('y:',y,"synced" in y,type(y["synced"]))
 			if "synced" in y:
 				if y["synced"]==True:
 				# self.walletTab.bstartstop.setEnabled(True) #self.bstartstop.configure(state='normal')
 					self.start_stop_enable.emit(True)
+					self.the_wallet.refresh_wallet()
 			elif y['longestchain']==y['blocks']:
 				self.start_stop_enable.emit(True)
+				self.the_wallet.refresh_wallet()
 			else:
 				# self.walletTab.bstartstop.setEnabled(False) #self.bstartstop.configure(state='disabled')
 				self.start_stop_enable.emit(False)
 				
-			return 
-
+			self.wallet_synced_signal.emit(True)
 		else:
+			# print('start_deamon???')
+			self.output('Decrypting wallet ...')
 			if self.decrypt_wallet()=='Cancel':
 				return
 				
-			self.output('Starting deamon usually takes few minutes ...')
-			reskanopt=[]
+			self.output('Starting deamon\n usually takes few minutes ...')
+			reskanopt=[] #['-salvagewallet']
 			if addrescan:
 				reskanopt=['-rescan']
 				
-			# print([self.deamon_par+reskanopt,self.cli_cmd])
 			self.run_subprocess([self.deamon_par+reskanopt,self.cli_cmd],'start',8)
 			
-			return
+			# return
 			
 	
 	def get_last_load(self):
 
 		idb=localdb.DB(self.db )
-		last_load=-1
+		last_load=0 # was -1 
 		if idb.check_table_exist( 'deamon_start_logs'):
-			tt=idb.select_last_val( 'deamon_start_logs','loaded_block')
-
-			if tt!=None:
-				last_load=tt #[0][0]	
+			
+			tt00=idb.select_max_val('deamon_start_logs','loaded_block',where={'ttime':['<',time.time()-3600*24]} )
+			
+			if len(tt00)>0 :
+				if tt00[0][0]!=None:
+					last_load=tt00[0][0] #[0][0]	
 					
 		return last_load
 		
 	# @gui.Slot()	
-	def output(self,ostr): #self.output()
+	def output(self,ostr,ttype='set'): #self.output()
+		 
+		self.wallet_status_update.emit([ttype,ostr]) # 'Wallet synced!'
 		
-		self.wallet_status_update.emit(['set',ostr]) #
-		# self.walletTab.stat_lab.setText(ostr)
-	
 		# error: couldn't connect to server: timeout reached (code 0)
 # (make sure server is running and you are connecting to the correct RPC port)
 		
 	@gui.Slot()	
 	def run_subprocess(self,CLI_STR,cmd_orig,sleep_s=4 ):
-
+		# print('cmd_orig',cmd_orig)
 		if cmd_orig in ['start','stop']:
 			self.start_stop_enable.emit(False)
 			# self.walletTab.bstartstop.setEnabled(False) #self.bstartstop.configure(state='disabled')
@@ -1062,6 +1012,7 @@ class DeamonInit(gui.QObject):
 			deamon_start=CLI_STR[0]
 			cli_cmd=CLI_STR[1]
 			cmd=[]
+			# print('\ndeamon_start',deamon_start)
 
 		elif type(cmd_orig)!=type([]):
 			
@@ -1075,19 +1026,17 @@ class DeamonInit(gui.QObject):
 		
 		time.sleep(sleep_s)
 		
-		tsyncing=None
-		blocksinit=None
+		tsyncing=[]
+		
+		blocks_passed=[]
+		max_n_last_iter=16
 		gitmp=''
 		
 		while pp.poll() is None: #==None:
 		
-			# print('deamon  while')
-		
 			if cmd_orig=='start':
 			
 				gitmp=app_fun.run_process(cli_cmd,'getinfo')
-				
-				# print(1010,gitmp)
 				
 				if deamon_warning in gitmp:
 					self.output(gitmp)
@@ -1114,21 +1063,35 @@ class DeamonInit(gui.QObject):
 					if y['longestchain']==y["blocks"] and y['longestchain']>0:
 						if cmd_orig=='start':
 							self.output('Wallet synced!')
+							self.wallet_synced_signal.emit(True) #init_app.check_if_new_wallet_backup_needed
 							
 						break
-					elif y['longestchain']>0:
+					elif y['longestchain']>0 and y["blocks"]>0:
 						
 						timeleft=''
-						if tsyncing==None and y["blocks"]>0 and y["longestchain"]-y["blocks"]>0:
+						blocksleft=y["longestchain"]-y["blocks"]
 						
-							tsyncing=time.time()
-							blocksinit=y["blocks"]
+						if len(tsyncing)==0 and blocksleft>0: # and y["blocks"]>0
+						
+							tsyncing.append(time.time())
+							blocks_passed.append(y["blocks"])
 							
-						elif y["blocks"]>0 and y["longestchain"]-y["blocks"]>0:
-							secpassed=time.time()-tsyncing
-							blockssynced=y["blocks"]-blocksinit
-							syncspeed=blockssynced/secpassed
-							blocksleft=y["longestchain"]-y["blocks"]
+						elif blocksleft>0: # and blocksiniter>0: #y["blocks"]>0 and 
+							
+							tsyncing.append(time.time())
+							blocks_passed.append(y["blocks"])
+							# print('blocks and time',blocks_passed,tsyncing)
+							tmp_time_arr=tsyncing[-max_n_last_iter:]
+							tmp_blocks_arr=blocks_passed[-max_n_last_iter:]
+							# print('last N',tmp_time_arr,tmp_blocks_arr)
+							
+							# take last max N=8 iter for estim
+							# take time from aray list# take sum blocks for last N
+							secpassed=tmp_time_arr[-1] - tmp_time_arr[0] #time.time()-tsyncing
+							blockssynced=tmp_blocks_arr[-1] - tmp_blocks_arr[0]  #y["blocks"]-blocksinit
+							
+							syncspeed=(blockssynced+1)/secpassed # plus 1 to exclude zero denom
+							# blocksleft=y["longestchain"]-y["blocks"]
 							timeleft=int(blocksleft/syncspeed)
 							hoursleft=0
 							minutesleft=0
@@ -1144,6 +1107,9 @@ class DeamonInit(gui.QObject):
 							
 							if hoursleft>1:
 								timeleft+='\nConsider downloading bootstrap for faster sync.'
+								
+						else:
+							print('1159 ',y["blocks"],y["longestchain"] )
 							
 						tmpstr='Syncing ... \nLoaded blocks: '+str(y["blocks"])+' of '+str(y["longestchain"])+' ('+str(int(100*y["blocks"]/y["longestchain"]))+'%)' +'\nBlocks left: '+str(y["longestchain"]-y["blocks"])+'\n'+timeleft+'\n'
 						
@@ -1165,14 +1131,10 @@ class DeamonInit(gui.QObject):
 			# if not hasattr(self.walletTab,'stat_lab'): printsleep(sleep_s)
 			# else: 
 			for ti in range(int(sleep_s)):
-				# tmptmptmp=self.walletTab.stat_lab.text()
 				
 				self.wallet_status_update.emit(['append',' .']) #self.walletTab.stat_lab.setText(self.walletTab.stat_lab.text()+' .') #.set_textvariable(None,self.statustable.get()+' .')
 				time.sleep(1)
 				
-				
-		# print('pp.poll()',pp.poll(),'gitmp',gitmp)
-		
 		if cmd_orig=='start':		
 			self.the_wallet=wallet_api.Wallet(self.cli_cmd,self.get_last_load(),self.db)
 			
@@ -1183,7 +1145,8 @@ class DeamonInit(gui.QObject):
 			try:
 				y = json.loads(gitmp)
 			except:
-				pass
+				traceback.print_exc()
+				# pass
 				
 			if 'error' in gitmp and 'errors' not in y:
 				print('ERROR doing getinfo for CLI STR',CLI_STR)
@@ -1193,7 +1156,10 @@ class DeamonInit(gui.QObject):
 				
 			else:
 				
-				
+				if y["blocks"]==None:
+					print('ERROR y',y)
+					return
+					
 				loaded_block=y["blocks"]
 				
 				# save loading time
@@ -1222,69 +1188,85 @@ class DeamonInit(gui.QObject):
 			self.the_wallet=None
 			self.start_stop_enable.emit(True)
 			# self.walletTab.bstartstop.setEnabled(True) #self.bstartstop.configure(state='normal')
-			self.output('Blockchain stopped')
+			self.output('Blockchain stopped\nEncrypting wallet...')
 			
 			self.encrypt_wallet_and_data()
+		
+	def check_wallet_hash(self,dat_file,insert_on_exception=False):
+		cc=aes.Crypto()
+		# print('self.db',self.db)
+		db=localdb.DB(self.db)
+		last_wallet_hash=db.select('jsons', ['json_content'],{'json_name':['=',"'wallet_hash'"]})
+		
+		cur_dat_hash= cc.hash2utf8_1b( cc.read_bin_file( dat_file),1)
+		
+		def insertNewHash(tmparr):
+			# print('Inserting hash',cur_dat_hash,'self.db',self.db)
+			tmparr.append(cur_dat_hash)
+			table={}
+			table['jsons']=[{'json_name':"wallet_hash", 'json_content':json.dumps(tmparr), 'last_update_date_time': app_fun.now_to_str(False)}]
+			db=localdb.DB(self.db)
+			db.upsert(table,['json_name','json_content','last_update_date_time'],{'json_name':['=',"'wallet_hash'"]})
+			# print('after upser',db.select('jsons', ['json_content'],{'json_name':['=',"'wallet_hash'"]}))
+		
+		if len(last_wallet_hash)>0:
+			last_wallet_hash_arr=json.loads(last_wallet_hash[0][0])
+			if cur_dat_hash in last_wallet_hash_arr: #==last_wallet_hash[0][0]:
+				print('Decrypted wallet hash exists in history - ok.')
+			else:
+				if insert_on_exception:
+					print('New wallet hash detected - inserting')
+					insertNewHash(last_wallet_hash_arr)
+				else:
+					print('Warning - wallet decryption might have been wrong - existing wallet hash does not exist in history ... ! ')
+		else: # no last hash - save new one 
+			print('No last wallet hash - saving the new one!',cur_dat_hash)
+			insertNewHash([])
+
 		
 	def decrypt_wallet(self):
 		
 		idb=localdb.DB('init.db')
 		ppath=idb.select('init_settings',['datadir'] )
 		
-		# print(self.wallet_display_set.password,os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.dat'))
+		dat_file=os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.dat')
+		encr_file=os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.encr')
 		
-		# if self.wallet_display_set.password==None:
-			# print(1004)
-		
-		if os.path.exists(os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.dat') ):
-			return self.wallet_display_set.data_files['wallet']+'.dat exists'
+		if os.path.exists(dat_file): #os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.dat') ):
+			# print('wallet decrypted exist?')
+			self.output('\nwallet decrypted exist?:\n'+dat_file,'append')
+			return dat_file+' exists'
 			
-		elif os.path.exists(os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.encr') ):
+		elif os.path.exists(encr_file): #os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.encr') ):
 			cc=aes.Crypto()
-			rv=cc.aes_decrypt_file( os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.encr'), os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.dat') , self.wallet_display_set.password)
-			time.sleep(1)
-			# print( rv)
-			# os.remove(ppath[0][0]+'/wallet.encr')
+			 
+			rv=cc.aes_decrypt_file( encr_file, dat_file , self.wallet_display_set.password)
+			
+			t_to_wait=int(os.path.getsize(dat_file)/1e7 )
+			# print('Waiting '+str(t_to_wait)+' seconds to ensure wallet is ready ... ' )
+			self.output('\nWaiting '+str(t_to_wait)+' seconds to ensure wallet is ready\n','append')
+			self.counterPrint(t_to_wait)
+			
+			self.check_wallet_hash( dat_file )
+			 
 			if rv!='' and os.path.exists(rv):
-				app_fun.secure_delete(os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.encr'))
-			time.sleep(1)
-			
-			
-			
-		# if not os.path.exists(os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.dat') ):
-			# addstr=''
-			# if os.path.exists(os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.encr') ):
-				# addstr=' However '+self.wallet_display_set.data_files['wallet']+'.encr EXISTS - MAYBE YOU SHOULD RUN WITH PASSWORD OPTION? '
-			
-			# if gui.msg_yes_no("Wallet file missing!", 'There is no '+self.wallet_display_set.data_files['wallet']+'.dat file in the directory \n\n'+ppath[0][0]+'\n'+addstr+'\n\n ARE YOU SURE YOU WANT TO PROCEEED?? A NEW WALLET WILL BE CREATED!'):
-							
-				# return 'New wallet accepted'
-			# else:
-				# return 'Cancel'
-		# else:
-			# return self.wallet_display_set.data_files['wallet']+'.dat exists'
-			
-		
-		
-		
-		# elif os.path.exists(os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.encr') ):
-			# cc=aes.Crypto()
-			# rv=cc.aes_decrypt_file( os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.encr'), os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.dat') , self.wallet_display_set.password)
-			# time.sleep(1)
-			
-			# if rv!='' and os.path.exists(rv):
-				# app_fun.secure_delete(os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.encr'))
-			# time.sleep(1)
-		# else:
-			# print(1033)
-			# gui.messagebox_showinfo('Wallet file missing!', 'There is no '+self.wallet_display_set.data_files['wallet']+'. file in the directory \n\n'+ppath[0][0]+'\n\n Will create new wallet file!')
-		
+				app_fun.secure_delete(encr_file) #os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.encr'))
+				
+			self.output('Wallet decrypted and ready' )
+			 
 		return 'Decrypted'
-			
+	
+
+	def counterPrint(self,t_to_wait):
+		while t_to_wait>-1:
+			# print('... time left ',t_to_wait)
+			self.output(' ... '+str(t_to_wait),'append')
+			t_to_wait-=1
+			time.sleep( 1) # 1+ t_to_wait ) # 1MB = 1s waiting
 			
 			
 	def encrypt_wallet_and_data(self):
-		
+	
 		if self.wallet_display_set.password==None:
 			return
 			
@@ -1293,18 +1275,32 @@ class DeamonInit(gui.QObject):
 		
 		cc=aes.Crypto()
 		path2encr=os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.dat')
+		t_to_wait=int(os.path.getsize(path2encr)/1e7 )
+		# print('Waiting '+str(t_to_wait)+' seconds \nto ensure wallet \nis not working ... ' )
+		self.output('\nWaiting '+str(t_to_wait)+' seconds to ensure \nwallet is not working\n','append')
+		self.check_wallet_hash( path2encr, True )
+		self.counterPrint(t_to_wait)
+		# return
+		
 		path_end=os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.encr')
+		# print('Encrypting ... ' )
+		self.output('\nEncrypting ... ','append')
 		rv=cc.aes_encrypt_file( path2encr, path_end , self.wallet_display_set.password)
-		time.sleep(1)
-		# print('encrypted wallet',path2encr,path_end,rv)
+		
+		self.output('done','append')
 		
 		encrypted_size=os.path.getsize(path_end)
 		# print('encrypted_size error ',encrypted_size)
+		if encrypted_size<10000:
+			# print('encrypted_size error ',encrypted_size)
+			self.output('\nencrypted_size error '+str(encrypted_size),'append')
+		# time.sleep(1)
 		
 		if rv  and os.path.exists(path_end) and encrypted_size>10000: #rv!=''
-			app_fun.secure_delete(os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.dat'))
+			datf=os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.dat')
+			# print('Deleting .dat after encryption:',datf)
+			self.output('\nDeleting .dat after encryption:\n'+datf,'append')
+			app_fun.secure_delete(datf)
 			
-		if encrypted_size<10000:
-			print('encrypted_size error ',encrypted_size)
-		time.sleep(1)
+		self.output('Blockchain stopped\nWallet encrypted\nand secured (.dat deleted)')	
 	
