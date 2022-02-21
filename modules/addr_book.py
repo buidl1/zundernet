@@ -1,5 +1,3 @@
-# TODO: limit historical tx display
-
 # show button for not validated addresses to validate again 
 # there should be id validation if cancelled - show button
 
@@ -24,18 +22,25 @@ class AddressBook:
 	def __init__(self,wds):
 		self.wds=wds
 		self.db=wds.db
+		self.addr_book_view_grid=[]
 		
 	def prepare_own_addr_frame(self,  selecting_to=False):
+		# print('addrbook byaddr frame')
 		return self.wds.prepare_byaddr_frame(False, True,selecting_to )
 
+		
+	# add amount {'confirmed':amount_init,'unconfirmed':am_unc,'#conf':cc_conf,'#unconf':cc_unc}
 	def cat_alias(self,selz,own=True):
 		cat1=''
 		alia1=''
+		am1=''
 		if own:
 			if selz in self.wds.addr_cat_map:
 				cat1=self.wds.addr_cat_map[selz]
 			if selz in self.wds.alias_map:
 				alia1=self.wds.alias_map[selz]
+			if selz in self.wds.addr_amount_dict:
+				am1=', available amount: '+str(round(self.wds.addr_amount_dict[selz]['confirmed']+self.wds.addr_amount_dict[selz]['unconfirmed'],8))
 		else:
 			if selz in self.wds.addr_book_category_alias:
 				cat1=self.wds.addr_book_category_alias[selz]['category']
@@ -43,7 +48,7 @@ class AddressBook:
 				alia1=self.wds.addr_book_category_alias[selz]['alias']
 		
 		if cat1!='' or alia1!='':
-			return cat1+','+alia1
+			return alia1+','+cat1+am1 #cat1+','+alia1
 			
 		return selz
 		
@@ -273,6 +278,7 @@ class AddressBook:
 			self.increment_usage(addr )
 			
 		def subsendto(btn,addr , sendto_fun):
+			# print(addr)
 			sendto_fun(btn,addr)
 			self.increment_usage(addr )
 			
@@ -370,6 +376,7 @@ class AddressBook:
 			
 		for kk in range(self.main_table.rowCount()):
 		
+
 			addr=self.main_table.item(kk,3 ).toolTip()
 			alias=self.main_table.item(kk,2  ).text()
 			categ=self.main_table.item(kk,1).text()
@@ -404,7 +411,7 @@ class AddressBook:
 		grid_settings,colnames,cur_addr=self.addr_book_view()
 		self.main_table.updateTable(grid_settings,colnames)
 		
-		
+	@gui.Slot()		
 	def refresh_addr_book(self):
 	
 		self.filter_table.updateBox( new_items_list=self.wds.categories_filter())
@@ -427,6 +434,7 @@ class AddressBook:
 		frame1=gui.FramedWidgets(None,'Addresses list') #ttk.LabelFrame(parent_frame,text='Addresses list') 
 		
 		grid_settings,colnames,cur_addr=self.addr_book_view()
+		self.addr_book_view_grid=grid_settings
 		
 		self.cur_addr=cur_addr
 		
@@ -466,7 +474,7 @@ class AddressBook:
 		self.form_table=gui.Table(None,params={'dim':[len(init_form),2],'updatable':1, 'toContent':1} )  #, 'toContent':1
 		self.form_table.updateTable(form_grid)
 		frame2.insertWidget(self.form_table)
-		frame2.setMinimumWidth(256+64)
+		frame2.setMinimumWidth(256) # +32
 		
 		
 		
@@ -502,7 +510,7 @@ class AddressBook:
 			
 			table={}
 			# print('self.cur_addr',self.cur_addr,tmpvk_valid,tmpvk)
-			if tmpaddr in self.cur_addr:
+			if tmpaddr in self.cur_addr: # = editing addr already in 
 				table['addr_book']=[{'Category':tmpcat,'Alias':tmpalia,'Address':tmpaddr,'ViewKey':tmpvk,'addr_verif':tmpaddr_valid,'viewkey_verif':tmpvk_valid }] 
 				idb.upsert(table,[ 'Category','Alias','Address','ViewKey','addr_verif','viewkey_verif' ],{'Address':['=',"'"+tmpaddr+"'"]})
 				
@@ -511,7 +519,7 @@ class AddressBook:
 					tmpjson=json.dumps({'addr':tmpaddr,'viewkey':tmpvk})
 					table['queue_waiting']=[localdb.set_que_waiting(command='import_view_key',jsonstr=tmpjson, wait_seconds=0)]
 					idb.upsert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ],{'command':['=',"'import_view_key'"],'json':['=',"'"+tmpjson+"'"] })
-			else:
+			else: # new 
 				table['addr_book']=[{'Category':tmpcat,'Alias':tmpalia,'Address':tmpaddr,'ViewKey':tmpvk,'usage':0,'addr_verif':tmpaddr_valid,'viewkey_verif':tmpvk_valid}]  
 				idb.insert(table,[ 'Category','Alias','Address','ViewKey','usage','addr_verif','viewkey_verif'])
 				
@@ -552,45 +560,65 @@ class AddressBook:
 			if zpath==None or zpath[0]=='':
 				return
 				
-			zpath=zpath[0]
-				
+			zpath=zpath[0]				
 			tmpval=[]
+			cc=aes.Crypto()
 			
-			# print(zpath)
+			# 1. try read file as decrypted containing addr or viewkey keyword json
+			# if failed try password
+			isjok=False
 			
-			# if len(tmpval)>0:
-			def whilewaiting(tmpval2,zpath):
-				# global zpath
-				# print(547,zpath,tmpval2)
-				if tmpval2[0]==' ':
-					return
-				cc=aes.Crypto()
+			def load_values(ddi):
+				isjok=False
+				if 'addr' in ddi:
+					self.form_table.cellWidget(3,1).setText(ddi['addr'])
+					isjok=True
+					# print(isjok)
+				if 'viewkey' in ddi:
+					self.form_table.cellWidget(4,1).setText(ddi['viewkey']) 
+					self.form_table.cellWidget(1,1).setText('ViewKey')
+			
+				return isjok
 				
+			try:
+				testjson=json.loads(cc.read_file( zpath))
+				isjok=load_values(testjson)
+				
+			except:
+				print('err testjson')  
+				isjok=False
 			
-				try:
-					decr_val=cc.aes_decrypt_file(path1=zpath,path2=None,password=tmpval2 ) #
-					
-					if decr_val==False:
-						1/0
-					
-					ddi=json.loads(decr_val)
-								
-			
-					if 'viewkey' in ddi:
-						self.form_table.cellWidget(1,1).setText('ViewKey') #self.form_table.set_textvariable('cat','ViewKey')
-						self.form_table.cellWidget(3,1).setText( ddi['addr'])
-						self.form_table.cellWidget(4,1).setText(ddi['viewkey'])
-					else:
-						# self.form_table.set_textvariable('addr',ddi['addr'])		
-						self.form_table.cellWidget(3,1).setText(ddi['addr'])	 
-					
-				except:
-					gui.showinfo('Could not decrypt file','File '+zpath+' does not contain encrypted address or view key or you have wrong password!', self.form_table)
-			
-			gui.PassForm(tmpval, first_time=False, parent = self.form_table,  title="Enter password to decrypt file")
-			if len(tmpval)>0:
-				# flexitable.ask_password(tmpval,'Decrypting file','\n Decrypting file '+zpath+'\n\nEnter password\n',whilewaiting) # set password if needed ?
-				whilewaiting(tmpval[0],zpath)
+			if not isjok:
+				def whilewaiting(tmpval2,zpath):
+					# global zpath
+					# print(547,zpath,tmpval2)
+					if tmpval2[0]==' ':
+						return					
+				
+					try:
+						decr_val=cc.aes_decrypt_file(path1=zpath,path2=None,password=tmpval2 ) #
+						
+						if decr_val==False:
+							1/0
+						
+						ddi=json.loads(decr_val)	
+
+						load_values(ddi)						
+				
+						# if 'viewkey' in ddi:
+							# self.form_table.cellWidget(1,1).setText('ViewKey') #self.form_table.set_textvariable('cat','ViewKey')
+							# self.form_table.cellWidget(3,1).setText( ddi['addr'])
+							# self.form_table.cellWidget(4,1).setText(ddi['viewkey'])
+						# else:							
+							# self.form_table.cellWidget(3,1).setText(ddi['addr'])	 # self.form_table.set_textvariable('addr',ddi['addr'])		
+						
+					except:
+						gui.showinfo('Could not decrypt file','File '+zpath+' does not contain encrypted address or view key or you have wrong password!', self.form_table)
+				
+				gui.PassForm(tmpval, first_time=False, parent = self.form_table,  title="Enter password to decrypt file")
+				if len(tmpval)>0:
+					# flexitable.ask_password(tmpval,'Decrypting file','\n Decrypting file '+zpath+'\n\nEnter password\n',whilewaiting) # set password if needed ?
+					whilewaiting(tmpval[0],zpath)
 		
 		
 		self.form_table.cellWidget(0,0).set_fun(True,import_z) #.set_cmd('import',[ ],import_z)
