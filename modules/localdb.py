@@ -93,9 +93,6 @@ def is_busy():
 		return False
 	
 	ts=time.time()-tt[0][1]
-	# print('still busy ',tt[0][0],'last task sec ago: ',ts)
-	# print(idb.select('busy'))
-	# print('cur time ',time.time())
 	
 	return True
 	
@@ -103,13 +100,57 @@ def is_busy():
 	
 	
 	
-def init_tables(dbfname): #localdb.init_tables()
+def init_tables(dbfname, app_db_version): #to update tables and indexes iterate app version db +1
 	
 	idb=DB(dbfname)
 	
+	existing_tables=idb.all_tables()
+	create_tables=False
+	# print('check app version',app_db_version)
+	# to=time.time()
+	for et in existing_tables:
+		# print(et )
+		if 'jsons' ==et[1]:
+			# print('jsons exist!')
+			tmptmp=idb.select('jsons',['json_content'],{'json_name':['=',"'app_db_version'"]})
+			# print('tmptmp',tmptmp)
+			if len(tmptmp)==0:
+				# print('init entry app_db_version')
+				table={}
+				table['jsons']=[{'json_name':'app_db_version', 'json_content':str(app_db_version) }]
+				idb.insert(table,['json_name','json_content' ]) #,"password_on"
+				create_tables=True
+			elif tmptmp[0][0]==str(app_db_version):
+				# print('do not create tables and indexes')
+				create_tables=False
+			else:
+				# print(' create tables and indexes and update app version ')
+				table={}
+				table['jsons']=[{'json_content':str(app_db_version) }]
+				idb.update(table,[ 'json_content' ],{'json_name':['=',"'app_db_version'"]}) #,"password_on"
+				create_tables=True
+				
+			break
+	
+	if len(existing_tables)==0: 	create_tables=True	
+	# idb.drop_table('msgs_inout')
+	# idb.drop_table('channels')
+	# idb.drop_table('tx_history')
+	# idb.drop_table('in_signatures')
+	# idb.drop_table('notifications')
+	# create_tables=True # REMOVE after testing !!!!!!!!!!!!!!!!!!!!!!!
+	if not create_tables: return
+	# print('hash seeds',idb.select( 'out_signatures' ) )
+	
+	
+	
+	# print('check app version',time.time()-to)
 	table={}
 	table['view_keys']={'address':'text', 'vk':'text' }
-	table['channels']={'address':'text', 'vk':'text', 'creator':'text', 'channel_name':'text', 'status':'text', 'own':'text' }
+	table['channels']={'address':'text', 'vk':'text', 'creator':'text', 'channel_name':'text', 'channel_intro':'text', 'status':'text', 'own':'text', 'channel_type':'text' }
+	# 2 indexes:
+	# indexes['channels']=[{'idx_name':'chnl_idx1','cname':['address' ]}]  
+	# indexes['channels'].append({'idx_name':'chnl_idx2','cname':['creator' ]})  
 	
 	table['address_category']={'address':'text', 'category':'text', 'last_update_date_time':'text' }
 	table['deamon_start_logs']={'uid':'int', 'time_sec':'int', 'ttime':'real','loaded_block':'int' }
@@ -124,13 +165,19 @@ def init_tables(dbfname): #localdb.init_tables()
 	
 	table['in_signatures']={'hex_sign':'text','n':'int','addr_from_book':'text','uid':'auto'}
 	
+	table['channel_signatures']={'addr':'text','signature':'text','uid':'auto'}
+	
 	table['msgs_inout']={'proc_json':'text','type':'text','addr_ext':'text','txid':'text','tx_status':'text','date_time':'text', 'msg':'text','uid':'auto','in_sign_uid':'int','addr_to':'text','is_channel':'text'}
 	
 	
 	# tmptmp=idb.select('tx_history',{'Category':['=',"'send'"]})
 	# for ttt in tmptmp:
 		# print(ttt)
+	# idb.drop_table('msgs_inout')
+	# idb.drop_table('channels')
 	# idb.drop_table('tx_history')
+	# idb.drop_table('in_signatures')
+	# idb.drop_table('addr_book')
 	
 	table['queue_waiting']={"type":'text' # auto/manual
 							
@@ -151,10 +198,11 @@ def init_tables(dbfname): #localdb.init_tables()
 							, "result":'text' # success or failed + reason
 							, 'end_time':'text'
 							} 
-							
+			
 	idb.create_table(table)
+
+	# else: idb.delete_where('queue_done',{'command':[' in ',"('show_bills','new_addr','export_viewkey')"]})
 	
-	idb.delete_where('queue_done',{'command':[' in ',"('show_bills','new_addr','export_viewkey')"]})
 	
 	# table={'msgs_inout':[{'txid':''}]}
 	# idb.update( table,['txid'  ], {'date_time':['<', app_fun.today_add_days(-7)], 'proc_json':['=',"'True'"] })
@@ -197,6 +245,7 @@ def init_tables(dbfname): #localdb.init_tables()
 	
 	idb.create_indexes(indexes)
 	
+	
 
 class DB:
 
@@ -228,50 +277,65 @@ class DB:
 		
 
 	def table_size(self,tname,datetime_colname='created_time'):
-	
-		colnames=self.get_table_columns(tname)
+		onlyone=False
+		if type(tname)==type('str'):
+			tname=[tname]
+			datetime_colname=[datetime_colname]
+			onlyone=True
+			
+		ret_dict={}
 		fname='table_size'
 	
 		curs,conn,ts=self.getcursor(fname)
-		
-		cc=curs.execute('SELECT '+','.join(colnames)+' FROM __replace__'.replace('__replace__',tname))
-		cc=cc.fetchall()
-		total_chars=0
-		rowsii=0
-		old_rows=0
-		older_chars=0 # older then 1 month
-		got_date='"'+datetime_colname+'"' in colnames
-		date_index=None
-		if got_date:
-			got_date=datetime.datetime.now()- datetime.timedelta(days=30)
-			date_index=colnames.index('"'+datetime_colname+'"')
+	
+		for tii,tn in enumerate(tname):
+			colnames=self.get_table_columns(tn)
 			
-		if len(cc)==0:
-			return {'total_chars':total_chars, 'total_rows':rowsii, 'older_chars':older_chars, 'old_rows':old_rows}
-		
-		col_size=[0 for ii in range(len(cc[0])) ]
-		for c in cc:
-			rowsii+=1
-			cur_row_size=0
-			mark_row=False
-			for jj,ii in enumerate(c):
-				tmpsize=len(str(ii))
-				col_size[jj]+=tmpsize
-				total_chars+=tmpsize
-				cur_row_size+=tmpsize
+			cc=curs.execute('SELECT '+','.join(colnames)+' FROM __replace__'.replace('__replace__',tn))
+			cc=cc.fetchall()
+			
+			total_chars=0
+			rowsii=0
+			old_rows=0
+			older_chars=0 # older then 1 month
+			got_date='"'+datetime_colname[tii]+'"' in colnames
+			date_index=None
+			if got_date:
+				got_date=datetime.datetime.now()- datetime.timedelta(days=30)
+				date_index=colnames.index('"'+datetime_colname[tii]+'"')
 				
-				if jj==date_index:
-					if got_date!=False:
-						if app_fun.datetime_from_str(ii)<got_date:
-							mark_row=True
-							
-			if mark_row:
-				old_rows+=1
-				older_chars+=cur_row_size
-				
+			if len(cc)==0:
+				ret_dict[tn]={'total_chars':total_chars, 'total_rows':rowsii, 'older_chars':older_chars, 'old_rows':old_rows}
+				continue
+				# return {'total_chars':total_chars, 'total_rows':rowsii, 'older_chars':older_chars, 'old_rows':old_rows}
+			
+			col_size=[0 for ii in range(len(cc[0])) ]
+			for c in cc:
+				rowsii+=1
+				cur_row_size=0
+				mark_row=False
+				for jj,ii in enumerate(c):
+					tmpsize=len(str(ii))
+					col_size[jj]+=tmpsize
+					total_chars+=tmpsize
+					cur_row_size+=tmpsize
+					
+					if jj==date_index:
+						if got_date!=False:
+							if app_fun.datetime_from_str(ii)<got_date:
+								mark_row=True
+								
+				if mark_row:
+					old_rows+=1
+					older_chars+=cur_row_size
+					
+			ret_dict[tn]={'total_chars':total_chars, 'total_rows':rowsii, 'older_chars':older_chars, 'old_rows':old_rows}
+					
 		self.close_connection(curs,conn,fname,ts)
 		
-		return {'total_chars':total_chars, 'total_rows':rowsii, 'older_chars':older_chars, 'old_rows':old_rows}
+		if onlyone: return ret_dict[tname[0]]
+		
+		return ret_dict # {'total_chars':total_chars, 'total_rows':rowsii, 'older_chars':older_chars, 'old_rows':old_rows}
 
 		
 		
@@ -456,7 +520,7 @@ class DB:
 			for vi,vii in v.items():
 				if vi not in colnames:
 					sql_str="ALTER TABLE "+k+' ADD COLUMN '+vi+' '+vii
-					# print('adding',sql_str)
+					print('\n\nadding column ',sql_str)
 					curs.execute(sql_str)
 		
 			
@@ -484,20 +548,37 @@ class DB:
 		fname='delete_where'
 		curs,conn,ts=self.getcursor(fname)
 		sql_init="delete from "+table_name+self.add_where(where)
+		# print('\n\nDELETE WHERE',sql_init)
 		curs.execute(sql_init)
 		self.close_connection(curs,conn,fname,ts)
 		
 	def upsert(self,table,items_order,where): #={'json_name':['=',tmp_max_val]}
+		if table=={}:
+			print('\n\n! ! ! EMPTY UPSERT TABLE!!!!!\n\n')
+			return
+	
+		# if 'jsons' in table:
+			# print('table',table)
+	
 		self.check_encrypted()
+		# print( self.db_encrypted)
+		
 		if self.db_encrypted:
 			return 
 	
+		# print('b4 tname')
 		tname=list(table.keys())
 		tname=tname[0]
 		
+		# if 'jsons' in table:
+			# print('tname',tname)
+		
 		cc=self.count(tname,where)
 		
+		# print('cc',cc)
+		
 		if cc[0][0]==0:
+			# print('inserting ...')
 			self.insert(table,items_order)
 		elif cc[0][0]==1:
 			self.update(table,items_order,where)
@@ -555,6 +636,9 @@ class DB:
 		
 		
 	def update(self,table,items_order,where):
+		if table=={}:
+			print('\n\n! ! ! EMPTY UPSERT TABLE!!!!!\n\n')
+			return
 		self.check_encrypted()
 		if self.db_encrypted:
 			return 
@@ -575,6 +659,7 @@ class DB:
 		for rr in table[tname]:
 			
 			update_str='update '+tname+' set '+', '.join([ io+'=?' for io in items_order])
+			# print(update_str)
 			vtuple=[rr[io] for io in items_order]
 			
 			strwhere,vtup=self.add_where_new(where)
@@ -591,6 +676,10 @@ class DB:
 		
 	
 	def insert(self,table,items_order): 
+		if table=={}:
+			print('\n\n! ! ! EMPTY UPSERT TABLE!!!!!\n\n')
+			return []
+			
 		self.check_encrypted()
 		if self.db_encrypted:
 			return []
@@ -653,18 +742,15 @@ class DB:
 		self.close_connection(curs,conn,fname,ts)
 		return retv
 		
+		
+		
 	def select_max_val(self,table_name,column,where={},groupby=[]):
-		# print('select_max_val',self.dbname)
-		# print(self.all_tables())
-	
+		
 		self.check_encrypted()
 		if self.db_encrypted:
 			return []
 		fname='select_max_val'
 		curs,conn,ts=self.getcursor(fname)
-		
-		
-		
 		sqlstr=''
 		
 		if type(column)==type('asdf'):
@@ -708,13 +794,24 @@ class DB:
 		return retv[0][0]
 		
 		
-	def add_where(self,where_dict): 
+	def add_where(self,where_dict): # either 'is_channel':['=',"'False'"] or OR  'is_channel':[ ['=',"'False'"], [' is ','null']]
 	
 		sqlstr=''
 		if len(where_dict)>0:
-			whrstr=[ k2 +str(v2[0])+str(v2[1]) for k2,v2 in where_dict.items()]
-			
+			# whrstr=[ k2 +str(v2[0])+str(v2[1]) for k2,v2 in where_dict.items()]
+			whrstr=[]
+			for k2,v2 in where_dict.items():
+				tmpw=''
+				if type(v2[0])==type([]): # join in () example 'is_channel':[ ['=',"'False'"], [' is ','null']]
+					tmpwa=[ k2 +str(v[0])+str(v[1]) for v in v2]
+					tmpw=' ( '+' or '.join(tmpwa)+' ) '
+				else:
+					tmpw=k2 +str(v2[0])+str(v2[1])
+				
+				whrstr.append(tmpw)
+				
 			sqlstr+=' where '+' and '.join(whrstr)
+			
 			
 		return sqlstr
 	
@@ -794,12 +891,9 @@ def blocks_to_datetime(blknr):
 		if nearest_time[0][0]!=None:
 	
 			nearest_block=idb.select_min_val('block_time_logs','block',where={'block':['>=',blknr]} )
-			# print('blknr',blknr,nearest_block,blknr-nearest_block[0][0])
-			# print('nearest_time[0][0]',nearest_time[0][0])
-			# print('nearest_time[0][0]','nearest_block',nearest_time[0][0],nearest_block)
-			# print(app_fun.timestamp_to_datetime(nearest_time[0][0]),datetime.timedelta( minutes=blknr-nearest_block[0][0] ))
+			
 			dt=app_fun.timestamp_to_datetime(nearest_time[0][0]) + datetime.timedelta( minutes=blknr-nearest_block[0][0] )
-			# print('blocks_to_datetime dt',dt)
+			
 			return app_fun.date2str(dt)
 			
 	return app_fun.now_to_str(False)
@@ -812,12 +906,10 @@ def blocks_to_datetime(blknr):
 def set_que_waiting( command,jsonstr='', wait_seconds=0):
 	initdb= DB('init.db')
 	tt= initdb.select('init_settings',columns=["data_files"]) 
-	# print(tt)
-	# print(tt[0])
+	
 	dbname=json.loads(tt[0][0])
 	dbname=dbname['db']+'.db'
-	# print(dbname)
- 
+	
 	idb=DB(dbname)
 	tmparr=[0]
 	latestid1=idb.select_max_val( 'queue_done','id' )
