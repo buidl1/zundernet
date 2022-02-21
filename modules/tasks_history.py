@@ -11,10 +11,13 @@ import modules.gui as gui
 
 class TasksHistory:
 
-	def update_filter_cmd(self):
-		idb=localdb.DB(self.db)
-		task_done=idb.select('queue_done', ['command'],distinct=True)
-		tmpcommands=[cc[0] for cc in task_done]
+	def update_filter_cmd(self,from_update_list=[]):
+		tmpcommands=self.distinct_task_commands.copy()
+		if len(self.distinct_task_commands)==0:
+			idb=localdb.DB(self.db)
+			task_done=idb.select('queue_done', ['command'],distinct=True)
+			tmpcommands=[cc[0] for cc in task_done]
+			
 		colnames=['Category','Command','Last','Result']
 		tmpdict={}
 		tmpdict['rowk']='filters'
@@ -27,6 +30,8 @@ class TasksHistory:
 		grid_filter.append(tmpdict )
 		
 		self.filter_table.updateTable(grid_filter,colnames)    #update_frame(grid_filter,head_offset=-1)
+		
+		
 		
 	def update_history_frame(self,*eventargs):
 		if not self.update_in_progress:
@@ -46,6 +51,7 @@ class TasksHistory:
 	def __init__(self,db ):
 		self.db=db
 		self.grid_settings=[]
+		self.distinct_task_commands=[]
 		self.update_in_progress=False
 		self.parent_frame = gui.ContainerWidget(None,layout=gui.QVBoxLayout() )
 
@@ -58,7 +64,7 @@ class TasksHistory:
 		frame0.insertWidget(self.filter_table)
 		self.update_filter_cmd()
 		
-		frame1=gui.FramedWidgets(None,'Tasks list')    #ttk.LabelFrame(parent_frame,text='Tasks list') 
+		frame1=gui.FramedWidgets(None,'Tasks list')    
 		self.parent_frame.insertWidget(frame1)
 		# frame1.grid(row=1,column=0, sticky="nsew")
 			
@@ -68,7 +74,7 @@ class TasksHistory:
 			
 		self.update_list()
 		
-		self.main_table=gui.Table(None,params={'dim':[len(self.grid_settings),len(self.colnames)],'updatable':1} )  #flexitable.FlexiTable(frame0,grid_filter) 
+		self.main_table=gui.Table(None,params={'dim':[len(self.grid_settings),len(self.colnames)],'updatable':1,'default_sort_col':'Created at'} )  #flexitable.FlexiTable(frame0,grid_filter) 
 		frame1.insertWidget(self.main_table)    #flexitable.FlexiTable(frame1,self.grid_settings, min_canvas_width=1200,force_scroll=True)
 		self.main_table.updateTable(self.grid_settings,self.colnames)
 		
@@ -100,8 +106,13 @@ class TasksHistory:
 		cmd=self.filter_table.cellWidget(0,1).currentText() #.get_value('command')
 		
 		self.grid_settings=[]
+		
+		self.distinct_task_commands=[]
 	
 		for rr in task_done:
+		
+			if rr[1] not in self.distinct_task_commands: self.distinct_task_commands.append(rr[1])
+				
 			tmpdict={}
 			sstyle={'bgc':'green','fgc':'#fff'}
 			short_result='Success/True'
@@ -137,4 +148,4 @@ class TasksHistory:
 							
 			self.grid_settings.append(tmpdict)
 			
-		
+		# return distinct_task_commands
