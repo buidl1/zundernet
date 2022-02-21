@@ -17,7 +17,11 @@ class Notifications:
 		if not self.update_in_progress:
 			self.update_in_progress=True
 			self.update_list()
-			self.main_table.updateTable(self.grid_notif)
+			reset_values=False
+			if len(eventargs)>0:
+				reset_values=eventargs[1] # [0] is widget combobox 
+				# print('update_notif_frame reset_values',reset_values)
+			self.main_table.updateTable(self.grid_notif,reset_values= reset_values ) #,reset_values=
 			self.set_actions()
 			self.update_in_progress=False
 			
@@ -28,7 +32,12 @@ class Notifications:
 		table={}
 		table['notifications']=[{'closed':'True'}]
 		idb.update(table,['closed'],{} )
-		self.update_notif_frame()
+		time.sleep(0.3)
+		reset_values=False
+		if len(eventargs)>0:
+			reset_values=eventargs[-1] # if noself just last arg 
+			# print('close_all_notif reset_values',reset_values)
+		self.update_notif_frame(reset_values)
 		
 
 	def __init__(self, addr_book  ):
@@ -40,7 +49,7 @@ class Notifications:
 		self.parent_frame = gui.ContainerWidget(None,layout=gui.QVBoxLayout() )
 		
 		frame0=gui.FramedWidgets(None,'Filter')   
-		frame0.setMaximumHeight(128)
+		frame0.setMaximumHeight(108)
 		self.parent_frame.insertWidget(frame0)
 		
 		tmpdict={}
@@ -56,8 +65,8 @@ class Notifications:
 		self.filter_table.updateTable(grid_filter)
 		frame0.insertWidget(self.filter_table)
 		
-		self.filter_table.cellWidget(0,1).set_fun(self.update_notif_frame) #.bind_combox_cmd('category',[], self.update_notif_frame )	
-		self.filter_table.cellWidget(0,2).set_fun(True,self.close_all_notif) #.set_cmd('clearall',[], self.close_all_notif )	
+		self.filter_table.cellWidget(0,1).set_fun(self.update_notif_frame,True) #.bind_combox_cmd('category',[], self.update_notif_frame )	
+		self.filter_table.cellWidget(0,2).set_fun(True,self.close_all_notif,True) #.set_cmd('clearall',[], self.close_all_notif )	
 		
 		self.grid_notif=[]
 		
@@ -67,7 +76,7 @@ class Notifications:
 		self.colnames=['Date time','Event','Operation details','Status','','' ]
 		self.update_list()
 		
-		self.main_table=gui.Table(None,params={'dim':[len(self.grid_notif),len(self.colnames)],'updatable':1} )  #flexitable.FlexiTable(frame1,self.grid_notif, min_canvas_width=1200,force_scroll=True)
+		self.main_table=gui.Table(None,params={'dim':[len(self.grid_notif),len(self.colnames)],'updatable':1,'default_sort_col':'Date time'} )  #flexitable.FlexiTable(frame1,self.grid_notif, min_canvas_width=1200,force_scroll=True)
 		frame1.insertWidget(self.main_table)     
 		# print(self.grid_notif)
 		self.main_table.updateTable(self.grid_notif,self.colnames)
@@ -196,7 +205,7 @@ class Notifications:
 			wwhere ={'closed':['=',"'True'"]}
 		
 		task_done=idb.select('notifications', ['uid','datetime' ,'opname' ,'details' ,'status' ,'closed','orig_json'],where=wwhere,orderby=[{'uid':'desc'}])
-		
+		# print('task done',task_done)
 		for ij,rr in enumerate(task_done):
 		
 			tmpdict={}
@@ -206,12 +215,10 @@ class Notifications:
 			okclosebutton={'T':'Button', 'L':'Ok, close', 'uid':'ok'+str(rr[0]) , 'tooltip':rr[0]}
 			
 			if rr[5]=='True':
-				okclosebutton={} #{'T':'LabelE'}
+				okclosebutton={} #{'T':'LabelV', 'L': 'Closed'} #{'T':'LabelE'}
 			
 			review={} #{'T':'LabelE'}
 			tmpdetails=rr[6]
-			
-			# print('orig_json',rr[3])
 			
 			if rr[2] =='payment request' and rr[5]!='True':
 				tmp=rr[6].split('PaymentRequest;')
