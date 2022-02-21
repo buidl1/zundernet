@@ -9,18 +9,13 @@ import modules.app_fun as app_fun
 import modules.gui as gui
 import modules.localdb as localdb
 import modules.aes as aes
-import modules.gui as gui
+# import modules.gui as gui
 import modules.deamon as deamon
 import modules.usb as usb
 import getpass
 
-# props:
-# self.cc=aes.Crypto()
-# self.autostart
- 
-# self.first_run
-# self.app_password
-# self.dmn
+import traceback
+
 class InitApp:
 
 	def correctWin(self,p1,p2):
@@ -109,14 +104,18 @@ class InitApp:
 		
 	# need to generate name here for config and save it 	
 	def __init__(self):
+		self.app_db_version=3 # change when changing db tables to update 
 		self.wallet ='tmpwallet.dat'
 		# self.data_files['wallet']
 		self.data_files={'wallet':'wallet','db':'local_storage'} # .dat/.encr or .db/.encr
 		self.was_derypted_warning=False
+		self.did_init_backup=False # needed cause self.was_derypted_warning also used for encr_db function
+		
 		self.close_thread=False
 		self.chain='pirate'
+		self.creating_new_wallet=False
 
-		app_fun.check_already_running(os.path.basename(__file__)) # check app not runnin - else escape !
+		app_fun.check_already_running(os.path.basename(__file__)) # check app not runnin - else exit !
 
 		localdb.init_init() # init local DB initial settings - if not exist 
 		self.cc=aes.Crypto()
@@ -151,9 +150,10 @@ class InitApp:
 			# idb.upsert(dict_set,["lock"],{})
 
 		# self.autostart=tt[0][2]
-		self.autostart='no'	
-		if is_deamon_working[0]:
-			self.autostart='yes'	
+		# self.autostart='no'	
+		# if is_deamon_working[0]:
+		self.is_started=is_deamon_working[0]
+			# self.autostart='yes'	
 			
 		dict_set={}
 		dict_set['lock_db_threads']=[{'lock':'no'}]
@@ -166,7 +166,7 @@ class InitApp:
 		if os.path.exists(os.path.join(ppath , self.data_files['db']+'.encr'))==False and os.path.exists(os.path.join(ppath ,self.data_files['db']+'.db'))==False:
 			newdbfname= self.data_files['db']+'.db' 
 			gui.messagebox_showinfo("Creating new database","Creating new database file:\n"+newdbfname)
-			localdb.init_tables(newdbfname)
+			localdb.init_tables(newdbfname,self.app_db_version)
 			self.first_run=True
 
 		self.app_password=None
@@ -181,14 +181,26 @@ class InitApp:
 				gui.messagebox_showinfo("Canceled - exiting", "Exiting app...")
 				exit()
 			
-			if self.isvalid(tmpv[0]): # checks if decryption is correct 
+			print('checking pass is valid self.first_run', self.first_run)
+			if self.first_run:
+				self.updateHashedPass(tmpv[0])
 				self.app_password=tmpv[0]
+
+			elif self.isvalid(tmpv[0]):
+				self.app_password=tmpv[0]
+			# if self.isvalid(tmpv[0]) and not self.first_run : # checks if decryption is correct 
+				# self.app_password=tmpv[0]
+				
 			else:
 				gui.messagebox_showinfo("Wrong password", "Password was not correct - try again.")
 			
 		###################### INIT DB AND DEAMON	
+		t0=time.time()
 		if not self.first_run:
-			localdb.init_tables(self.data_files['db']+'.db')
+			print('if not first run update localdb.init_tables',self.first_run)
+			localdb.init_tables(self.data_files['db']+'.db',self.app_db_version)
+			
+		self.check_if_new_wallet_backup_needed()
 		
 		self.wallet = self.data_files['wallet']+'.dat'
 		self.db = self.data_files['db']+'.db'
@@ -196,14 +208,119 @@ class InitApp:
 		deamon_cfg=self.deamon_setup(tt)
 		# print(155,deamon_cfg)
 		self.dmn=deamon.DeamonInit(deamon_cfg,self.db)
+		# print(' DeamonInit dt',time.time()-t0)
+		# t0=time.time()
 		self.dmn.init_clear_queue()	
-		# self.data_files={ 'wallet':tmp['wallet'],'db':tmp['local_storage'] }
+		 
+		
+	
+	def get_last_wallet_backup_data(self ):
+		# required before backup	
+		# idb=localdb.DB('init.db')
+		if not os.path.exists(self.test_ppath):
+			return [], ''
+		
+		cc=aes.Crypto()
+		cur_dat_hash= cc.hash2utf8_1b( cc.read_bin_file( self.test_ppath),1)
+		
+		db=localdb.DB(self.data_files['db']+'.db')
+		# print('from db',self.data_files['db']+'.db')
+		last_wallet_hash=db.select('jsons', ['json_content'],{'json_name':['=',"'backup_wallet_hash'"]})
+		# print('last_wallet_hash',last_wallet_hash)
+		# print('all',db.select('jsons', [] )) #'json_content'
+		if len(last_wallet_hash)==0:
+			return [], cur_dat_hash
+			
+		# print(last_wallet_hash)
+		last_wallet_hash_arr=json.loads(last_wallet_hash[0][0])		
+		
+		return last_wallet_hash_arr, cur_dat_hash
+	
+	
+	def make_wallet_backup(self,init_msg_info,msg2,parent,data_src,new_wallet_hash_arr ): 
+	
+		if not hasattr(self,'data_files'):
+			print('no attribute data_files exit ')
+			exit()
+		gui.messagebox_showinfo('Wallet backup required',init_msg_info)
+									
+		if not app_fun.wallet_copy_progress( src_dir=data_src, add_msg=['Please insert USB/pendrive',msg2], wallet_name=self.data_files['wallet'], gui=gui, parent_widget=parent ):
+			exit()
 		
 		
+		# dat_file=src   
+		# new_wallet_hash_arr= last_wallet_hash_arr.append(cur_dat_hash)
+	
+		# print('Inserting backup_wallet_hash at decrypted wallet found!',new_wallet_hash_arr[-1]) 
+		table={}
+		table['jsons']=[{'json_name':"backup_wallet_hash", 'json_content':json.dumps(new_wallet_hash_arr), 'last_update_date_time': app_fun.now_to_str(False)}]
+		db=localdb.DB(self.data_files['db']+'.db')
+		db.upsert(table,['json_name','json_content','last_update_date_time'],{'json_name':['=',"'backup_wallet_hash'"]})
+	
 		
+	# run in 2 cases:
+	# if wallet was decrypted at start
+	# if creating new wallet file and synced signal emited!
+	# for new dat file creat wallt hash!
+	@gui.Slot()	
+	@gui.Slot(bool)	
+	def check_if_new_wallet_backup_needed(self,synced=False ):
+		if self.did_init_backup:
+			print('init backup already done')
+			return
+	
+		# print('check_if_new_wallet_backup_needed',self.creating_new_wallet,synced,self.was_derypted_warning)
+		if not hasattr(self,'test_ppath'):
+			print('\tno test path')
+			return
+			
+		if not (self.creating_new_wallet and synced) and not self.was_derypted_warning:
+			print('neither decrypted nor new wallet?')
+			return
+	
+		# print('test_ppath',self.test_ppath)
+		# print('init checks 269 self.creating_new_wallet  or self.was_derypted_warning',self.creating_new_wallet, self.was_derypted_warning)
+		# if new wallet in option selected
+		# or for some reason wallet dat was decrypted on entry:
 		
+		last_wallet_hash_arr, cur_dat_hash = self.get_last_wallet_backup_data() #get_last_wallet_backup_data(self,test_ppath)
+		# print(' last_wallet_hash_arr, cur_dat_hash',last_wallet_hash_arr, cur_dat_hash)
 		
+		idb=localdb.DB('init.db') 
+		data_src00=idb.select('init_settings', ['datadir'])
+		data_src=data_src00[0][0]
 		
+		tmpmsg1='New wallet created - backup required'
+		tmpmsg2='Please insert USB pendrive. New wallet needs to be backed up to external memory.'
+			
+		if synced and self.creating_new_wallet :
+			print('self.creating_new_wallet - backaup!')
+			# last_wallet_hash_arr.append(cur_dat_hash)
+			# self.make_wallet_backup(tmpmsg1 ,tmpmsg2,None,data_src,last_wallet_hash_arr )	
+
+		elif self.was_derypted_warning:
+			# print('self.was_derypted_warning')
+			 
+			 
+			if cur_dat_hash in last_wallet_hash_arr: 
+				print('Decrypted wallet hash consistent with history - no backup needed') # if cur_dat_hash in last_wallet_hash_arr: #==last_wallet_hash[0][0]:
+				return
+			else: 
+				tmpmsg1='Decrypted wallet exist - backup required'
+				tmpmsg2='Please insert USB pendrive. Unencrypted wallet file detected - needs to be backed up to external memory.'
+			 
+			 
+		if os.path.exists(self.test_ppath) and cur_dat_hash!='':
+			# print('making new backup')
+			last_wallet_hash_arr.append(cur_dat_hash)
+			self.make_wallet_backup(tmpmsg1 ,tmpmsg2,None,data_src,last_wallet_hash_arr )		
+			self.did_init_backup=True			
+			
+			
+			
+			
+			
+			
 	
 	def update_paths(self,deamon,data, parent,new_wallet):
 	
@@ -230,74 +347,15 @@ class InitApp:
 			# komodo_cli_ok=True
 			
 		blockchain_data_ok=False
-		test_ppath=os.path.join(data,self.data_files['wallet']+'.dat')
-		decr_wal_exist=os.path.exists( test_ppath  ) #app_fun.fileExist(data,cond={'start':self.data_files['wallet'],'end':'.dat' })
+		self.test_ppath=os.path.join(data,self.data_files['wallet']+'.dat')
+		decr_wal_exist=os.path.exists( self.test_ppath  ) #app_fun.fileExist(data,cond={'start':self.data_files['wallet'],'end':'.dat' })
 		self.was_derypted_warning=(decr_wal_exist==True)
 		
 		# print('checked ', test_ppath ,decr_wal_exist)
 		# print( decr_wal_exist,app_fun.fileExist(data,cond={'start':self.data_files['wallet'],'end':'.encr' }))
 		if decr_wal_exist or app_fun.fileExist(data,cond={'start':self.data_files['wallet'],'end':'.encr' }):
 			blockchain_data_ok=True
-		
-		# decr_wal_exist=os.path.exists( os.path.join(data,self.data_files['wallet']+'.dat'))
-		# if decr_wal_exist or os.path.exists( os.path.join(data,self.data_files['wallet']+'.encr') ):
-			# blockchain_data_ok=True
-			
-		# print('blockchain_data_ok',blockchain_data_ok,new_wallet,str_data_files)
-			
-			
-		if decr_wal_exist: # backup!
-			
-			gui.messagebox_showinfo('Wallet backup required','Decrypted wallet exist - backup required')
-			
-			uu=usb.USB()
-			
-			while len(uu.locate_usb())==0:
-				gui.messagebox_showinfo('Please insert USB pendrive','Please insert USB pendrive. Unencrypted wallet file detected - needs to be backed up to external memory.')
-				
-			path=uu.locate_usb()
-			path=path[0]
-			path2=''
-			while path2=='':
-				tmpinitdir=os.getcwd()
-				
-				if sys.platform=='win32':
-					if os.path.exists(path):
-						tmpinitdir=path
-						
-				elif sys.platform!='win32':
-					curusr=getpass.getuser()
-					if os.path.exists('/media/'+curusr+'/'):
-						tmpinitdir='/media/'+curusr+'/'
-				
-				# path=filedialog.askdirectory(initialdir=tmpinitdir, title="Select directory on your USB drive") # was 
-				path2=gui.set_file( None,None,True,parent,init_path=tmpinitdir,title="Select directory on your USB drive" )
-				# print(path2)
-				if path2!=None:
-					if uu.verify_path_is_usb(path2):
-						# gui.messagebox_showinfo('Starting backup','Please wait untill backup is finished and relevant message is displayed.' )
-						dest=os.path.join(path2,self.data_files['wallet']+ '_'+app_fun.now_to_str()+'.dat')  
-						src= os.path.join(data,self.data_files['wallet']+'.dat')
-						
-						path2=gui.copy_progress(path2, 'Wallet backup to '+path2+'\n',src,dest)
-						
-						# try:
-							# shutil.copy(src, dest)
-							# path2=''
-							# gui.messagebox_showinfo('Backup done','Your wallet is safe now at \n'+dest )
-							# break
-						# except:
-							# exit()
-					else:
-						gui.messagebox_showinfo('Wrong path','Selected path is not USB drive, please try again.' )
-						path2=''
-				else:
-					# path2=''
-					exit()
-		
-		
-		
-		# print(254,deamon,data,self.data_files)
+		 
 		
 		if komodod_ok and komodo_cli_ok  and (blockchain_data_ok or new_wallet):  
 
@@ -364,14 +422,7 @@ class InitApp:
 				preset[1]=templatepath
 			elif os.path.exists('/home/'+curusr+'/.komodo/PIRATE'):
 				preset[1]='/home/'+curusr+'/.komodo/PIRATE'
-				
-		# combobox actions:
-		# new - generate name
-		# select file - open dialog and select -> generate db name relevant
-		# other - select value 
-		# END: update 
-			
-			
+		
 			
 		automate_rowids=[ [{'T':'LabelV', 'L':'Set proper paths, otherwise the deamon may freeze and you may need to kill the process manually.', 'span':3},{  }, {  } ] ,
 						[{'T':'LabelC', 'L':'Select deamon and cli path \n(pirated and pirate-cli inside)', 'width':32}, {'T':'Button','L':'Pirated path:','uid':'p1', 'width':15}, {'T':'LabelV', 'L':preset[0],'uid':'deamon', 'width':60} ],
@@ -415,8 +466,18 @@ class InitApp:
 		
 		def getv(tmptw):#self.data_files={'wallet':'wallet','db':'local_storage'}
 		
+			data_path=tmptw.item(2,2).text().strip()
+			deamon_path=tmptw.item(1,2).text().strip()
 			cbtntxt=tmptw.cellWidget(3,1).currentText()
-			data_path=tmptw.item(2,2).text()
+			
+			if deamon_path=='' or data_path=='':
+				print('empty path')
+				return
+			
+			if not os.path.exists(deamon_path) or not os.path.exists(data_path):
+				print('bad path')
+				return
+		
 			# print(data_path)
 			
 			tmp_wal=''
@@ -429,9 +490,7 @@ class InitApp:
 					tmp_wal='wallet_'+tmprand+'.dat'
 					tmp_db='local_storage_'+tmprand+'.db'
 					if not os.path.exists(os.path.join(data_path,tmp_wal)) and not os.path.exists( os.path.join(os.getcwd(),tmp_db) ):
-						# print(os.path.join(data_path,tmp_wal), os.path.join(data_path,tmp_db) )
-						# with open(os.path.join(data_path,tmp_wal),'wb'):
-							# print('created new wallet file: ',os.path.join(data_path,tmp_wal))
+						
 						break
 				self.data_files['db']='local_storage_'+tmprand
 				self.data_files['wallet']='wallet_'+tmprand
@@ -455,45 +514,99 @@ class InitApp:
 			# print(self.data_files)
 				
 			self.paths_confirmed=True
-			self.update_paths(tmptw.item(1,2).text(),  tmptw.item(2,2).text(),   tmptw,newwallet)
+			self.creating_new_wallet=newwallet # need to create backup after new wallet is synced
+			self.update_paths(deamon_path,  data_path,   tmptw,newwallet)
 			tmptw.parent().close()
 
 		tw.cellWidget(4,0).set_fun(True, getv,tw)
-		# tw.cellWidget(4,0).setFocus()
-		# tw.cellWidget(4,0).setDefault(True)
 		
 		gui.CustomDialog(None,tw,'Enter zUnderNet', defaultij=[4,0])	
 		
 		
 	
 
-	
+	def updateHashedPass(self,pas):
+		db=localdb.DB(self.data_files['db']+'.db')
+		table={}  
+		salttmp=self.cc.init_hash_seed() 
+		passhashtmp=self.cc.hash(pas+salttmp)
+		# print('hashed at',passhashtmp)
+		disp_dict={'salt':salttmp,'passhash':passhashtmp} # 
+		table['jsons']=[{'json_name':"password_hash", 'json_content':json.dumps(disp_dict), 'last_update_date_time': app_fun.now_to_str(False)}]
+		db.upsert(table,['json_name','json_content','last_update_date_time'],{'json_name':['=',"'password_hash'"]})
+
 	# self.data_files['db']
+	# checking password is valid based on :
+	# 1. possibility to decrypt db
+	# 2. hashed password in jsons table 
 	def isvalid(self,pas):
 
 		ppath=os.getcwd()
+		print('isvalid pass main path getcwd',ppath)
+		
+		
 		
 		if os.path.exists(os.path.join(ppath , self.data_files['db']+'.encr')):
-			# print(256,pas)
+			print('encr db exist ...',self.data_files['db']+'.encr')
 			# print('decr path',os.path.join(ppath , 'local_storage.encr'), os.path.join(ppath,'local_storage.db'))
 			if self.cc.aes_decrypt_file( os.path.join(ppath , self.data_files['db']+'.encr'), os.path.join(ppath,self.data_files['db']+'.db') , pas):
 				try:
 					db=localdb.DB(self.data_files['db']+'.db')
 					at=db.all_tables()
-					# print(at)
+					# print('decrypted\n',at)
+					
+					# if decrypted correctly save pass hasing with different salt
 					if len(at)>0:
 						app_fun.secure_delete(os.path.join(ppath , self.data_files['db']+'.encr'))
-
+						 
 						return True
+				except AttributeError:
+					traceback.print_exc()
+					print('passing - strange expcetion')
+					return True
 				except:
+					traceback.print_exc()
 					print('wrong password 489?')
+					# print('self.data_files[ db ]+ .db ',self.data_files['db']+'.db')
 					return False
 			else:
 				return False
 			
 				
 		elif os.path.exists(os.path.join(ppath , self.data_files['db']+'.db')):
-			return True
+			# print('Provided pass: ',pas,' Write it down if it was not correct.')
+			print('decrypted db exist',self.data_files['db']+'.db')
+			# if first run: password just created, no hashes, should backup wallet dat after wallet created and after sync!
+			# if consecutive run: check hash!
+			
+			db=localdb.DB(self.data_files['db']+'.db')
+			last_hashed_pass=db.select('jsons', ['json_name','json_content','last_update_date_time'],{'json_name':['=',"'password_hash'"]})
+			# print('last_hashed_pass',last_hashed_pass)
+			if len(last_hashed_pass)>0:
+				try:
+					last_hashed_pass=last_hashed_pass[0][1]
+					# print('last_hashed_pass',last_hashed_pass)
+					pass_dict=json.loads(last_hashed_pass)
+					# print('testing',pas,pass_dict['salt'])
+					newpasshashtmp=self.cc.hash(pas+pass_dict['salt'])
+					# print('testing',newpasshashtmp,pass_dict['passhash'])
+					if newpasshashtmp==pass_dict['passhash']:
+						# print('hashed pass ok ')
+						return True
+					else:
+					
+						print('Password hash checked - not matching previous password hash. Try again. Pass hash must be matched for consistency.')
+						return False
+				except:
+					traceback.print_exc()
+					return False
+			else:
+				print('	# save hash since not hash found - could not verify ? new db file ? ')
+				self.updateHashedPass(pas)
+				return True
+			# instead verify is password matched hashed:
+			
+			return False #True
 			
 		return False
 
@@ -503,6 +616,10 @@ class InitApp:
 		
 	def encr_db(self,parent):
 		
+		if self.was_derypted_warning and self.dmn.deamon_started_ok==False: #encrypt if started with unencrypted
+			print('exceptional encryption')
+			self.dmn.encrypt_wallet_and_data()
+			
 		dict_set={}
 		dict_set['lock_db_threads']=[{'lock':'yes'}]
 		idb=localdb.DB('init.db')
@@ -545,12 +662,11 @@ class InitApp:
 			
 			time.sleep(1)
 			
-		if self.was_derypted_warning and self.dmn.deamon_started_ok==False: #encrypt if started with unencrypted
-			print('exceptional encryption')
-			self.dmn.encrypt_wallet_and_data()
 			
 			
-
+	# to speed up init loading best to save all loaded views grids to a single json into db and then read
+	# to make so need to pass all views after wallet is encrypted to this place and log to DB
+	
 	def on_closing(self,parent):
 		# self.close_thread=True
 		db=localdb.DB(self.data_files['db']+'.db' )
@@ -566,5 +682,7 @@ class InitApp:
 			else:
 				return False
 		else:
+			# save last views for init load 
+		
 			self.encr_db(parent)	
 			return True
