@@ -1,7 +1,8 @@
 
 import os
-import ssd
+import modules.pyssd as ssd
 import sys, multiprocessing, time
+import traceback
 
 import datetime
 
@@ -12,6 +13,8 @@ import threading
 import modules.aes as aes
 
 import modules.usb as usb
+import getpass
+# import pythoncom #win only
 
 def listProd(ll):
 	iv=ll[0]
@@ -199,7 +202,16 @@ def secure_delete(path, passes=5): #app_fun.secure_delete(self.tmp_err)
 		pythoncom.CoInitialize()
 		# print('pythoncom.CoInitialize()')
 	
-	if not ssd.is_ssd(path): #overwite make sens only for hdd not ssd
+	is_not_ssd=True
+	try:
+		is_not_ssd=not ssd.is_ssd(path)
+	except:
+		# print('\n\nis ssd exception')
+		traceback.print_exc()
+		is_not_ssd=True 
+		passes=1 # might be still ssd so makes no sense to overwrite many times to use the disk too much 
+	
+	if is_not_ssd: #overwite make sens only for hdd not ssd
 	
 		with open(path, "ba+") as delfile:
 			length = delfile.tell()
@@ -243,7 +255,6 @@ class CompactCharInt89:  # excluded |`;\
 		return retv
 		
 
-		
 		
 	
 class TmpFilesOE:
@@ -382,3 +393,65 @@ def proces_return_oe(oo,ee):
 		
 	return oo
 	
+
+def save_file(ppath,tt):
+	fo=open(ppath,'w')
+	fo.write(tt)
+	fo.close()
+	
+# add_msg=['Please insert USB pendrive','Please insert USB pendrive. Unencrypted wallet file detected - needs to be backed up to external memory.']
+# add_msg=['Please insert USB/pendrive','To create new address wallet backup to pendrive is required. ']			
+def wallet_copy_progress( src_dir, add_msg, wallet_name, gui, parent_widget=None ):
+
+	src_path=os.path.join(src_dir,wallet_name+'.dat')
+
+	# test224=aes.Crypto(224,2)
+	# cur_dat_hash= test224.hash2utf8_1b( test224.read_bin_file( src_path),1)
+	
+	uu=usb.USB()
+	while len(uu.locate_usb())==0:
+		gui.showinfo(add_msg[0],add_msg[1])
+		# gui.messagebox_showinfo()
+
+		
+	
+	pathu=uu.locate_usb()
+	pathu=pathu[0]
+	tmpinitdir=os.getcwd()
+		
+	if sys.platform=='win32':
+		if os.path.exists(pathu):
+			tmpinitdir=pathu
+			
+	elif sys.platform!='win32':
+		curusr=getpass.getuser()
+		if os.path.exists('/media/'+curusr+'/'):
+			tmpinitdir='/media/'+curusr+'/'
+	
+	path=''
+	while path==None or path=='':
+	# if True:
+		# path=gui.get_file_dialog('Select directory on your pendrive' ,init_path=tmpinitdir, name_filter='dir') #filedialog.askdirectory(initialdir=os.getcwd(), title="")
+		path=gui.set_file( None,None,True,parent_widget,init_path=tmpinitdir,title="Select directory on your USB drive" )	
+		# widget,validation_fun=None,dir=False,parent=None,init_path=os.getcwd(),title="Select relevant file",on_change_fun=None
+		
+		if path!=None:
+			if uu.verify_path_is_usb(path):
+			
+				# dest=os.path.join(path ,wallet_name+ '_'+cur_dat_hash+'.dat') 
+				dest=os.path.join(path ,wallet_name+ '_'+ now_to_str()+'.dat')
+				
+				 
+				path=gui.copy_progress(path,'Wallet backup to '+path+'\n',src_path,dest)
+				
+			else:
+				gui.showinfo('Wrong path','Selected path is not USB drive, please try again' )
+				path=''
+				
+		else:
+			print('path is none, unknown error')
+			gui.showinfo('unknown error','FAILED TO BACKUP WALLET!\nPath is none.' )
+			return False
+			
+			
+	return True
