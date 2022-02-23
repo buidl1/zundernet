@@ -1,10 +1,3 @@
-# todo current:
-# clean comments and prints
-# create comipled versions
-
-
-# bug?:
-# started too soon can freeze - deamon not init ?
 
 # TODO:
 # block quit when wallet being encrypted after blockchain stop!
