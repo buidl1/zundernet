@@ -162,7 +162,9 @@ class DeamonInit(gui.QObject):
 					self.update_addr_book.emit()
 					count_task_done+=1 
 					self.sending_signal.emit(['task_done','cmd_queue'])
-					# print('225 done' )	
+					# print('# run wallet api refresh 	')
+					self.update_wallet()
+					# print('wallet refreshed ')
 				
 			elif rr[3]=='import_priv_keys': #json.dumps({'addr':tmpaddr,'viewkey':tmpvk})
 			
@@ -215,13 +217,14 @@ class DeamonInit(gui.QObject):
 				addr_count= addr_opt['addr_count'] 
 				addr_cat=addr_opt['addr_cat']
 				addr_cat_counter=addr_opt['addr_cat_counter'] # yes / no
+				new_seed=addr_opt['new_seed']
 			
 				# 2 create results / wallet api
 				new_addr_list=[]
 				date_str=app_fun.now_to_str(False)
 				for nal in range(addr_count):
 					# print(nal,addr_count)
-					tmpresult=self.the_wallet.new_zaddr()
+					tmpresult=self.the_wallet.new_zaddr(new_seed)
 					# print(tmpresult)
 					new_addr_list.append(tmpresult)
 					
@@ -240,7 +243,7 @@ class DeamonInit(gui.QObject):
 					table['queue_waiting']=[{'status':'processing '+str(nal+1)+'/'+str(addr_count)}]
 					idb.update( table,['status'],{'id':[ '=',rr[5] ]})
 					self.sending_signal.emit(['cmd_queue'])
-					time.sleep(0.01)
+					# time.sleep(0.01)
 					
 				# addr_cat_test=idb.select('address_category',['address','category'] )	
 				# print('test\n\n',addr_cat_test)
