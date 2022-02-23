@@ -195,7 +195,7 @@ class AddressBook:
 				# fsize=24
 				tmpnott={'T':'QLabel', 'L':'-',   'tooltip':'No view key', 'style':' text-align:center;padding-left:10px;margin:3px;' } #u"\u2612" , 'fontsize':fsize
 				
-				# print(190,rr[3])
+				# print(190,rr )
 				if rr[3].strip()!='':
 					tmphasvk=True
 					
