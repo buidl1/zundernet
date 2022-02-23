@@ -1037,7 +1037,7 @@ class WalDispSet(gui.QObject):
 		uu=usb.USB()
 		
 		while len(uu.locate_usb())==0:
-			if not gui.msg_yes_no('Please insert USB pendrive','To create new address wallet backup to pendrive is required. Click [yes] when you are read or [no] co cancel.',btn):
+			if not gui.msg_yes_no('Please insert USB pendrive','To create new address wallet backup to pendrive is required. Click [yes] when you are read or [no] to cancel.',btn):
 				return
 		
 		############### new addr setup
@@ -1046,34 +1046,36 @@ class WalDispSet(gui.QObject):
 		automate_rowids=[ [{'T':'LabelV', 'L':'Number of addresses to create: ',  'style':{'bgc':'#eee','fgc':'red'} },{'T':'LineEdit', 'V':'1','valid':{'ttype':int, 'rrange':[1,9999]}} ] ,
 						[{'T':'LabelV', 'L':'Category for new addresses: ', 'style':{'bgc':'#eee','fgc':'red'} },{'T':'LineEdit', 'V':''} ],
 						[{'T':'LabelV', 'L':'Set category counter' },{'T':'Combox','V':['No','Yes'] } ] ,
+						[{'T':'LabelV', 'L':'Address from new seed' },{'T':'Combox','V':['No (better for wallet performance)','Yes (better for privacy when sharing a viewing key)'] } ] ,
 						[{'T':'Button', 'L':'Create', 'span':2}   ] 
 						]
 		
-		tw=gui.Table( params={'dim':[4,2],"show_grid":False, 'colSizeMod':[ 'toContent','toContent'], 'rowSizeMod':['toContent','toContent' ]})		
+		tw=gui.Table( params={'dim':[5,2],"show_grid":False, 'colSizeMod':[ 'toContent','toContent'], 'rowSizeMod':['toContent','toContent' ]})		
 		tw.updateTable(automate_rowids)
 		
 		
-		def create_addr(btn_c,addr_num,addr_cat,addr_cat_counter):
+		def create_addr(btn_c,addr_num,addr_cat,addr_cat_counter, new_seed):
 			# print ('create_addr wds ')
-			addr_num,addr_cat,addr_cat_counter=addr_num.text().strip(),addr_cat.text().strip(),addr_cat_counter.currentText()
+			addr_num, addr_cat, addr_cat_counter, new_seed =addr_num.text().strip(), addr_cat.text().strip(), addr_cat_counter.currentText(), new_seed.currentText()
 		
 			idb=localdb.DB(self.db)
 			
-			if addr_cat_counter=='No':
-				addr_cat_counter=False
-			else:
-				addr_cat_counter=True
+			if addr_cat_counter=='No': 	addr_cat_counter=False
+			else: addr_cat_counter=True
+			
+			if 'No' in new_seed: new_seed=False
+			else: new_seed=True 
 				
 			table={}
-			table['queue_waiting']=[localdb.set_que_waiting('new_addr', json.dumps({'addr_count':int(addr_num),'addr_cat':addr_cat,'addr_cat_counter':addr_cat_counter}) ) ]
+			table['queue_waiting']=[localdb.set_que_waiting('new_addr', json.dumps({'addr_count':int(addr_num),'addr_cat':addr_cat,'addr_cat_counter':addr_cat_counter, 'new_seed':new_seed}) ) ]
  
 			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 
 			btn_c.parent().parent().parent().close() #.destroy()
 			
-		tw.cellWidget(3,0).set_fun(False, create_addr, tw.cellWidget(0,1), tw.cellWidget(1,1), tw.cellWidget(2,1)) 
+		tw.cellWidget(4,0).set_fun(False, create_addr, tw.cellWidget(0,1), tw.cellWidget(1,1), tw.cellWidget(2,1), tw.cellWidget(3,1)) 
 		
-		gui.CustomDialog(btn,tw, title='New address setup', defaultij=[3,0])
+		gui.CustomDialog(btn,tw, title='New address setup', defaultij=[4,0])
 		
 		
 		
