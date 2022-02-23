@@ -130,6 +130,8 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 			if outindex not in self.historical_txs[aa][txid]:
 				self.historical_txs[aa][txid][outindex]	= { "amount":ti[9]} #,"conf": self.last_block-ti[4],"memo":ti[7]  }
 				
+		# print('init self.historical_txs',self.historical_txs)
+				
 		
 	def refresh_wallet(self): # once a 1-2 minutes?
 		
@@ -322,6 +324,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 		tmp_ord={}
 		
 		for aa in iterat_arr:
+			# print('\n\nanalyzing aa',aa)
 			
 			if True:
 				tt=[] # tt=aa
@@ -349,7 +352,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 				if len(tt)==0:
 					continue
 				
-				if aa not in tmp_ord: tmp_ord[aa]={}
+				# if aa not in tmp_ord: tmp_ord[aa]={}
 				
 				if aa not in self.historical_txs:
 					self.historical_txs[aa]={}
@@ -364,8 +367,8 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 						
 					# if "blockindex" in tx:
 						# max_block_analized=max( tx["blockindex"], self.last_analized_block)
-						
-					if tx["txid"] not in tmp_ord[aa]: tmp_ord[aa][tx["txid"]]=tx["confirmations"]
+					# # if aa not in tmp_ord: tmp_ord[aa]={}	
+					# if tx["txid"] not in tmp_ord[aa]: tmp_ord[aa][tx["txid"]]=tx["confirmations"]
 					
 					
 					if tx["txid"] not in self.historical_txs[aa]:  # if this ever change - may be needed to update some records in case of reorg ?
@@ -419,14 +422,20 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 								
 							# print('orig memmo',tmpmemo)
 							tmpmemo=self.clear_memo(tmpmemo)
+							# print('clear memmo',tmpmemo)
+						
+						# updating tx history
+						# self.historical_txs[aa][tx["txid"]][outindex] = { "amount":tx["amount"]} #,"conf":tx["confirmations"],"memo":tmpmemo  }
+						# print('updated tx history',self.historical_txs[aa][tx["txid"]][outindex])
 						
 						
-						self.historical_txs[aa][tx["txid"]][outindex] = { "amount":tx["amount"]} #,"conf":tx["confirmations"],"memo":tmpmemo  }
+						tmpwhere={'to_str':['=',"'"+aa+"'"] ,'txid':['=',"'"+tx["txid"]+"'"],'Category':['=',"'outindex_"+str(outindex)+"'"] }
+						# print('test\n', idb.select('tx_history', [ ],tmpwhere) )
 						
 						tmpwhere={'to_str':['=',"'"+aa+"'"],'Type':[' like ',"'in%'"],'txid':['=',"'"+tx["txid"]+"'"],'Category':['=',"'outindex_"+str(outindex)+"'"] }
 						
 						checkexist=idb.select('tx_history', ["Type"],tmpwhere) # if not exist yet add for processing 
-						# print('checkexist',checkexist)
+						# print('\ncheckexist',checkexist)
 						if len(checkexist)==0:
 							table={}
 							
@@ -440,10 +449,12 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 							if aa not in table_history_notif:
 								# merged_msg[aa]={}
 								table_history_notif[aa]={}
+								# print('added aa to table_history_notif',aa)
 							
 							if tx["txid"] not in table_history_notif[aa]:
 								# merged_msg[aa][tx["txid"]]={}
 								table_history_notif[aa][tx["txid"]]={}
+								# print('added txid  to table_history_notif',tx["txid"])
 							# print(268)
 							if outindex not in table_history_notif[aa][tx["txid"]]:
 								# merged_msg[aa][tx["txid"]][outindex]={'dt':dt, 'tmpmemo':tmpmemo } #table
@@ -457,6 +468,9 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 									, 'outindex':'_'+str(outindex)
 									}
 								table_history_notif[aa][tx["txid"]][outindex]=q
+								# print('added outindex  to table_history_notif',outindex,q)
+							if aa not in tmp_ord: tmp_ord[aa]={}	
+							if tx["txid"] not in tmp_ord[aa]: tmp_ord[aa][tx["txid"]]=tx["confirmations"]
 								
 								
 		self.addr_for_full_recalc=[] # reset 
@@ -479,156 +493,171 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 			except:
 				return False,channel_json
 			
+		# print('tmp_ord',tmp_ord) # tmp org should only contain not empty msgs found in the loop ... 
 		for_ord={}
 		for aa,txids in tmp_ord.items():
 			# print('aa,txids',aa,txids)
 			for txid, confs in txids.items():
-				# print('\ttxid, iis',txid, iis)
-				for_ord[confs]=[aa,txid]
+				# bug: for each conf there can be many entries
+				if confs not in for_ord:
+					for_ord[confs]=[[aa,txid]]
+				else:
+					for_ord[confs].append([aa,txid])
+				# for_ord[confs]=[aa,txid]
 				
 		for_ord_keys=list( for_ord.keys())
 		sorted_for_ord_keys=sorted(for_ord_keys, reverse=True) 
 		
+		# print('for_ord',for_ord)
+		# print('sorted_for_ord_keys',sorted_for_ord_keys)
+		
 		for ss in sorted_for_ord_keys:
+			# print('for_ord[ss]',for_ord[ss])
+			for conf_ar_txid in for_ord[ss]:
+				aa=conf_ar_txid[0]
+				txid=conf_ar_txid[1]
+				# print('aa txid',aa,txid)
+			# aa=for_ord[ss][0]
+			# txid=for_ord[ss][1]
 			
-			aa=for_ord[ss][0]
-			txid=for_ord[ss][1]
-			
-			is_aa_external=aa in self.external_addr
-			# print('\n\n for ss,aa,txids',ss,aa,txid) # selected txid on aa 
-			
-			if aa not in table_history_notif:
-				# print(aa,'not in ',table_history_notif)
-				continue
+				is_aa_external=aa in self.external_addr
+				# print('\n\n for ss,aa,txids',ss,aa,txid) # selected txid on aa 
 				
-			if txid not in table_history_notif[aa]:
-				# print(txid,'not in ',table_history_notif[aa])
-				continue
-				
-			iis=table_history_notif[aa][txid]
-			
-			# for txid, iis in txids.items():
-			if True:
-				
-				kk_ordered=sorted(iis.keys())
-				# print('320 wal api sorted ',kk_ordered)
-				init_table=iis[kk_ordered[0]]
-				
-				if len(kk_ordered)>1:
-					for ii in kk_ordered[1:]:
-						init_table['tmpmemo']+=iis[ii]['tmpmemo'] #merge memos if multiple outindex and multiple memos 
-						init_table['outindex']+=iis[ii]['outindex']
-						
-				table_msg={} # insert only those after first block
-				from_str=''
-				
-				if True: #init_table["block"]>=self.first_block:
-					table_msg=self.prep_msgs_inout(txid,[init_table['tmpmemo'],0,''],'in',init_table['dt'],tx_status='received', in_sign_uid=-2,addr_to=aa ) # -2 to be detected
+				if aa not in table_history_notif:
+					# print(aa,'not in ',table_history_notif)
+					continue
 					
-					from_str=table_msg['msgs_inout'][0]['msg']
-					# print(321,table_msg,from_str)
-					tmpmsg=from_str
-					# recognize if channel 
+				if txid not in table_history_notif[aa]:
+					# print(txid,'not in ',table_history_notif[aa])
+					continue
 					
-					# create channel if not abused!
-					is_channel=idb.select('channels',['channel_name'],{'address':['=',"'"+aa+"'"]} ) # check if recognized channel
-					is_abuse=''
-					channel_json={}
-					if len(is_channel)>0:
-						# print('349 RECOGNIZED CHANNEL MSG')
-						is_channel=True
-						
-						is_channel2 ,channel_json=check_is_channel(tmpmsg) # check if msg has channel definition
-						# is_channel=True
-						# but not self is not abused
-						if is_channel2  and aa not in self.addr_list:
+				iis=table_history_notif[aa][txid]
+				
+				# for txid, iis in txids.items():
+				if True:
+					
+					kk_ordered=sorted(iis.keys())
+					# print('320 wal api sorted ',kk_ordered)
+					init_table=iis[kk_ordered[0]]
+					
+					if len(kk_ordered)>1:
+						for ii in kk_ordered[1:]:
+							init_table['tmpmemo']+=iis[ii]['tmpmemo'] #merge memos if multiple outindex and multiple memos 
+							init_table['outindex']+=iis[ii]['outindex']
 							
-							is_abuse='\n'.join( ['\n\nCHANNEL ABUSE DETECTED SPOOFING CHANNEL INFO',aa,str(txid),'\n'] )
-							# print(is_abuse,tmpmsg)
-							tmpmsg= is_abuse+tmpmsg
-						
-					else: # if not recognized channel - check if needs registration?
-						is_channel=False # try recognize incoming channel
-						# print('363 CHANNEL NOT RECOGNIZED / external channel or not a channel ')
-						
-						# if proper channel - register
-						try:
-							# channel_json=json.loads(tmpmsg)
-							is_channel,channel_json=check_is_channel(tmpmsg)
-							# print(channel_json)
+					# print('init_table',init_table)		
 							
-							if is_channel: #'channel_name' in tmpmsg and 'channel_owner' in tmpmsg and 'channel_intro' in tmpmsg:
+					table_msg={} # insert only those after first block
+					from_str=''
+					
+					if True: #init_table["block"]>=self.first_block:
+						table_msg=self.prep_msgs_inout(txid,[init_table['tmpmemo'],0,''],'in',init_table['dt'],tx_status='received', in_sign_uid=-2,addr_to=aa ) # -2 to be detected
+						
+						from_str=table_msg['msgs_inout'][0]['msg']
+						# print(321,table_msg,from_str)
+						tmpmsg=from_str
+						# recognize if channel 
+						
+						# create channel if not abused!
+						is_channel=idb.select('channels',['channel_name'],{'address':['=',"'"+aa+"'"]} ) # check if recognized channel
+						is_abuse=''
+						channel_json={}
+						if len(is_channel)>0:
+							# print('349 RECOGNIZED CHANNEL MSG')
+							is_channel=True
+							
+							is_channel2 ,channel_json=check_is_channel(tmpmsg) # check if msg has channel definition
+							# is_channel=True
+							# but not self is not abused
+							if is_channel2  and aa not in self.addr_list:
 								
-								# get view key from table :
-								vk_list=idb.select('view_keys', ["vk"],{'address':['=',"'"+aa+"'"]})
-								vkey=''
-								if len(vk_list)>0:
-									vkey=vk_list[0][0]
+								is_abuse='\n'.join( ['\n\nCHANNEL ABUSE DETECTED SPOOFING CHANNEL INFO',aa,str(txid),'\n'] )
+								# print(is_abuse,tmpmsg)
+								tmpmsg= is_abuse+tmpmsg
+							
+						else: # if not recognized channel - check if needs registration?
+							is_channel=False # try recognize incoming channel
+							# print('553 CHANNEL NOT RECOGNIZED / external channel or not a channel ')
+							
+							# if proper channel - register
+							try:
+								# channel_json=json.loads(tmpmsg)
+								is_channel,channel_json=check_is_channel(tmpmsg)
+								# print(channel_json)
+								
+								if is_channel: #'channel_name' in tmpmsg and 'channel_owner' in tmpmsg and 'channel_intro' in tmpmsg:
 									
-								is_chnl_own='False'
-								chnl_owner=channel_json['channel_owner']
-								# own channel should be reigistered in creation 
-								if aa in self.addr_list:
-									is_chnl_own='True'
-									# chnl_owner='ME:'+channel_json['channel_owner']
+									# get view key from table :
+									vk_list=idb.select('view_keys', ["vk"],{'address':['=',"'"+aa+"'"]})
+									vkey=''
+									if len(vk_list)>0:
+										vkey=vk_list[0][0]
+										
+									is_chnl_own='False'
+									chnl_owner=channel_json['channel_owner']
+									# own channel should be reigistered in creation 
+									if aa in self.addr_list:
+										is_chnl_own='True'
+										# chnl_owner='ME:'+channel_json['channel_owner']
+									
+									table={'channels':[{'address':aa, 'vk':vkey, 'creator':chnl_owner, 'channel_name':channel_json['channel_name'], 'channel_intro':channel_json['channel_intro'], 'status':'active', 'own':is_chnl_own , 'channel_type':channel_json['channel_type']  }]}	
+									# print('channel recog:',table)
+									idb.insert(table,['address' , 'vk' , 'creator' , 'channel_name', 'channel_intro' , 'status' , 'own','channel_type' ])
+									if 'channels' not in self.to_refresh: self.to_refresh.append('channels') # channels,
+									
+									if aa in self.external_addr: # change addr book viekey alias category 
 								
-								table={'channels':[{'address':aa, 'vk':vkey, 'creator':chnl_owner, 'channel_name':channel_json['channel_name'], 'channel_intro':channel_json['channel_intro'], 'status':'active', 'own':is_chnl_own , 'channel_type':channel_json['channel_type']  }]}	
-								# print('channel recog:',table)
-								idb.insert(table,['address' , 'vk' , 'creator' , 'channel_name', 'channel_intro' , 'status' , 'own','channel_type' ])
-								if 'channels' not in self.to_refresh: self.to_refresh.append('channels') # channels,
+										table={}
+										table['addr_book']=[{'Category':'Channel: '+channel_json['channel_type'],'Alias': channel_json['channel_name'], 'Address':aa, 'ViewKey':vkey, 'viewkey_verif':1,'addr_verif':1 }] 
+										# print('updating addr book entry',table)
+										idb.upsert(table,[ 'Category','Alias','Address' , 'ViewKey', 'viewkey_verif','addr_verif' ],{'Address':['=',"'"+aa+"'"]})
+										if 'addr_book' not in self.to_refresh: self.to_refresh.append('addr_book') # channels,addr_book
 								
-								if aa in self.external_addr: # change addr book viekey alias category 
+							except:
+								print("Not proper json channel",tmpmsg)
+								pass
+						
+						table_msg['msgs_inout'][0]['is_channel']=str(is_channel)
+						if is_abuse!='':
+							table_msg['msgs_inout'][0]['msg']=tmpmsg
 							
-									table={}
-									table['addr_book']=[{'Category':'Channel: '+channel_json['channel_type'],'Alias': channel_json['channel_name'] }] 
-									# print('updating addr book entry',table)
-									idb.upsert(table,[ 'Category','Alias' ],{'Address':['=',"'"+aa+"'"]})
-									if 'addr_book' not in self.to_refresh: self.to_refresh.append('addr_book') # channels,addr_book
 							
-						except:
-							print("Not proper json channel",tmpmsg)
-							pass
+						# print('msg before insert',table_msg)
+						# if is channel - add sender to anon addr book to mark same name each time : self name + init hash 
+						# if is_channel: # is channel difinition  
+						idb.insert(table_msg,['proc_json','type','addr_ext','txid','tx_status','date_time', 'msg','uid','in_sign_uid','addr_to','is_channel'])
 					
-					table_msg['msgs_inout'][0]['is_channel']=str(is_channel)
-					if is_abuse!='':
-						table_msg['msgs_inout'][0]['msg']=tmpmsg
+					
+					
+					# history and notifications only for own incoming addr 
+					# print('whil update tx history?')
+					if True: # must update incoming to view to not repeat aa in self.addr_list: 
+						tmptype='in'
+						if is_aa_external:
+							tmptype='in/external'
+							
+						# print('insert_history_tx from_str',from_str)
+						self.insert_history_tx( init_table['outindex'],txid,init_table["block"] ,init_table["timestamp"],init_table["date_time"],from_str,aa,init_table["amount"],tmptype)
 						
+					if not is_aa_external: #True: #init_table["block"]>=self.first_block:
+						table={}
+						toalias=' to address '+aa
+						if aa in self.alias_map:
+							toalias=' to alias '+self.alias_map[aa]
+							
+						tmpjson='Amount: '+str(init_table["amount"])+toalias
+						tmpopname='received'
 						
-					# print('msg before insert',table_msg)
-					# if is channel - add sender to anon addr book to mark same name each time : self name + init hash 
-					# if is_channel: # is channel difinition  
-					idb.insert(table_msg,['proc_json','type','addr_ext','txid','tx_status','date_time', 'msg','uid','in_sign_uid','addr_to','is_channel'])
-				
-				
-				
-				# history and notifications only for own incoming addr 
-				# print('whil update tx history?')
-				if True: # must update incoming to view to not repeat aa in self.addr_list: 
-					tmptype='in'
-					if is_aa_external:
-						tmptype='in/external'
+						if len(from_str)>13 and from_str[:14] =='PaymentRequest':
+						# if table_msg['msgs_inout'][0]['msg'][:14] =='PaymentRequest':
+							# tmpjson+=';'+g['msgs_inout'][0]['msg']
+							tmpjson+=';'+from_str
+							tmpopname='payment request'
 						
-					self.insert_history_tx( init_table['outindex'],txid,init_table["block"] ,init_table["timestamp"],init_table["date_time"],from_str,aa,init_table["amount"],tmptype)
-					
-				if not is_aa_external: #True: #init_table["block"]>=self.first_block:
-					table={}
-					toalias=' to address '+aa
-					if aa in self.alias_map:
-						toalias=' to alias '+self.alias_map[aa]
+						table['notifications']=[{'opname':tmpopname,'datetime':init_table['date_time'],'status':'Confirmed','details':txid,'closed':'False','orig_json':tmpjson ,'uid':'auto'}]
 						
-					tmpjson='Amount: '+str(init_table["amount"])+toalias
-					tmpopname='received'
-					
-					if len(from_str)>13 and from_str[:14] =='PaymentRequest':
-					# if table_msg['msgs_inout'][0]['msg'][:14] =='PaymentRequest':
-						# tmpjson+=';'+g['msgs_inout'][0]['msg']
-						tmpjson+=';'+from_str
-						tmpopname='payment request'
-					
-					table['notifications']=[{'opname':tmpopname,'datetime':init_table['date_time'],'status':'Confirmed','details':txid,'closed':'False','orig_json':tmpjson ,'uid':'auto'}]
-					
-					idb.insert(table,['opname','datetime','status','details', 'closed','orig_json' ,'uid'])
-					if 'notifications' not in self.to_refresh: self.to_refresh.append('notifications') #self.to_refresh=[] channels,addr_book,tx_history,notifications
+						idb.insert(table,['opname','datetime','status','details', 'closed','orig_json' ,'uid'])
+						if 'notifications' not in self.to_refresh: self.to_refresh.append('notifications') #self.to_refresh=[] channels,addr_book,tx_history,notifications
 				
 		# print('return',table_history_notif)
 		return len(table_history_notif)		
@@ -924,12 +953,22 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 			print('wallet api update_all_addr')
 			return
 		
+		# print('self.addr_list',self.addr_list)
+		# print('self.external_addr',self.external_addr)
 		
 		
-	def new_zaddr(self):
+	def new_zaddr(self,new_seed=False):
 
 		try:
-			tmpnewaddr=app_fun.run_process(self.cli_cmd,"z_getnewaddress")		
+			tmpnewaddr=''
+			
+			if new_seed: 
+				print('creating address from new seed')
+				tmpnewaddr=app_fun.run_process(self.cli_cmd,"z_getnewaddresskey ")	
+			else: 
+				print('creating diversified address')
+				tmpnewaddr=app_fun.run_process(self.cli_cmd,"z_getnewaddress")		
+			
 			self.update_all_addr()
 			self.address_aliases() # this takes only own addr 
 			# self.update_unspent() # this important only for own addr 
@@ -954,14 +993,14 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 		
 	def exp_view_key(self,zaddr): # 'False' 'cannot export'
 		try:
-			# print('zaddr',zaddr)
+			print('exporting viewkey for zaddr',zaddr)
 			return str(app_fun.run_process(self.cli_cmd,"z_exportviewingkey "+zaddr)) 
 		except:
 			print('wallet api cannot export')
 			return 'cannot export'
 		
 	# "yes", "no" or "whenkeyisnew"
-	def imp_view_key(self,zaddr,vkey,rescan="whenkeyisnew",startHeight=1700000 ): #996000 1575757 1780000
+	def imp_view_key(self,zaddr,vkey,rescan="whenkeyisnew",startHeight=1780000 ): #996000 1575757 1780000
 
 		rescan="yes"
 		tmpnewaddr=''
