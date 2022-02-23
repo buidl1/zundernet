@@ -1,5 +1,4 @@
 
-
 import os
 # import datetime
 import json
@@ -14,10 +13,10 @@ class DefChannels:
 
 	def __init__(self):
 		
-		self.activation_channel_addr='zs1z7dzq6v0pca7x6nh97qudkugrq235x9h9w9lpzgqenqsg4whw4t384s6zdsgukywz52ygzwfh4j'
+		self.activation_channel_addr='zs1qds8vy37aewz0ersgnxexj3w96gs642p0d0mh3vzlschgyn9ahfrvu7lq96wmff4l8lg7a8rpg6'
 	
 		self.channels={ #'addr':'viewkey'
-		'zs1z7dzq6v0pca7x6nh97qudkugrq235x9h9w9lpzgqenqsg4whw4t384s6zdsgukywz52ygzwfh4j':'zxviews1q0gy39khqqqqpqplye4pm7ztcy3kd0plkf65wk5gkesvpl7s3ulzx6yggq4lqtq2kkatafwwh7gzp9eqqyf25spfj9m4hhlw3jm50m0gyhnlrm7ddvrufxtvtgqfpees6hwt9tz8cjzfvwyllm90su6jlsuec0huwm8umfkrsxzmldylvtlv5dmth8kzynf9k7y4r7z32hvpez5v3l77rsyktl4sapxq5nn2hzuzw0f6enrrdgt7l6rd2h3rnaathfdlqcswej37k7g0lajgr'
+		self.activation_channel_addr:'zxviews1q0krxcg6qyqqpqqw4pupu3tlr6qcpxxk73dt969ks4xhf2lhacddyf2hqw577azksq9c84y0mq9ym7kxreut00kjkmzysjptysrh2x9yv5cne2lh46kjurudd8uklx259e3azckkj4ghh0zhlwuy0fpxph29ktz9dv5sgwtx79fcvzm2df8awj3cy8wmkdz25mn050ku04kfuneag9p3fw7dlntw8g46ru2qsg3vcvt9nvlfx06qt7srknjs32hvyvm3sd94sk7uq9q2n4df9'
 		}
 
 class Chnls(gui.QObject):
@@ -144,19 +143,27 @@ class Chnls(gui.QObject):
 	
 	def updateFilter(self,*evargs):
 		tmpdict={}
-		# print(evargs)
-		if not self.is_channels_active(): 
+		
+		widgetExist=False
+		if self.filter_table.cellWidget(0,1)!=None: 
+			if self.filter_table.cellWidget(0,1).isEnabled():
+				widgetExist=True
+		
+		if not self.is_channels_active() and widgetExist==False: 
+			# if exists and if is true do not update ?
+		
 			tmp_active_active=False
 			tmp_active_tooltip='Sync the wallet to activate channels'
 			if len(evargs)>0:
-				print('evargs',evargs)
+				# print('evargs',evargs)
 				for ee in evargs:
-					print('ee',ee)
+					# print('ee',ee)
 					if ee==True:
+						# print(156)
 						tmp_active_active=True
 						tmp_active_tooltip='This will add common public channel (takes few minutes)'
 						break
-		
+			# print('tmp_active_active',tmp_active_active)
 			tmpdict['rowk']='activation'
 			tmpdict['rowv']=[ {'T':'LabelC', 'L':'Activate Channels:','align':'center'} 
 							, {'T':'Button', 'L':'Activate','tooltip': tmp_active_tooltip } 
@@ -164,7 +171,7 @@ class Chnls(gui.QObject):
 						]
 						 
 			self.filter_table.updateTable([tmpdict])  
-			def activateChannels(*evargs): 
+			def activateChannels(*evargs):  
 				idb=localdb.DB(self.db)
 				
 				tmpaddr=self.defchnls.activation_channel_addr
@@ -178,7 +185,7 @@ class Chnls(gui.QObject):
 				idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 				gui.messagebox_showinfo('Channels activated','Initial public channel (Tavern) added to wallet! Syncing will take few minutes.',None) 
 				self.filter_table.cellWidget(0,1).setEnabled(False) # when imported update filters !
-				
+			# print('tmp_active_active 2',tmp_active_active)	
 			self.filter_table.cellWidget(0,1).setEnabled( tmp_active_active )
 			self.filter_table.cellWidget(0,1).set_fun(False, activateChannels)
 			
@@ -241,39 +248,8 @@ class Chnls(gui.QObject):
 		
 		self.filter_table=gui.Table(None,params={'dim':[1,6],'updatable':1} ) 
 		self.updateFilter()
-		# tmpdict={}
-		# grid_filter=[]
 		
 			
-			
-		
-		# if not self.is_channels_active(): 
-			# tmpdict['rowk']='activation'
-			# tmpdict['rowv']=[ {'T':'LabelC', 'L':'Activate Channels:','align':'center'} 
-							# , {'T':'Button', 'L':'Activate','tooltip':'This will add common public channel (takes few minutes)'  } 
-							# ,{'T':'LabelC', 'L':''},{'T':'LabelC', 'L':''},{'T':'LabelC', 'L':''},{'T':'LabelC', 'L':''}
-						# ]
-						 
-			# self.filter_table.updateTable([tmpdict])  
-			# def activateChannels(*evargs): 
-				# idb=localdb.DB(self.db)
-				
-				# tmpaddr=self.defchnls.activation_channel_addr
-				# tmpvk=self.defchnls.channels[tmpaddr]
-				# table={'addr_book':[{'Category':'Channel','Alias':'Tavern','Address':tmpaddr,'ViewKey':tmpvk,'usage':0,'addr_verif':1,'viewkey_verif':-2}]   }
-				# idb.upsert(table,[ 'Category','Alias','Address','ViewKey','usage','addr_verif','viewkey_verif'], {'Address':['=',  "'"+tmpaddr+"'" ] } )
-				
-				# self.refreshAddrBook.emit() 
-				# tmpjson=json.dumps({'addr':tmpaddr,'viewkey':tmpvk})
-				# table={'queue_waiting':[localdb.set_que_waiting(command='import_view_key',jsonstr=tmpjson, wait_seconds=0)]}
-				# idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
-				# gui.messagebox_showinfo('Channels activated','Initial public channel (Tavern) added to wallet! Syncing will take few minutes.',None)
-				 
-				# self.filter_table.cellWidget(0,1).setEnabled(False) # when imported update filters !
-				
-			# self.filter_table.cellWidget(0,1).set_fun(False, activateChannels)
-		# else: # print('channel ACTIVATE - load filters')
-			# self.updateFilter()
 			
 		frame0.insertWidget(self.filter_table) 
 		frame0.setMaximumHeight(self.filter_table.height()) 
@@ -377,11 +353,16 @@ class Chnls(gui.QObject):
 		 
 		
 		citems=self.action_buttons.layout().count()
+		tmplen=len(tmpalias['intro'])
+		tmpmsg='Channel intro: '+tmpalias['intro']
+		if len(tmpalias['intro'])>64:
+			tmpmsg='Channel intro: '+tmpalias['intro'][:64]+' ...'
+		
 		if citems>0:
-			self.action_buttons.layout().itemAt(0).widget().setText( 'Channel intro: '+ tmpalias['intro'][:64]+' ...')
+			self.action_buttons.layout().itemAt(0).widget().setText( tmpmsg)
 			self.action_buttons.layout().itemAt(0).widget().setToolTip( tmpalias['intro'] )
 		else:
-			self.action_buttons.insertWidget( gui.Label(None, 'Channel intro: '+ tmpalias['intro'][:64]+' ...',tooltip=tmpalias['intro'] ))			
+			self.action_buttons.insertWidget( gui.Label(None, tmpmsg,tooltip=tmpalias['intro'] ))			
 			 
 		
 		
