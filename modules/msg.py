@@ -266,7 +266,7 @@ class Msg(gui.QObject):
 						# tmpmsg=mm[3]
 						traceback.print_exc()
 				else:
-					print('nit proper channel json - simple text msg')
+					print('not proper channel json - simple text msg')
 			############## unfinished ?
 			
 			if mm[0]=='out':
