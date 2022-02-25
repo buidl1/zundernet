@@ -5,6 +5,10 @@ Zundernet is new proof of concept wallet, with features not available in other w
 
 It works with Pirate (komodod or pirated) .
 
+Why Pirate Chain? Two reasons:
+1. Proven double spend protection via Komodo Platform
+2. Forced private blockchain, using ZEC tech but with forced p2p tx (biggest anon set among private chains).
+
 NOTE: when using zundernet do not run Pirate at the same time with different wallets.
 
 ## List of features:
