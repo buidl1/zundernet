@@ -2,10 +2,11 @@
 _Python3 wallet GUI for [Pirate Chain](https://pirate.black/)_
 
 Zundernet is new proof of concept wallet, with features not available in other wallets.  
+[NEW] Decentralized on-chain in-wallet forum over private blockchain is there!
 
 It works with Pirate (komodod or pirated) .
 
-Why Pirate Chain? Two reasons:
+**Why Pirate Chain?** Two reasons:
 1. Proven double spend protection via Komodo Platform
 2. Forced private blockchain, using ZEC tech but with forced p2p tx (biggest anon set among private chains).
 
@@ -14,6 +15,7 @@ NOTE: when using zundernet do not run Pirate at the same time with different wal
 ## List of features:
 
 Big:
+0. Decentralized on-chain in-wallet forum
 1. address book
 2. messeging arbitrary length message with signatures (recognizing sender - allows for chat threading)
 3. transaction history stored in DB (possible to view sent transactions details without wallet syncing)
