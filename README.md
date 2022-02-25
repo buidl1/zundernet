@@ -15,13 +15,13 @@ NOTE: when using zundernet do not run Pirate at the same time with different wal
 ## List of features:
 
 Big:
-0. Decentralized on-chain in-wallet forum
-1. address book
-2. messeging arbitrary length message with signatures (recognizing sender - allows for chat threading)
-3. transaction history stored in DB (possible to view sent transactions details without wallet syncing)
-4. initial loading of wallet in view mode without running blockchain (e.g. if you only need to copy address no need to wait to sync)
-5. handling multiple wallets in data directory
-6. wallet and database encryption on closing
+1. Decentralized on-chain in-wallet forum
+3. address book
+4. messeging arbitrary length message with signatures (recognizing sender - allows for chat threading)
+5. transaction history stored in DB (possible to view sent transactions details without wallet syncing)
+6. initial loading of wallet in view mode without running blockchain (e.g. if you only need to copy address no need to wait to sync)
+7. handling multiple wallets in data directory
+8. wallet and database encryption on closing
 
 Small:
 1. amounts rounding
