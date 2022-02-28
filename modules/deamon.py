@@ -443,13 +443,15 @@ class DeamonInit(gui.QObject):
 				if ddict['fromaddr'] in self.wallet_display_set.amount_per_address :
 					for tt in ddict['to']:
 						sum_cur_spending+=float(tt['a'])
+						
+				# print('sum_cur_spending',sum_cur_spending,round(sum_cur_spending,8),round(total_conf_per_addr-0.0001,8))	
 				if round(sum_cur_spending,8)>round(total_conf_per_addr-0.0001,8): # validate amoaunt to send
 					
 					table={}
 					table['queue_waiting']=[{'status':'awaiting_balance'}]
 					idb.update( table,['status'],{'id':[ '=',rr[5] ]}) # 
 					self.sending_signal.emit(['cmd_queue'])
-					time.sleep(1)
+					# time.sleep(1)
 				
 				elif self.the_wallet.validate_zaddr(ddict['fromaddr']) : # first validate addr:
 				
@@ -457,7 +459,7 @@ class DeamonInit(gui.QObject):
 					table['queue_waiting']=[{'status':'processing'}]
 					idb.update( table,['status'],{'id':[ '=',rr[5] ]})
 					self.sending_signal.emit(['cmd_queue'])
-					time.sleep(1)
+					# time.sleep(1)
 				
 					merged_queue_done=[]
 					msg_chnl=['message','channel'] # merging utxo sending only if not msg or chnls
@@ -516,6 +518,8 @@ class DeamonInit(gui.QObject):
 						
 						memo_orig.append([to['m'],float(to['a']),to['z']]) 
 					
+					# print('sending_summary\n',sending_summary)
+					# return 
 					
 					tmpres={}
 					tmpres['opid']=''
@@ -571,8 +575,9 @@ class DeamonInit(gui.QObject):
 									
 								if opj["status"]=="success":
 									tmpres["result"]='success'
-									
+									# print('sending success')
 								else:
+									# print('sending failed',opstat)
 									tmpres["result"]='Failed'
 									exceptions.append('Failed to process tx: '+opstat)
 									insert_notification(opstat, {'fromaddr':ddict['fromaddr'],'to':[to]})
