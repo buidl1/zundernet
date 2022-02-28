@@ -242,6 +242,7 @@ class Msg(gui.QObject):
 				refrsh_chnl+=1
 				if ('txt' in tmpmsg or 'channel_name' in tmpmsg) and 'CHANNEL ABUSE DETECTED SPOOFING CHANNEL INFO' not in tmpmsg:	
 					try: #decode regular message
+						# print(245,'\n\n',tmpmsg)
 						tmp_str=json.loads(tmpmsg) #'channel_name':chname,'channel_owner':creator, 'channel_intro'
 						# table_msg['msgs_inout'][0]['msg']='Channel name: '+channel_json['channel_name']+'\nOwner: '+channel_json['channel_owner']+'\nType: '+channel_json['channel_type']+'\nIntro: '+channel_json['channel_intro']
 							
@@ -264,9 +265,12 @@ class Msg(gui.QObject):
 								
 					except: # OR print channel init 
 						# tmpmsg=mm[3]
+						tmpmsg='BAD MSG FORMAT, SEE TERMINAL '
+						tmp_sender='Unknown'
+						print('\n\n\nBAD MSG FORMAT '+mm[3])
 						traceback.print_exc()
 				else:
-					print('not proper channel json - simple text msg')
+					print('msg::not proper channel json - simple text msg',tmpmsg)
 			############## unfinished ?
 			
 			if mm[0]=='out':
