@@ -41,6 +41,11 @@ class WalDispSet(gui.QObject):
 		self.addr_book_category_alias={}
 		self.addr_amount_dict={}
 		
+		self.is_synced=False
+	
+	def setSynced(self,bb):
+		# print('set wds synced',bb)
+		self.is_synced=bb
 		
 	def update_addr_cat_map(self):
 		idb=localdb.DB(self.db)
@@ -1230,13 +1235,16 @@ class WalDispSet(gui.QObject):
 		
 	def get_options(self,strval=False):
 		idb=localdb.DB(self.db)
-		retdict={'sorting':'amounts','filtering': 'All','rounding':",.4f"}
+		retdict={'sorting':'amounts','filtering': 'All','rounding':'0.0001' } #",.4f"
 		opt=idb.select('wallet_display',['option','value'],{'option':[' in ',"('sorting','filtering','rounding')"]} )
+		# print('opt',opt)
 		for oo in opt:
 			retdict[ oo[0] ] = oo[1]
 		
 		if not strval:
 			retdict['rounding']=self.set_rounding_str(retdict['rounding'])
+	
+		# print('retdict',retdict)
 	
 		return retdict
 		
@@ -1521,17 +1529,25 @@ class WalDispSet(gui.QObject):
 		elif btn.currentText()=='address':
 			self.export_addr(btn,addr)
 		elif btn.currentText()=='view key':
-			self.export_viewkey(btn,addr)
+			if self.is_synced:
+				self.export_viewkey(btn,addr)
+			else:
+				# print('must be synced to export view key')
+				gui.showinfo('Cannot export view key','Must be synced to export view key!')
 		elif btn.currentText()=='set channel':
 			# print(btn.currentText())
-			ddict={'addr':addr} #,
-						# 'path':'',
-						# 'password':''
-						# }
-			table={}	
-			table['queue_waiting']=[localdb.set_que_waiting('get_viewkey',jsonstr=json.dumps(ddict)) ]
-			idb=localdb.DB(self.db)
-			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
+			if self.is_synced:
+				ddict={'addr':addr} #,
+							# 'path':'',
+							# 'password':''
+							# }
+				table={}	
+				table['queue_waiting']=[localdb.set_que_waiting('get_viewkey',jsonstr=json.dumps(ddict)) ]
+				idb=localdb.DB(self.db)
+				idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
+			else:
+				# print('must be synced to set channel')
+				gui.showinfo('Cannot create Channel','Must be synced to set up a channel!')
 			
 			
 		btn.setIndexForText('Select:')
