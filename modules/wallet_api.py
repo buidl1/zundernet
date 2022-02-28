@@ -354,12 +354,14 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 				
 				# if aa not in tmp_ord: tmp_ord[aa]={}
 				
+				
 				if aa not in self.historical_txs:
 					self.historical_txs[aa]={}
 					
 				y=self.getinfo()
 				
 				for tx in tt: 
+					
 						
 					# print(367,tx)
 					if "txid" not in tx:
@@ -377,7 +379,9 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 						
 					outindex=0
 					
-					if 'jsindex' in tx:
+					if 'outindex' in tx:
+						outindex=tx['outindex']
+					elif 'jsindex' in tx:
 						outindex=tx['jsindex']
 					elif 'output' in tx:
 						outindex=tx['output']
@@ -387,14 +391,14 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 						continue
 						
 					# print(378,tx)
+					dt,ts=app_fun.now_to_str(False,ret_timestamp=True)
+					tmp_timestamp=ts-60*tx["confirmations"]
+					tmp_date_time=app_fun.date2str(datetime.datetime.now()-datetime.timedelta(seconds=60*tx["confirmations"]) )
 					if 'change' in tx: # not interested in change tx ??
 						if tx['change']:
 							# print('\n\tchange found - pass by ;')
 							
 							# if outindex not in self.historical_txs[aa][tx["txid"]]:
-							dt,ts=app_fun.now_to_str(False,ret_timestamp=True)
-							tmp_timestamp=ts-60*tx["confirmations"]
-							tmp_date_time=app_fun.date2str(datetime.datetime.now()-datetime.timedelta(seconds=60*tx["confirmations"]) )
 							
 							# table_msg=self.prep_msgs_inout(txid,[init_table['tmpmemo'],0,''],'in',init_table['dt'],tx_status='received', in_sign_uid=-2,addr_to=aa ) 
 							from_str='self change from '+aa #'self' #table_msg['msgs_inout'][0]['msg']
@@ -423,24 +427,33 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 							# print('orig memmo',tmpmemo)
 							tmpmemo=self.clear_memo(tmpmemo)
 							# print('clear memmo',tmpmemo)
-						
-						# updating tx history
-						# self.historical_txs[aa][tx["txid"]][outindex] = { "amount":tx["amount"]} #,"conf":tx["confirmations"],"memo":tmpmemo  }
-						# print('updated tx history',self.historical_txs[aa][tx["txid"]][outindex])
-						
-						
-						tmpwhere={'to_str':['=',"'"+aa+"'"] ,'txid':['=',"'"+tx["txid"]+"'"],'Category':['=',"'outindex_"+str(outindex)+"'"] }
-						# print('test\n', idb.select('tx_history', [ ],tmpwhere) )
+							# clearing memo can erase \n wrongly ... 
 						
 						tmpwhere={'to_str':['=',"'"+aa+"'"],'Type':[' like ',"'in%'"],'txid':['=',"'"+tx["txid"]+"'"],'Category':['=',"'outindex_"+str(outindex)+"'"] }
 						
+						# print('\ncheckexist where ',tmpwhere)
 						checkexist=idb.select('tx_history', ["Type"],tmpwhere) # if not exist yet add for processing 
 						# print('\ncheckexist',checkexist)
+						
+						# print(idb.select('tx_history', [ ],{'to_str':['=',"'"+aa+"'"],'Type':[' like ',"'in%'"],'txid':['=',"'"+tx["txid"]+"'"]  }))
 						if len(checkexist)==0:
+						
 							table={}
+							# updating tx history
+							self.historical_txs[aa][tx["txid"]][outindex] = { "amount":tx["amount"]} #,"conf":tx["confirmations"],"memo":tmpmemo  }
+							# print('updated tx history',self.historical_txs[aa][tx["txid"]][outindex])
+							ttype='in'
+							if aa in self.external_addr:
+								ttype='in/external' 
+								
 							
-															
 							dt,ts=app_fun.now_to_str(False,ret_timestamp=True)
+							tmp_timestamp=ts-60*tx["confirmations"]
+							tmp_date_time=app_fun.date2str(datetime.datetime.now()-datetime.timedelta(seconds=60*tx["confirmations"]) )
+							self.insert_history_tx( '_'+str(outindex),tx["txid"],y["blocks"]-tx["confirmations"] ,tmp_timestamp,tmp_date_time,tmpmemo,aa,tx["amount"],ttype)
+						
+															
+							# dt,ts=app_fun.now_to_str(False,ret_timestamp=True)
 							
 							dt=localdb.blocks_to_datetime(y["blocks"]-tx["confirmations"]) # time it was sent 
 							# print('dt?',dt)
@@ -458,7 +471,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 							# print(268)
 							if outindex not in table_history_notif[aa][tx["txid"]]:
 								# merged_msg[aa][tx["txid"]][outindex]={'dt':dt, 'tmpmemo':tmpmemo } #table
-								# print('times\ndt',dt,'timestamp',ts-60*tx["confirmations"]   ,'datetime',app_fun.date2str(datetime.datetime.now()-datetime.timedelta(seconds=60*tx["confirmations"]) ))
+								# print('times\n blocks_to_datetime dt',dt,'timestamp',ts-60*tx["confirmations"]   ,'date_time',app_fun.date2str(datetime.datetime.now()-datetime.timedelta(seconds=60*tx["confirmations"]) ))
 								q={'dt':dt
 									, 'tmpmemo':tmpmemo
 									,'block':y["blocks"]-tx["confirmations"]
@@ -468,7 +481,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 									, 'outindex':'_'+str(outindex)
 									}
 								table_history_notif[aa][tx["txid"]][outindex]=q
-								# print('added outindex  to table_history_notif',outindex,q)
+								# print('\n\nadded outindex  to table_history_notif',aa,'\n',outindex,'\n',q)
 							if aa not in tmp_ord: tmp_ord[aa]={}	
 							if tx["txid"] not in tmp_ord[aa]: tmp_ord[aa][tx["txid"]]=tx["confirmations"]
 								
@@ -631,13 +644,13 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 					
 					# history and notifications only for own incoming addr 
 					# print('whil update tx history?')
-					if True: # must update incoming to view to not repeat aa in self.addr_list: 
-						tmptype='in'
-						if is_aa_external:
-							tmptype='in/external'
+					# if True: # must update incoming to view to not repeat aa in self.addr_list: 
+						# tmptype='in'
+						# if is_aa_external: #is_aa_external=aa in self.external_addr
+							# tmptype='in/external'
 							
-						# print('insert_history_tx from_str',from_str)
-						self.insert_history_tx( init_table['outindex'],txid,init_table["block"] ,init_table["timestamp"],init_table["date_time"],from_str,aa,init_table["amount"],tmptype)
+						# print('insert_history_tx from_str',init_table['outindex'],txid)
+						# self.insert_history_tx( init_table['outindex'],txid,init_table["block"] ,init_table["timestamp"],init_table["date_time"],from_str,aa,init_table["amount"],tmptype)
 						
 					if not is_aa_external: #True: #init_table["block"]>=self.first_block:
 						table={}
@@ -791,7 +804,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 		if lastii==0:
 			return ''
 			
-		return tmpmemo[:lastii].strip()
+		return tmpmemo[:lastii] #.strip()
 		
 		
 	# z_listreceivedbyaddress “address” need this for view key ?	
@@ -1000,7 +1013,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 			return 'cannot export'
 		
 	# "yes", "no" or "whenkeyisnew"
-	def imp_view_key(self,zaddr,vkey,rescan="whenkeyisnew",startHeight=1780000 ): #996000 1575757 1780000
+	def imp_view_key(self,zaddr,vkey,rescan="whenkeyisnew",startHeight=1790000 ): #996000 1575757 1780000
 
 		rescan="yes"
 		tmpnewaddr=''
