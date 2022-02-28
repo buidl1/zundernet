@@ -28,8 +28,19 @@ class Chnls(gui.QObject):
 	# recognize own msg to chnl  and prev sender name to not require again
 	# modify to proper chnl message ormat (select sender name signature / load if has previous and tx )
 	
+	
+	
+	
+	
+	
 	def send_reply(self,btn,*args):		
 
+		# tmpdict rows:
+		# sending addr
+		# to addr
+		# msg txt
+		# signature and button
+		
 		msg_grid=[]
 		tmpdict={'rowk':'from', 'rowv':[{'T':'LabelC', 'L':'Select sending address (own):','width':19},{'T':'Button', 'L':'...', 'uid':'selownadr'}]} #, 'width':4
 		msg_grid.append(tmpdict) #, {'T':'LabelV','L':'','uid':'ownaddr','width':80}
@@ -68,7 +79,7 @@ class Chnls(gui.QObject):
 			sign_dict={'T':'LineEdit', 'L':'signature', 'V':mysignature ,'width':6}
 
 		
-		tmpdict={'rowk':'send', 'rowv':[{'T':'LabelC', 'L':'Signature' ,'width':6}, sign_dict,{'T':'Button', 'L':'Send', 'uid':'send','width':6}  ] }
+		tmpdict={'rowk':'send', 'rowv':[ {'T':'LabelC', 'L':'Signature' ,'width':6}, sign_dict, {'T':'Button', 'L':'Send', 'uid':'send','width':6}  ] }
 		msg_grid.append(tmpdict)
 		
 		# msg_table=flexitable.FlexiTable(selframe,msg_grid)
@@ -84,8 +95,10 @@ class Chnls(gui.QObject):
 		def send():
 			# global tmpaddr
 			msg=msg_table.cellWidget(2,0).toPlainText()  #get_value( 'msg')
+			# print('sendng msg channel toPlainText\n',msg)
+			
 			if msg.strip()=='':
-				print('no msg to send')
+				# print('no msg to send')
 				return
 			
 			
@@ -100,14 +113,22 @@ class Chnls(gui.QObject):
 			idb=localdb.DB(self.db)
 			# prepare msg inner json ... 
 			send_dict={'txt':msg}
+			
+			
 			if msg_table.cellWidget(3,1)!=None:
 				
 				tmpsender=msg_table.cellWidget(3,1).text()
-				send_dict['sender']=tmpsender# only add sender first time later not needdidb=localdb.DB(self.db)
-				table={'channel_signatures':[{'addr':to,'signature':tmpsender}]} 
-				idb.upsert( table, [ 'addr' ,'signature' ], {'addr':['=',  "'"+to+"'" ] } )
-				
+			elif msg_table.item(3,1)!=None:
+				tmpsender=msg_table.item(3,1).text()
+			
+			# print('tmpsender', tmpsender)
+			
+			send_dict['sender']=tmpsender# only add sender first time later not needdidb=localdb.DB(self.db)
+			table={'channel_signatures':[{'addr':to,'signature':tmpsender}]} 
+			idb.upsert( table, [ 'addr' ,'signature' ], {'addr':['=',  "'"+to+"'" ] } )	
+			
 			json_msg=json.dumps(send_dict)
+			# print('json ready',json_msg)
 			got_bad_char, msg_arr=self.prep_msg(json_msg,to)
 			# print(msg_arr)
 			# return
@@ -121,6 +142,10 @@ class Chnls(gui.QObject):
 			for mm in msg_arr:
 				ddict['to'].append({'z':to,'a':0.0001,'m':mm})
 				
+			# print('sending ddict\n',ddict)
+			# print('temporaty return')
+			# return
+				
 			table={}
 			table['queue_waiting']=[localdb.set_que_waiting('send',jsonstr=json.dumps(ddict) ) ]
 			table['queue_waiting'][0]['type']='channel'
@@ -131,6 +156,10 @@ class Chnls(gui.QObject):
 			localdb.set_last_addr_from( froma,"'last_msg_from_addr'")
 			msg_table.parent().close()
 			
+			
+			
+			
+			
 		msg_table.cellWidget(3,2).set_fun(True,send) #set_cmd('send',[ ], send)
 		msg_table.cellWidget(0,1).set_fun(False,self.addr_book.get_addr_from_wallet ) 
 		
@@ -139,6 +168,37 @@ class Chnls(gui.QObject):
 		
 		gui.CustomDialog(btn,[msg_table ], title='Write message ')
 		
+	
+	
+	
+	
+	
+	def is_channels_active(self):
+	
+		idb=localdb.DB(self.db)
+		
+		# table={'channel_signatures':[{'addr':to,'signature':tmpsender}]} 
+		# print('channel_signatures\n', idb.select('channel_signatures'  ) )
+		
+		
+		# table['addr_book']={'Category':'text', 'Alias':'text', 'Address':'text','ViewKey':'text','usage':'int','addr_verif':'int','viewkey_verif':'int' }
+		xx=idb.select('addr_book', [ 'Address', 'viewkey_verif'] ,{'Address':['=',  "'"+self.defchnls.activation_channel_addr+"'" ] } )
+		
+		if len(xx)==0:
+			print('no def channel - need to activate channels')
+			return False
+			
+		elif xx[0][0]==None:
+			print(' channel = none',xx)
+			return False
+		else:
+			if xx[0][1]<1:
+				print('is_channels_active: channels active but view key not validated',xx)
+				
+				return False
+		
+			#print('channels active',xx)
+			return True 
 	
 	
 	def updateFilter(self,*evargs):
@@ -451,27 +511,6 @@ class Chnls(gui.QObject):
 		self.update_msg_frame()
 		  
 		
-	def is_channels_active(self):
-	
-		idb=localdb.DB(self.db)
-		# table['addr_book']={'Category':'text', 'Alias':'text', 'Address':'text','ViewKey':'text','usage':'int','addr_verif':'int','viewkey_verif':'int' }
-		xx=idb.select('addr_book', [ 'Address', 'viewkey_verif'] ,{'Address':['=',  "'"+self.defchnls.activation_channel_addr+"'" ] } )
-		
-		if len(xx)==0:
-			print('no def channel - need to activate channels')
-			return False
-			
-		elif xx[0][0]==None:
-			print(' channel = none',xx)
-			return False
-		else:
-			if xx[0][1]<1:
-				print('is_channels_active: channels active but view key not validated',xx)
-				
-				return False
-		
-			#print('channels active',xx)
-			return True 
 		
 		
 	# in msg channels = external addresses = external uids
