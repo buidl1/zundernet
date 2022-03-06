@@ -134,12 +134,17 @@ class Settings:
 			grid_db.append(tmpdict)
 			
 			
+			tmpdict={}
+			tmpdict['rowk']='db_reset_msgs'
+			tmpdict['rowv']=[ { 'T':'LabelV', 'L':'Reset processed transactions:'}, { 'T':'LabelV', 'L':  ' '}, {'T':'Button', 'L':'Reset','span':2, 'tooltip':'In case of big wallet may take some time.' }]
+			grid_db.append(tmpdict)
+			
 			return grid_db, colnames
 			
 		grid_db, colnames=update_db_info()
 		
 		# self.db_table=flexitable.FlexiTable(frame1,grid_db)
-		self.db_table=gui.Table(None,params={'dim':[5,3],'updatable':1, 'toContent':1} )       #flexitable.FlexiTable(frame0,grid_pass) # +++ update command filter after each iteration
+		self.db_table=gui.Table(None,params={'dim':[6,3],'updatable':1, 'toContent':1} )       #flexitable.FlexiTable(frame0,grid_pass) # +++ update command filter after each iteration
 		self.db_table.updateTable(grid_db,colnames)
 		frame1.insertWidget(self.db_table)
 		
@@ -154,6 +159,22 @@ class Settings:
 			
 		self.db_table.cellWidget(2,2).set_fun(True,delete_old,'queue_done','created_time',31)
 		self.db_table.cellWidget(4,2).set_fun(True,delete_old,'notifications','datetime',1)
+		
+		
+		
+		def reset_messages(*evargs):
+			idb=localdb.DB(self.db)
+			idb.delete_where( 'in_signatures' )
+			idb.delete_where( 'msgs_inout' )
+			idb.delete_where( 'tx_history' )
+			idb.delete_where( 'notifications' )
+			idb.delete_where( 'channels' ) 
+			gui.showinfo("Transactions cleared", "DB transactions clear - can recalc now!",self.parent_frame )
+			
+		self.db_table.cellWidget(5,2).set_fun(True,reset_messages )
+			# to recalc msg and signatures: 
+			#, table['out_signatures'] -- export if full db reset ?
+			#, table['channel_signatures']? -- storage of my selected part of signature 
 		
 		# return parent_frame
 		
