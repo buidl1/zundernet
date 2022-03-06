@@ -51,7 +51,7 @@ class Chnls(gui.QObject):
 		# print(self.cur_addr)
 		if args[0]=='r': # and hasattr(self,'cur_addr'):
 			# if self.cur_addr!='':
-			tmpaddr=self.cur_addr #args[1] #self.cur_addr
+			tmpaddr=self.cur_uid #args[1] #self.cur_addr
 			# tmpdict={'rowk':'to', 'rowv':[{'T':'LabelC', 'L':'Replying to: '+tmpaddr,'width':80}  ]}
 			tmpstr=''
 			if len(args)>1:
@@ -66,10 +66,11 @@ class Chnls(gui.QObject):
 		mysignature=''
 		idb=localdb.DB(self.db)
 		 
-		db_sign=idb.select( 'channel_signatures', [ 'signature' ], {'addr':['=',  "'"+tmpaddr+"'" ] } )
+		# db_sign=idb.select( 'channel_signatures', [ 'signature' ], {'addr':['=',  "'"+tmpaddr+"'" ] } )
+		db_sign=idb.select_last_val('channel_signatures','signature')
 		sign_dict={}
-		if len(db_sign)==1:
-			mysignature=db_sign[0][0]
+		if db_sign!=None: #len(db_sign)==1:
+			mysignature=db_sign #[0][0]
 			sign_dict={'T':'LabelC', 'L':mysignature ,'width':6}
 		# if mysignature=='':
 		else:
@@ -102,7 +103,7 @@ class Chnls(gui.QObject):
 				return
 			
 			
-			to=self.cur_addr
+			to=self.cur_uid
 			if to=='':
 				to=msg_table.cellWidget(1,1).toolTip() #.get_value( 'addr')
 				
@@ -114,18 +115,18 @@ class Chnls(gui.QObject):
 			# prepare msg inner json ... 
 			send_dict={'txt':msg}
 			
-			
+			tmpsender=''
 			if msg_table.cellWidget(3,1)!=None:
 				
-				tmpsender=msg_table.cellWidget(3,1).text()
+				tmpsender=msg_table.cellWidget(3,1).text() 
 			elif msg_table.item(3,1)!=None:
 				tmpsender=msg_table.item(3,1).text()
 			
 			# print('tmpsender', tmpsender)
 			
-			send_dict['sender']=tmpsender# only add sender first time later not needdidb=localdb.DB(self.db)
-			table={'channel_signatures':[{'addr':to,'signature':tmpsender}]} 
-			idb.upsert( table, [ 'addr' ,'signature' ], {'addr':['=',  "'"+to+"'" ] } )	
+			send_dict['sender']=tmpsender# only add sender first time later not needdidb=localdb.DB(self.db) 
+			table={'channel_signatures':[{ 'signature':tmpsender}]} 
+			idb.upsert( table, [ 'signature' ] )
 			
 			json_msg=json.dumps(send_dict)
 			# print('json ready',json_msg)
@@ -266,10 +267,21 @@ class Chnls(gui.QObject):
 			self.filter_table.cellWidget(0,3).set_fun( self.update_msg_frame) #.bind_combox_cmd('msg',[], self.update_msg_frame )	
 			# self.filter_table.cellWidget(0,4).set_fun(False,self.send_reply,'s') #.set_cmd('newmsg',['s' ], self.send_reply)
 			# self.filter_table.cellWidget(0,4).set_fun(False,print,'Import') #.set_cmd('newmsg',['s' ], self.send_reply)
-			self.filter_table.cellWidget(0,4).set_fun(False,print,'Export')
-			self.filter_table.cellWidget(0,4).setEnabled(False) #.set_cmd('newmsg',['s' ], self.send_reply)
-			self.filter_table.cellWidget(0,5).set_fun(False,print,'Reply')
-			self.filter_table.cellWidget(0,5).setEnabled(False) #.set_cmd('newmsg',['s' ], self.send_reply)
+			
+			
+			if self.cur_uid in self.valid_uid_to_name:
+				tmpalias=self.valid_uid_to_name[self.cur_uid] #'CHANNEL NAME!!!' #self.grid_threads_msg[curid][0]['rowv'][1]['uid'] #TO CHANGE CHANNEL
+				 
+				self.filter_table.cellWidget(0,4).updateButton(name='Export '+ tmpalias['name'], actionFun=self.export_channel,args=( self.cur_uid, tmpalias['vk'] ) )
+				self.filter_table.cellWidget(0,5).updateButton(name='Reply to '+ tmpalias['name'], actionFun=self.send_reply,args=('r',tmpalias['name'] ) )
+				 
+				self.filter_table.cellWidget(0,4).setEnabled(True) 
+				self.filter_table.cellWidget(0,5).setEnabled(True) 
+			else:
+				self.filter_table.cellWidget(0,4).set_fun(False,print,'Export')
+				self.filter_table.cellWidget(0,4).setEnabled(False) #.set_cmd('newmsg',['s' ], self.send_reply)
+				self.filter_table.cellWidget(0,5).set_fun(False,print,'Reply')
+				self.filter_table.cellWidget(0,5).setEnabled(False) #.set_cmd('newmsg',['s' ], self.send_reply)
 	
 	
 	#todo next:
@@ -280,7 +292,8 @@ class Chnls(gui.QObject):
 		super(Chnls, self).__init__()
 		# detect channels active!
 		# table['channels']={'address':'text', 'vk':'text', 'creator':'text', 'channel_name':'text', 'channel_intro':'text', 'status':'text', 'own':'text', 'channel_type':'text' }
-	
+		self.cur_uid=-1
+		self.valid_uid_to_name=[]
 		# print('CHANNEL INIT')
 		self.defchnls=DefChannels()
 		# self.activation_channel_addr='zs18mkw7d8d4ts3ctw24hmsk8auerq3r7ekhq356x8n72jfz5praez9kuh35s398lxy69zmq2snr9p'
@@ -345,7 +358,7 @@ class Chnls(gui.QObject):
 		 
 		self.main_table=None
 		self.main_table_params={ 'updatable':1,'sortable':1,'default_sort_col':'Date time' ,'rowSizeMod':1} #self.main_table_params['dim']=[len(self.grid_threads_msg[self.cur_uid]),2],
-		self.cur_uid=-1
+		
 		
 		self.updating_threads=False
 		self.updating_chat=False
@@ -399,18 +412,20 @@ class Chnls(gui.QObject):
 		 
 		 
 		 
-	def set_reply(self,curid):
+	def set_reply(self): #,curid - diff to msgs
 		
 		
-		self.cur_addr=curid 
-		tmpalias=self.valid_uid_to_name[self.cur_addr] #'CHANNEL NAME!!!' #self.grid_threads_msg[curid][0]['rowv'][1]['uid'] #TO CHANGE CHANNEL
+		# self.cur_addr=curid # self.cur_uid
+		tmpalias=self.valid_uid_to_name[self.cur_uid] #'CHANNEL NAME!!!' #self.grid_threads_msg[curid][0]['rowv'][1]['uid'] #TO CHANGE CHANNEL
+		 
+		# self.filter_table.cellWidget(0,4).setEnabled(True) 
+		# self.filter_table.cellWidget(0,5).setEnabled(True) 
+		 
+		self.filter_table.cellWidget(0,4).updateButton(name='Export '+ tmpalias['name'], actionFun=self.export_channel,args=( self.cur_uid, tmpalias['vk'] ) )
+		self.filter_table.cellWidget(0,5).updateButton(name='Reply to '+ tmpalias['name'], actionFun=self.send_reply,args=('r',tmpalias['name'] ) )
 		 
 		self.filter_table.cellWidget(0,4).setEnabled(True) 
 		self.filter_table.cellWidget(0,5).setEnabled(True) 
-		 
-		self.filter_table.cellWidget(0,4).updateButton(name='Export '+ tmpalias['name'], actionFun=self.export_channel,args=( self.cur_addr, tmpalias['vk'] ) )
-		self.filter_table.cellWidget(0,5).updateButton(name='Reply to '+ tmpalias['name'], actionFun=self.send_reply,args=('r',tmpalias['name'] ) )
-		 
 		
 		citems=self.action_buttons.layout().count()
 		tmplen=len(tmpalias['intro'])
@@ -456,13 +471,17 @@ class Chnls(gui.QObject):
 		self.updating_chat=True
 		 
 		if len(evargs)>0: 
+			# print('channel changing self.cur_uid len(evargs)>0 TO:',evargs[-1],'evargs',evargs)
 			self.cur_uid=evargs[-1]
 		
 		try:
 		 
 			if len(self.thr_ord )>0:
 				if self.cur_uid not in self.valid_uids:
+					# print('init self.cur_uid',self.cur_uid)
+					# print('channel changing self.cur_uid AGAIN NOT IN ',self.cur_uid,'not in valid arr',self.valid_uids)
 					self.cur_uid = self.valid_uids[0] 
+					# print('\t set',self.cur_uid )
 			
 			# if hasattr(self,'cur_uid') and self.cur_uid>-1:
 			
@@ -489,7 +508,7 @@ class Chnls(gui.QObject):
 				# add conditional maxcolwidth
 					
 				self.main_table.updateTable(self.grid_threads_msg[self.cur_uid],tmpcolnames,doprint=False) #+'_'
-				self.set_reply(self.cur_uid)
+				self.set_reply( )
 				 
 		except:
 			print('exception: update_msg_frame')
@@ -529,6 +548,8 @@ class Chnls(gui.QObject):
 			
 		# need channel name 
 		adr_date=idb.select_max_val( 'msgs_inout',['in_sign_uid','date_time'],where=wwhere,groupby=['addr_to'])
+		# print('adr_date',adr_date)
+		# print('msgs',idb.select('msgs_inout'))
 		if hasattr(self,"adr_date") and self.adr_date==adr_date:
 			return 0
 			
