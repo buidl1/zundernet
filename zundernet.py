@@ -1,5 +1,9 @@
 
-# TODO:
+# TODO: 
+# seems send wrongly? didnt merge properly ?
+ 
+# add sync start at 179... and per  key pair
+#call setprimarykey to set main key 
 # block quit when wallet being encrypted after blockchain stop!
 # use db in memoery
 # load backup to memory on start
@@ -94,6 +98,7 @@ def upload_0():
 	dmn.msg_signal_list.connect(wata.display_list)
 	dmn.wallet_status_update.connect(wata.updateStatus) #self.start_stop_enable.emit(True)
 	dmn.wallet_synced_signal.connect(init_app.check_if_new_wallet_backup_needed)
+	dmn.wallet_synced_signal.connect(wds.setSynced)
  
 	
 gui.QTimer.singleShot(500,upload_0)
@@ -103,6 +108,7 @@ gui.QTimer.singleShot(500,upload_0)
 
 tabs0.insertTab( tab_dict={'Wallet':wata.tabs1})
 
+# is this correct ? ok
 wds.sending_signal.connect(wata.updateWalletDisplay)
 
 addrb=addr_book.AddressBook( wds)
@@ -194,7 +200,7 @@ def upload_settings():
 	dmn.start_stop_enable.connect(wata_settings.updatePassChangeState )
 	# print(' Settings dt',time.time()-t0) #0.74
 	# t0=time.time()
-gui.QTimer.singleShot(9000,upload_settings)
+gui.QTimer.singleShot(5000,upload_settings)
 
 
 app.exec_()
