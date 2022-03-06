@@ -15,7 +15,9 @@ import modules.app_fun as app_fun
 
 class Wallet: # should store last values in DB for faster preview - on preview wallt commands frozen/not active
 
-
+	# in outgoing either addr to or addr ext should be own...
+	# now 2 times the same is eddr to ...
+	
 	def prep_msgs_inout(self,txid_utf8,mm,ttype,dt,tx_status='sent' ,in_sign_uid=-1,addr_to='' ):
 		# print('b4 split',mm[0])
 		tmpmsg,sign1,sign1_n,sign2,sign2_n =app_fun.split_memo(mm[0],False)
@@ -174,8 +176,10 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 	# WARNING - ensure only viekey addr gets here!
 		tt=[]
 		try:
+			# BUG in piraed? not returning change status for view keys ?
 			tmp1=app_fun.run_process(self.cli_cmd,['z_listreceivedbyaddress',addr,'0' ])
 			tt=json.loads(tmp1)
+			# print('z_listreceivedbyaddress for '+addr+'\n',tt)
 			
 		except:
 			print('Exception get_all_txs addr ',addr)
@@ -394,6 +398,9 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 					dt,ts=app_fun.now_to_str(False,ret_timestamp=True)
 					tmp_timestamp=ts-60*tx["confirmations"]
 					tmp_date_time=app_fun.date2str(datetime.datetime.now()-datetime.timedelta(seconds=60*tx["confirmations"]) )
+					
+					
+					
 					if 'change' in tx: # not interested in change tx ??
 						if tx['change']:
 							# print('\n\tchange found - pass by ;')
@@ -412,6 +419,10 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 					# print('NOT CHANGE!',outindex not in self.historical_txs[aa][tx["txid"]])
 					
 					if outindex not in self.historical_txs[aa][tx["txid"]]: # 'Category'= "'outindex_"+str(outindex)+"'"
+					
+						# if tx['txid']=='2a0a99f9644dc9e05e1417208d326abeff0710851b204235b80bdd013bc4698b': 
+							# print('\nwallet api outindex not in tx=\n',tx)
+					
 						tmpmemo=''
 						if "memoStr" in tx:
 							tmpmemo=tx["memoStr"]
@@ -424,16 +435,22 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 							
 								pass
 								
-							# print('orig memmo',tmpmemo)
-							tmpmemo=self.clear_memo(tmpmemo)
-							# print('clear memmo',tmpmemo)
-							# clearing memo can erase \n wrongly ... 
+						# print('orig memmo',tmpmemo)
+						tmpmemo=self.clear_memo(tmpmemo)
+						# print('clear memmo',tmpmemo) 
+						
+						if len(tmpmemo)<4:
+							from_str='too short memo imply error in msg format: ['+tmpmemo+']' 
+							self.insert_history_tx('_'+str(outindex),tx["txid"],y["blocks"]-tx["confirmations"] , tmp_timestamp , tmp_date_time, from_str, aa, tx["amount"],ttype='in/change?') 
+							self.historical_txs[aa][tx["txid"]][outindex] = { "amount":tx["amount"]}
+							continue
 						
 						tmpwhere={'to_str':['=',"'"+aa+"'"],'Type':[' like ',"'in%'"],'txid':['=',"'"+tx["txid"]+"'"],'Category':['=',"'outindex_"+str(outindex)+"'"] }
 						
 						# print('\ncheckexist where ',tmpwhere)
 						checkexist=idb.select('tx_history', ["Type"],tmpwhere) # if not exist yet add for processing 
-						# print('\ncheckexist',checkexist)
+						# if tx['txid']=='2a0a99f9644dc9e05e1417208d326abeff0710851b204235b80bdd013bc4698b': 
+						# print('\ncheckexist\n',checkexist)
 						
 						# print(idb.select('tx_history', [ ],{'to_str':['=',"'"+aa+"'"],'Type':[' like ',"'in%'"],'txid':['=',"'"+tx["txid"]+"'"]  }))
 						if len(checkexist)==0:
@@ -475,8 +492,8 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 								q={'dt':dt
 									, 'tmpmemo':tmpmemo
 									,'block':y["blocks"]-tx["confirmations"]
-									,'timestamp':ts-60*tx["confirmations"]   
-									, 'date_time':app_fun.date2str(datetime.datetime.now()-datetime.timedelta(seconds=60*tx["confirmations"]) )
+									,'timestamp':tmp_timestamp #ts-60*tx["confirmations"]   
+									, 'date_time':tmp_date_time #app_fun.date2str(datetime.datetime.now()-datetime.timedelta(seconds=60*tx["confirmations"]) )
 									, 'amount':tx["amount"]
 									, 'outindex':'_'+str(outindex)
 									}
@@ -564,7 +581,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 					from_str=''
 					
 					if True: #init_table["block"]>=self.first_block:
-						table_msg=self.prep_msgs_inout(txid,[init_table['tmpmemo'],0,''],'in',init_table['dt'],tx_status='received', in_sign_uid=-2,addr_to=aa ) # -2 to be detected
+						table_msg=self.prep_msgs_inout(txid,[init_table['tmpmemo'],0,''],'in',init_table['date_time'],tx_status='received', in_sign_uid=-2,addr_to=aa ) # -2 to be detected
 						
 						from_str=table_msg['msgs_inout'][0]['msg']
 						# print(321,table_msg,from_str)
@@ -744,6 +761,8 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 		self.amounts_conf=[]
 		self.amounts_unc=[]
 		
+		# potential bug:
+		# either self.confirmed or self.unconfirmed not having new aa or self.addr_list
 		for aa in self.addr_list:
 		
 			amount_init=0 
@@ -809,7 +828,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 		
 	# z_listreceivedbyaddress “address” need this for view key ?	
 		
-		
+	# in new addr reciving tx not refreshig self.confirmed ??
 	def update_unspent(self ): 
 	
 		cmdloc=['z_listunspent','0','999999999','true']
@@ -1017,12 +1036,15 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 
 		rescan="yes"
 		tmpnewaddr=''
-		# print("z_importviewingkey",vkey,rescan,str(startHeight))
+		print("started z_importviewingkey",vkey[:7]+'...','rescan',rescan,'start height',str(startHeight))
 		tmpnewaddr=app_fun.run_process(self.cli_cmd,["z_importviewingkey",vkey,rescan,str(startHeight)]) #,zaddr
+		print('finished z_importviewingkey')
 		
-		if 'error' in tmpnewaddr:
+		if 'error' in tmpnewaddr.lower():
+			print('error',tmpnewaddr)
 			return {'error':tmpnewaddr}
 		
+		print('updating wallet addresses')
 		self.update_all_addr()
 		self.any_change.append('z_importviewingkey')
 		
