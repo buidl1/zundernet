@@ -1087,12 +1087,13 @@ class WalDispSet(gui.QObject):
 	
 	def prepare_queue_frame(self,init=False):	
 
+		# print('11 os.path.exists(self.db)',os.path.exists(self.db) )
 		idb=localdb.DB(self.db)
 		grid_lol3=[]
 		tmpdict2={}
 		colnames=['Task','Created time','Status','Wait[s]','Cancel']
 		
-		
+		# print('22 os.path.exists(self.db)',os.path.exists(self.db) )
 		disp_dict=idb.select('queue_waiting', ["command","created_time","status","wait_seconds","json","id"],orderby=[{'created_time':'desc' }])
 		# print(disp_dict)
 		
@@ -1121,7 +1122,7 @@ class WalDispSet(gui.QObject):
 				
 				# print('before delete',idb.select('queue_waiting'))
 				idb.delete_where('queue_waiting',{'id':['=',id]})
-				self.sending_signal.emit(['cmd_queue'])
+				# self.sending_signal.emit(['cmd_queue']) # dead loop
 				
 			except:
 				traceback.print_exc()
