@@ -19,7 +19,11 @@ class Msg(gui.QObject):
 	refreshNotifications= gui.Signal()
 	
 	def match_sign(self,fsign,sender=''): 
+	
+		# print('starting match_sign',sender)
+		
 		if len(fsign)==0:
+			# print('len(fsign)==0')
 			return -1,''
 		
 		idb=localdb.DB(self.db)
@@ -70,56 +74,66 @@ class Msg(gui.QObject):
 			tmphash=''
 			
 		tuid=idb.select('in_signatures',['uid' ], {'hex_sign':['=',"'"+sign1+"'"],'n':['=',sign1_n]}   ) #
-		# print('select tuid',tuid)
+		# print('#match_sign found addr_from_book',addr_from_book)
 		
 		if len(tuid)>0: # this should be new hash - should be no other before like this one - if other detected - return 
+			# print('tuid',tuid)
+			print('ERR dupli detected - already in !',sign1,sign1_n)
 			return -666,''
 		
+		hex2alpha=cry.hex2alpha(sign1)
 		if tmphash=='': # new sender 
-			# print('# new sender ')
+			
 			table={}
 			table['in_signatures']=[{'hex_sign':sign1,'n':sign1_n ,'uid':'auto' }]
 			insert_arr=['hex_sign','n','uid'  ]
 			
-			if sender!='': # for channels exception: insert addr book here as incoming name 
+			if True: #sender!='': # for channels exception: insert addr book here as incoming name 
 				# print('hcannel ')
 				insert_arr.append('addr_from_book')
 				
-				hex2alpha=cry.hex2alpha(sign1)
 				addr_from_book=sender+'-'+hex2alpha[:6] # channel sender name = sender nickname + init hash 4 chars
 				# print('new sender addr_from_book',addr_from_book)
 				table['in_signatures'][0]['addr_from_book']=addr_from_book
 				
 			idb.insert(table,insert_arr)
-			
+			# print('#match_sign new sender addr_from_book',addr_from_book)
 			tuid=idb.select('in_signatures',['uid','addr_from_book'], {'hex_sign':['=',"'"+sign1+"'"],'n':['=',sign1_n]}   ) #getting the new uid 
 			new_uid=tuid[0][0]
+			# print('new uid',new_uid)
 			# if tuid[0][1]!=None:
 				# addr_from_book=tuid[0][1]
 		else: 
 			
 			table={}
-			table['in_signatures']=[{'hex_sign':sign1,'n':sign1_n}]
-			idb.update(table,['hex_sign','n'   ],{'hex_sign':['=',"'"+tmphash+"'"],'n':['=',n_init]})
+			# table['in_signatures']=[{'hex_sign':sign1,'n':sign1_n }]
+			if addr_from_book=='-'+hex2alpha[:6]: # correcting signature  
+				addr_from_book=sender+'-'+hex2alpha[:6] # table['in_signatures'][0]['addr_from_book']=addr_from_book
+			# print('#match_sign update addr_from_book',addr_from_book)
+				
+			table['in_signatures']=[{'hex_sign':sign1,'n':sign1_n, 'addr_from_book':addr_from_book }]
+			idb.update(table,['hex_sign','n','addr_from_book'   ],{'hex_sign':['=',"'"+tmphash+"'"],'n':['=',n_init]})
 			
-			
+		# print('#match_sign in_signatures',idb.select('in_signatures',[ ]  ),'sign2_n',sign2_n)	
 		
 		if sign2_n>-1: # if exchanging signature to new one 
-			
+			# print('in if sign2_n>-1')
 			cursign=idb.select('in_signatures', ['uid','addr_from_book' ],{'hex_sign':['=', "'"+sign1+"'"], 'n':['=', sign1_n] } ) #
 			tmpaddr=cursign[0][1]
 			tmpuid=cursign[0][0]
 			
 			table={}
 			table['in_signatures']=[{'hex_sign':sign2,'n':sign2_n}]
+			# print('in inserting')
 			idb.insert(table,['hex_sign','n'])
 			
 			table={} 
 			table['in_signatures']=[{'uid':tmpuid,'addr_from_book':tmpaddr }]
+			# print('updating')
 			idb.update(table,['uid','addr_from_book' ],{'hex_sign':['=',"'"+sign2+"'"],'n':['=',sign2_n] })
 			
 			# addr_from_book=tmpaddr # not needed - already done in the loop
-			
+		# print('retugning return new_uid,addr_from_book ',new_uid,addr_from_book )
 		return new_uid,addr_from_book 
 		
 	
@@ -219,16 +233,35 @@ class Msg(gui.QObject):
 	
 	
 	# main purpose - recognize sender
+	# to change:
+	# - every msg in defined channel is channel msg and do not display in msg table
+	# test recalcing signatures 
+	
 	def proc_inout(self): # goal - set addr_ext and in_sign_uid for incoming msg removed ,'addr_to'
+	
+		if self.update_in_progress:
+			print('already processing msgs - check next time')
+			return
+			
+		self.update_in_progress=True
+	
 		idb=localdb.DB(self.db)
 		
-		mio=idb.select('msgs_inout',['type','addr_ext','date_time','msg', 'in_sign_uid','uid','tx_status','txid','is_channel'],{'proc_json':['=',"'False'"]},orderby=[{'date_time':'asc'}]) #
-		# print('processing msg ',mio)	
+		mio=idb.select('msgs_inout',['type','addr_ext','date_time','msg', 'in_sign_uid','uid','tx_status','txid','is_channel','addr_to'],{'proc_json':['=',"'False'"]},orderby=[{'date_time':'asc'}]) #
+		# print('processing msg \n',mio)	
 		
 		if len(mio)==0:
+			self.update_in_progress=False
 			return
 			
 		refrsh_hist,refrsh_notif,refrsh_chnl =0,0,0
+		
+		def split_simple_signature(tmpmsg): #tmpmsg, tmp_sender
+			tmp_arr=tmpmsg.split('\nFrom:')
+			tmpmsg=tmp_arr[0]
+			if len(tmp_arr)>2: tmpmsg='\nFrom:'.join(tmp_arr[:-1]) 
+			tmp_sender=tmp_arr[-1] 
+			return tmpmsg, tmp_sender
 		
 		for mm in mio:
 		
@@ -272,17 +305,43 @@ class Msg(gui.QObject):
 				else:
 					print('msg::not proper channel json - simple text msg',tmpmsg)
 			############## unfinished ?
+			else:
+				# print('check if msg is reg msg to channel to not write into regular msgs ?')
+				test_addr=idb.select('channels',['address'], {'address':['=',"'"+mm[9]+"'"]}  ) #
+				# print('comparing',mm[9],test_addr)
+				if len(test_addr)>0:
+					if test_addr[0][0]==mm[9]:
+						print('\n\n# correcting channel type optional\n\n')
+						mm[8]='True'
+				else:
+					# try take sender from reg msg
+					# tmp_arr=tmpmsg.split('\nFrom:')
+					# tmpmsg=tmp_arr[0]
+					# if len(tmp_arr)>2:
+						# tmpmsg='\nFrom:'.join(tmp_arr[:-1])
+					
+					# tmp_sender=tmp_arr[-1]
+					tmpmsg, tmp_sender=split_simple_signature(tmpmsg) #tmpmsg, tmp_sender
+					
+				# print('\n\nREG MSG',tmpmsg)
+				# print('SENDER',tmp_sender)
+				
+				# table['channels']={'address':'text', 'vk':'text', 'creator':'text', 'channel_name':'text', 'channel_intro':'text', 'status':'text', 'own':'text', 'channel_type':'text' }
 			
+			# confusing out and in msgs ... ?
 			if mm[0]=='out':
-				table={'msgs_inout':[{'proc_json':'True' }]} 
-				idb.update(table,['proc_json' ],{'uid':['=',mm[5]]})
+				# print('outgoing msg\n',mm) 
+				table={'msgs_inout':[{'proc_json':'True','msg': tmpmsg}]} 
+				idb.update(table,['proc_json','msg' ],{'uid':['=',mm[5]]})
 				
 			elif mm[0]=='in' :
+				# print('incoming msg\n',mm)
 				
 				fsign=json.loads(mm1 )
 				
+				# print('\nchecking hash for\n',mm)
 				uid,addr_from_book=self.match_sign( fsign, tmp_sender ) #mio
-				# print('\n\n\nfound match',uid,addr_from_book)
+				# print('\n\nfound match',uid,addr_from_book)
 				
 				# TODO FOR CHANNLE:
 				# if externa l channel detected link with addr book zaddr
@@ -291,41 +350,62 @@ class Msg(gui.QObject):
 				addr_ext=''
 				if uid>-1:
 					tmpalias='uid_'+str(uid)
-					if mm[8]=='True': # if channel 
+					# print('tmpalias',tmpalias)
+					if mm[8]=='True': # if channel 	
+						# print("mm[8]=='True'")
 						tmpalias=addr_from_book
-						tmpmsg=tmpmsg #json.dumps({'sender':addr_from_book, 'txt':tmpmsg}) #addr_from_book+':\n'+tmpmsg
+						# tmpmsg=tmpmsg #json.dumps({'sender':addr_from_book, 'txt':tmpmsg}) #addr_from_book+':\n'+tmpmsg
 						addr_ext=addr_from_book
 						# tmpalias=addr_from_book
 					
 					elif addr_from_book!='':
+						# print("addr_from_book!=''")
 						addr_ext=addr_from_book
 						
 						tmpalias=idb.select('addr_book',['Alias'] , {'Address':['=',"'"+addr_from_book+"'"] } )
-						tmpalias=tmpalias[0][0]
+						
+						if tmp_sender!='': 
+							tmpalias=tmp_sender
+						elif len(tmpalias)<1:
+							tmpalias=addr_from_book
+						else:
+							# print(tmpalias)
+							tmpalias=tmpalias[0][0]
 					else:
+						# print("addr_ext=tmpalias")
 						addr_ext=tmpalias
+						if tmp_sender!='': tmpalias=tmp_sender
+							
 						
 					table_h={}
 					uidtmp=tmpalias+';uid='+str(uid)+': '
 					table_h['tx_history']=[{'from_str':uidtmp+mm[3]}]
 					# one more condition - addr to/from ... 
 					# if addr t ois self do not change
-					# print('# from_str, aa: aa in from_str')
+					# print('update(table_h')
 					idb.update(table_h,['from_str' ], {'txid':['=',"'"+mm[7]+"'"],'Type':[' not in ',"('in/change','out')"]} )
 					refrsh_hist+=1
 					# print('update history ok')
 					
 					
+					# print("select('notifications'")
 					orig_json=idb.select('notifications',['orig_json'],{'details':['=',"'"+mm[7]+"'"]})
+					# print(orig_json)
 					if len(orig_json)>0:
 						table_n={}
 						uidtmp='From '+tmpalias+';uid='+str(uid)+': '+orig_json[0][0]
 						table_n['notifications']=[{'orig_json':uidtmp }]
+						# print("update(table_n")
 						idb.update(table_n,['orig_json' ],{'details':['=',"'"+mm[7]+"'"]})
 						refrsh_notif+=1
 					
-					if tmpmsg=='':
-						tmpmsg='Received '+orig_json[0][0]
+					if tmpmsg=='' :
+						if len(orig_json)>0: 
+							tmpmsg='Received '+orig_json[0][0]
+						else : 
+							tmp_amount=idb.select('tx_history',['amount' ],{'txid':['=',"'"+mm[7]+"'"], 'Type':[' like ',"'in%'"] } ) 
+							if len(tmp_amount)>0:
+								tmpmsg='Received '+str(tmp_amount[0][0])
 						
 				# 'type',
 				tmptype=mm[0]
@@ -337,12 +417,13 @@ class Msg(gui.QObject):
 					tmpmsg='Payment request '+app_fun.json_to_str(json.loads(tmpmsg),tt='')		
 			
 					
-				table={'msgs_inout':[{'type':tmptype,'proc_json':'True', 'in_sign_uid':uid, 'addr_ext':addr_ext,'msg':tmpmsg}]} #,'is_channel':"False"
+				table={'msgs_inout':[{'type':tmptype,'proc_json':'True', 'in_sign_uid':uid, 'addr_ext':addr_ext,'msg':tmpmsg,'is_channel':mm[8]}]} #,'is_channel':"False"
 				# if is_channel:
 					# table['msgs_inout'][0]['is_channel']='True'
 				
-				
-				idb.update(table,['type','proc_json', 'in_sign_uid','addr_ext','msg' ],{'uid':['=',mm[5]]})
+				# correcting channel type optional
+				# print("updating 'proc_json':'True'",mm[7])
+				idb.update(table,['type','proc_json', 'in_sign_uid','addr_ext','msg','is_channel' ],{'uid':['=',mm[5]]})
 			# self.refresh_msgs_signal.emit()	
 		if refrsh_chnl>0:
 			self.refreshChannels.emit()	
@@ -350,6 +431,8 @@ class Msg(gui.QObject):
 			self.refreshTxHistory.emit()	
 		if refrsh_notif>0: 
 			self.refreshNotifications.emit()	
+			
+		self.update_in_progress=False
 		
 			
 			
@@ -372,11 +455,47 @@ class Msg(gui.QObject):
 		msg_grid.append(tmpdict)
 		tmpdict={'rowk':'msg', 'rowv':[{'T':'TextEdit','uid':'msg','span':2, 'style':'background-color:white;'} ]}
 		msg_grid.append(tmpdict)
-		tmpdict={'rowk':'send', 'rowv':[{'T':'Button', 'L':'Send', 'uid':'send','width':6}  ] }
+		
+		
+		
+		
+		
+		# check signature exist for the addr - if not create
+		mysignature=''
+		idb=localdb.DB(self.db)
+		 
+		# db_sign=idb.select( 'channel_signatures', [ 'signature' ], {'addr':['=',  "'"+tmpaddr+"'" ] } )
+		db_sign=idb.select_last_val('channel_signatures','signature')
+		if db_sign==None:
+			# db_sign
+			tmp=idb.select_max_val( 'channel_signatures','signature')
+			if len(tmp)>0:
+				if tmp[0][0]!=None:
+					db_sign=tmp[0][0]
+					
+		# print('db_sign',db_sign)
+		sign_dict={}
+		if db_sign!=None: #len(db_sign)==1:
+			mysignature=db_sign #[0][0]
+			sign_dict={'T':'LabelC', 'L':mysignature ,'width':6}
+		# if mysignature=='':
+		else:
+			# create and write to DB 
+			cc=aes.Crypto( )
+			mysignature=cc.rand_slbls( 4)
+			sign_dict={'T':'LineEdit', 'L':'signature', 'V':mysignature ,'width':6}
+
+		
+		tmpdict={'rowk':'send', 'rowv':[ {'T':'LabelC', 'L':'Signature' ,'width':6}, sign_dict, {'T':'Button', 'L':'Send', 'uid':'send','width':6}  ] }
 		msg_grid.append(tmpdict)
+		 
+		
+		
+		# tmpdict={'rowk':'send', 'rowv':[{'T':'Button', 'L':'Send', 'uid':'send','width':6}  ] }
+		# msg_grid.append(tmpdict)
 		
 		# msg_table=flexitable.FlexiTable(selframe,msg_grid)
-		msg_table=gui.Table(None,{'dim':[len(msg_grid),2], 'toContent':1})
+		msg_table=gui.Table(None,{'dim':[len(msg_grid),3], 'toContent':1})
 		msg_table.updateTable(msg_grid)
 		
 		last_addr=localdb.get_last_addr_from("'last_msg_from_addr'")
@@ -399,7 +518,19 @@ class Msg(gui.QObject):
 			froma=msg_table.cellWidget(0,1).toolTip() #.get_value( 'ownaddr')
 			if froma=='':
 				return
-				
+			
+			idb=localdb.DB(self.db)
+			
+			tmpsender=''
+			if msg_table.cellWidget(3,1)!=None: 
+				tmpsender=msg_table.cellWidget(3,1).text() 
+			elif msg_table.item(3,1)!=None:
+				tmpsender=msg_table.item(3,1).text() 
+			
+			table={'channel_signatures':[{ 'signature':tmpsender}]} 
+			idb.upsert( table, [ 'signature' ] )
+			msg+='\nFrom:'+tmpsender
+			
 			got_bad_char, msg_arr=self.prep_msg(msg,to)
 			
 			if got_bad_char:
@@ -412,15 +543,15 @@ class Msg(gui.QObject):
 			table={}
 			table['queue_waiting']=[localdb.set_que_waiting('send',jsonstr=json.dumps(ddict) ) ]
 			table['queue_waiting'][0]['type']='message'
-			
-			idb=localdb.DB(self.db)
 			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
+			
+			
 			
 			# self.set_last_addr_from( froma)
 			localdb.set_last_addr_from( froma,"'last_msg_from_addr'")
 			msg_table.parent().close()
 			
-		msg_table.cellWidget(3,0).set_fun(True,send) #set_cmd('send',[ ], send)
+		msg_table.cellWidget(3,2).set_fun(True,send) #set_cmd('send',[ ], send)
 		msg_table.cellWidget(0,1).set_fun(False,self.addr_book.get_addr_from_wallet ) 
 		
 		if tmpaddr=='':
@@ -705,6 +836,19 @@ class Msg(gui.QObject):
 		elif thr_filter=='Last 30 days':
 			wwhere={'date_time':['>=',"'"+app_fun.today_add_days(-30)+"'"], 'in_sign_uid':['>',-2],'is_channel':[['=',"'False'"],[' is ',"null"]]}
 			
+		# aliases known:
+		# can send to using addr book / defined situation or tx to any / undefined ...
+		
+		# when sending to - show under alias from send to addr, show "me" msgs 
+		# when receiving - show under alias from my addr
+		# should be:
+		# when addr from book - show both in out msgs under alias from book / merged ?
+		#
+		# when no addr in book connected:
+		# show outgoing under  from addr i sent to ?
+		# when receiving from unknown? should stay unknown until connected ?
+		# in this approach  is ok - sending to , it's me so it is outgoing!
+			
 		adr_date=idb.select_max_val( 'msgs_inout',['in_sign_uid','date_time' ],where=wwhere,groupby=['addr_ext'])
 		if hasattr(self,"adr_date") and self.adr_date==adr_date:
 			return 0
@@ -720,7 +864,7 @@ class Msg(gui.QObject):
 		unk_count=1
 		
 		for ad in adr_date:
-		
+			# print('ad',ad)
 			tmpalias=''
 			tmpaddr=ad[0]
 			tmpuid= str(ad[0])
@@ -730,22 +874,28 @@ class Msg(gui.QObject):
 				# print('alias_from_book',alias_from_book)
 				if len(alias_from_book)>0: 
 					if alias_from_book[0][0]!=None and alias_from_book[0][0]!='': 
+						# print('alias_from_book',alias_from_book[0][0])
 						tmpalias=alias_from_book[0][0]
 					else: # or maybe empty
 						tmpalias=ad[0][3:9]
+						# print('ad[0][3:9]',ad[0][3:9])
 						
 				else:
-					# print('preping tmpalias')
+					# print('preping tmpalias') 
 					if 'uid' == ad[0][:3]: # if addr may be not in a book
 						tmpalias=ad[0]
+						# print('ad[0]',ad[0] )# here uid1
 					else:
 						tmpalias=ad[0][3:9]
+						# print('2 ad[0][3:9]',ad[0][3:9])  
 					# print('preping tmpalias',tmpalias)
 					
 			else: 
+				# print(' thrd else',ad[0][3:9])
 				if ad[1]>-1: #got signature
 					tmpalias='uid_'+str(ad[1]) # ad[1]  #'uid_'+in_sign_uid
 					tmpaddr='uid_'+str(ad[1])
+					# print('ad[1]>-1',ad[1])
 				else:
 					tmpalias='unknown_'+str(unk_count)
 					tmpaddr='unknown' #+str(unk_count)
