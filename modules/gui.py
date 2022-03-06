@@ -1,4 +1,6 @@
-# small widgets
+# lambda bugs
+# lambda:  actionFun(*args)
+# sgould be# lambda *args:  actionFun(*args)
 import os,time
 
 from PySide2.QtCore import (
@@ -486,9 +488,9 @@ class Button(QPushButton):
 			self.fun=actionFun
 			self.args=args
 			if args!=None:
-				self.clicked.connect(lambda  : actionFun(self,*args))
+				self.clicked.connect(lambda   : actionFun(self,*args))
 			else:
-				self.clicked.connect(lambda : actionFun(self ))
+				self.clicked.connect(lambda  : actionFun(self ))
 	
 		# print(actionFun,args)
 
@@ -504,9 +506,9 @@ class Button(QPushButton):
 			self.fun=actionFun
 			
 			if args!=None:
-				self.clicked.connect(lambda  : actionFun(self,*args))
+				self.clicked.connect(lambda   : actionFun(self,*args))
 			else:
-				self.clicked.connect(lambda : actionFun(self ))
+				self.clicked.connect(lambda  : actionFun(self ))
 			
 		if tooltip!='':
 			self.setToolTip(tooltip)
@@ -521,9 +523,9 @@ class Button(QPushButton):
 		self.fun=actionFun
 	
 		if no_self:
-			self.clicked.connect(lambda:  actionFun(*args))
+			self.clicked.connect(lambda  :  actionFun(*args))
 		else:
-			self.clicked.connect(lambda:  actionFun(self,*args))
+			self.clicked.connect(lambda  :  actionFun(self,*args))
 	# def keyPressEvent(self,event):
 		# self.fun(self,args)
 	
@@ -627,16 +629,16 @@ class Combox(QComboBox):
 				# self.activated.connect(lambda: actionFun(self))
 				
 				if args!=None:
-					self.activated.connect(lambda  : actionFun(self,*args))
+					self.activated.connect(lambda   : actionFun(self,*args))
 				else:
-					self.activated.connect(lambda : actionFun(self ))
+					self.activated.connect(lambda  : actionFun(self ))
 			else:
 				if args!=None:
 					# self.activated.connect(lambda  : actionFun(self,*args))
-					self.currentTextChanged.connect(lambda: actionFun(self,*args))
+					self.currentTextChanged.connect(lambda  : actionFun(self,*args))
 				else:
 					# self.activated.connect(lambda : actionFun(self ))
-					self.currentTextChanged.connect(lambda: actionFun(self))	# self.currentText() self.currentData(Qt.UserRole) inside actionFun will get our values 
+					self.currentTextChanged.connect(lambda  : actionFun(self))	# self.currentText() self.currentData(Qt.UserRole) inside actionFun will get our values 
 		
 		self.setStyleSheet('QComboBox {padding:3px;font-size:13px;}')
 		
@@ -660,10 +662,10 @@ class Combox(QComboBox):
 		self.fun=actionFun
 	
 		if self.every_click:
-			self.activated.connect(lambda: actionFun(self,*args))
+			self.activated.connect(lambda  : actionFun(self,*args))
 		else:
 			# print('setting function',args)
-			self.currentIndexChanged.connect(lambda: actionFun(self,*args ))
+			self.currentIndexChanged.connect(lambda  : actionFun(self,*args ))
 		
 	def replace(self,old_item_name,new_item={}): # new_item={'text'} or {'text','userdata'}
 		idx=self.findText(old_item_name,Qt.MatchExactly)
@@ -1894,7 +1896,16 @@ class MainWindow(QMainWindow):
 	
 	def closeEvent(self,event):
 		 
-		 
+		if not hasattr(self,'wrkr') or not  hasattr(self,'thrd') :
+			if not hasattr(self,'wrkr') and not  hasattr(self,'thrd') :
+				self.close()
+				return
+			
+			# if either worker or thread is on:
+			print('awaiting worker or thread - try later')
+			event.ignore()
+			return
+		
 		if self.wrkr.block_closing:
 			messagebox_showinfo('Cannot close at this moment','Application is doing some background job (e.g. encryption)',self)
 			event.ignore()
