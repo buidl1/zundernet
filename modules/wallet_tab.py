@@ -193,6 +193,7 @@ class WalletTab:
 			if  'wallet'  in wallet_part : # refreshed inside deamon / currently signal missing, and inside worke from deamon -> update_status ret_val.append('wallet')
 				# print('\n\n\nupdateWalletDisplay',wallet_part)
 				self.wds.set_disp_dict() #HERE OK SOMTIMES NOT REFRESHING PROPERLY ?? 
+				# should take live data not from db? or update db sometimes?
 				
 				gridS,cols=self.wds.prepare_summary_frame()
 				self.summary_frame={'grid':gridS,'columns':cols}
