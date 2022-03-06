@@ -33,7 +33,7 @@ class DeamonInit(gui.QObject):
 		
 		idb=localdb.DB(self.db)
 		if self.started:
-			
+			self.update_chain_status()
 			utxo_change=self.the_wallet.refresh_wallet()
 			
 			if 'addr_book' in self.the_wallet.to_refresh:
@@ -670,6 +670,9 @@ class DeamonInit(gui.QObject):
 										# print('prep msg deamon 742\n',table)
 										idb.insert(table,['proc_json','type','addr_ext','txid','tx_status','date_time', 'msg', 'uid','in_sign_uid','addr_to','is_channel'])
 									
+									
+						# todo: see where pre msg is used and ext_addr
+						# replace 1 addr to ddict['fromaddr']						
 						# self.messages.update_msgs()
 						
 						tmpres=json.dumps(tmpres)	
@@ -799,7 +802,22 @@ class DeamonInit(gui.QObject):
 	
 		return count_updates
 		
-		 
+	def update_chain_status(self,gitmp=None,update=True):
+		if self.started:
+			if gitmp==None:
+				gitmp=app_fun.run_process(self.cli_cmd,'getinfo')
+			gi=json.loads(gitmp) 
+			kv_tmp=[{"name":"Chain: "},{"synced":"\nSynced: "},{"blocks":"\nCurrent block: " }, {"longestchain":"\nLongest chain: "}, {"notarized":"\nNotarized: "}, {"connections":"\nConnections: "}]
+			tmpstr=""
+			for dd in kv_tmp:
+				for kk,vv in dd.items():
+					if kk in gi:
+						tmpstr+=vv+str(gi[kk])
+						
+			if update:
+				self.output(tmpstr)
+			else:
+				return tmpstr
 	
 	def update_status(self,xx):
 		
@@ -811,12 +829,13 @@ class DeamonInit(gui.QObject):
 				gitmp=app_fun.run_process(self.cli_cmd,'getinfo')
 				gi=json.loads(gitmp)
 				# print('\nupdate_status 700',gi)
-				kv_tmp=[{"name":"Chain: "},{"synced":"\nSynced: "},{"blocks":"\nCurrent block: " }, {"longestchain":"\nLongest chain: "}, {"notarized":"\nNotarized: "}, {"connections":"\nConnections: "}]
-				tmpstr=""
-				for dd in kv_tmp:
-					for kk,vv in dd.items():
-						if kk in gi:
-							tmpstr+=vv+str(gi[kk])
+				# kv_tmp=[{"name":"Chain: "},{"synced":"\nSynced: "},{"blocks":"\nCurrent block: " }, {"longestchain":"\nLongest chain: "}, {"notarized":"\nNotarized: "}, {"connections":"\nConnections: "}]
+				# tmpstr=""
+				# for dd in kv_tmp:
+					# for kk,vv in dd.items():
+						# if kk in gi:
+							# tmpstr+=vv+str(gi[kk])
+				tmpstr=self.update_chain_status(gitmp , False)
 				
 				
 				# "Synced: "+str(gi["synced"])+"\nCurrent block: "+str(gi["blocks"])+"\nLongest chain: "+str(gi["longestchain"])+"\nNotarized: "+str(gi["notarized"])+"\nConnections: "+str(gi["connections"])
@@ -955,9 +974,11 @@ class DeamonInit(gui.QObject):
 				if y["synced"]==True:
 				# self.walletTab.bstartstop.setEnabled(True) #self.bstartstop.configure(state='normal')
 					self.start_stop_enable.emit(True)
+					self.update_chain_status()
 					self.the_wallet.refresh_wallet()
 			elif y['longestchain']==y['blocks']:
 				self.start_stop_enable.emit(True)
+				self.update_chain_status()
 				self.the_wallet.refresh_wallet()
 			else:
 				# self.walletTab.bstartstop.setEnabled(False) #self.bstartstop.configure(state='disabled')
