@@ -16,8 +16,9 @@ def init_init():
 	table['lock_db_threads']={"lock":'text' }
 	table['busy']={"fun_name":'text','ts':'real' }
 	table['block_time_logs']={'uid':'int', 'ttime':'real','block':'int' }
+	table['current_session']={'uid':'int', 'datetime':'txt' } # inserted before db decrypt
 	
-	# idb.drop_table('block_time_logs')
+	# idb.drop_table('lock_db_threads')
 	# nearest_time=idb.select_min_val('block_time_logs','ttime',where={'block':['>=', 1377250]} )
 	# print('nearest_time',nearest_time)
 	
@@ -144,7 +145,8 @@ def init_tables(dbfname, app_db_version): #to update tables and indexes iterate 
 	
 	
 	
-	# print('check app version',time.time()-to)
+	
+	
 	table={}
 	table['view_keys']={'address':'text', 'vk':'text' }
 	table['channels']={'address':'text', 'vk':'text', 'creator':'text', 'channel_name':'text', 'channel_intro':'text', 'status':'text', 'own':'text', 'channel_type':'text' }
@@ -384,6 +386,8 @@ class DB:
 		if dbname[:13]=='local_storage' and dbname[-3:]=='.db':
 			if not check_local_storage_not_encrypted():
 				self.db_encrypted=True
+				
+		# print('dbname self.db_encrypted', dbname , self.db_encrypted)
 
 	def __init__(self,dbname): #='local_storage.db'
 		
@@ -552,13 +556,13 @@ class DB:
 		curs.execute(sql_init)
 		self.close_connection(curs,conn,fname,ts)
 		
-	def upsert(self,table,items_order,where): #={'json_name':['=',tmp_max_val]}
+	def upsert(self,table,items_order,where={}): #={'json_name':['=',tmp_max_val]}
 		if table=={}:
 			print('\n\n! ! ! EMPTY UPSERT TABLE!!!!!\n\n')
 			return
 	
 		# if 'jsons' in table:
-			# print('table',table)
+		# print('table',table,items_order)
 	
 		self.check_encrypted()
 		# print( self.db_encrypted)
@@ -572,6 +576,10 @@ class DB:
 		
 		# if 'jsons' in table:
 			# print('tname',tname)
+		# if where=={}:
+			# print('upser where unspecified - doin insert')
+			# self.insert(table,items_order)
+			# return
 		
 		cc=self.count(tname,where)
 		
@@ -584,6 +592,7 @@ class DB:
 			self.update(table,items_order,where)
 		else:
 			print(cc[0][0],' upsert more then 1 - exception!?',tname,where)
+			# self.update(table,items_order,where)
 		
 		
 		
@@ -838,6 +847,7 @@ class DB:
 	def select(self,table_name,columns=[],where={},orderby=[],distinct=False, limit=''): 
 	
 		self.check_encrypted()
+		# print('\n\n??? self.db_encrypted',self.db_encrypted)
 		if self.db_encrypted: 
 			return [ ]
 		
@@ -937,6 +947,10 @@ def set_que_waiting( command,jsonstr='', wait_seconds=0):
 
 
 def get_addr_to_hash(addrto,onlylentest=False):
+	# addrto='ANY' #overwrite to have a common one !
+	# not good sinceending will replace only for a single one not all addr that can recognize it ... 
+	# would require to publish to a special channel public signatures that it was changed ... then sync in a proper order ... 
+
 	initdb= DB('init.db')
 	tt= initdb.select('init_settings',columns=["data_files"]) 
 	dbname=json.loads(tt[0][0])
@@ -944,6 +958,8 @@ def get_addr_to_hash(addrto,onlylentest=False):
 
 	idb= DB(dbname)
 	tmpsign=idb.select( 'out_signatures',['seed','n'], {'addr':['=',"'"+addrto+"'"], 'n':['>',0]}, orderby=[{'n':'asc'}] )
+	# tmpsign=idb.select( 'out_signatures',['seed','n'], { 'n':['>',0]}, orderby=[{'n':'asc'}] )
+	# db_sign=idb.select_last_val('channel_signatures','signature')
 	
 	if onlylentest:
 		if len(tmpsign)==0:
