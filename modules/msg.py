@@ -445,12 +445,12 @@ class Msg(gui.QObject):
 		
 		tmpdict={'rowk':'to', 'rowv':[{'T':'LabelC', 'L':'Select address to','width':19},{'T':'Button', 'L':'...', 'uid':'seladr', 'width':4}]} #, {'T':'LabelV','L':'','uid':'addr','width':80}
 		
-		tmpaddr=''
+		# tmpaddr=''
 		# print(self.cur_addr)
-		if args[0]=='r' and hasattr(self,'cur_addr'):
+		if args[0]=='r': # and hasattr(self,'cur_addr'):
 			if self.cur_addr!='':
-				tmpaddr=self.cur_addr
-				tmpdict={'rowk':'to', 'rowv':[{'T':'LabelC', 'L':'Replying to: '+tmpaddr,'width':80}  ]}
+				# tmpaddr=self.cur_addr
+				tmpdict={'rowk':'to', 'rowv':[{'T':'LabelC', 'L':'Replying to: '+self.cur_addr,'width':80}  ]}
 			
 		msg_grid.append(tmpdict)
 		tmpdict={'rowk':'msg', 'rowv':[{'T':'TextEdit','uid':'msg','span':2, 'style':'background-color:white;'} ]}
@@ -511,9 +511,10 @@ class Msg(gui.QObject):
 				return
 			
 			
-			to=self.cur_addr
-			if tmpaddr=='':
+			to= self.cur_addr
+			if to=='':
 				to=msg_table.cellWidget(1,1).toolTip() #.get_value( 'addr')
+			 
 				
 			froma=msg_table.cellWidget(0,1).toolTip() #.get_value( 'ownaddr')
 			if froma=='':
@@ -554,7 +555,7 @@ class Msg(gui.QObject):
 		msg_table.cellWidget(3,2).set_fun(True,send) #set_cmd('send',[ ], send)
 		msg_table.cellWidget(0,1).set_fun(False,self.addr_book.get_addr_from_wallet ) 
 		
-		if tmpaddr=='':
+		if self.cur_addr=='':
 			msg_table.cellWidget(1,1).set_fun(False,self.addr_book.get_addr_from_book, msg_table.cellWidget(1,1)) 
 		
 		gui.CustomDialog(btn,[msg_table ], title='Write message ')
@@ -567,7 +568,7 @@ class Msg(gui.QObject):
 		super(Msg, self).__init__()
 		self.update_in_progress=False
 		self.db=addr_book.db
-		
+		self.cur_addr=''
 		self.max_block=0
 		# self.proc_inout()
 		
