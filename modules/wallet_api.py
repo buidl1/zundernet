@@ -1041,7 +1041,14 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 		print('finished z_importviewingkey')
 		
 		if 'error' in tmpnewaddr.lower():
+			# if already in the wallet - test: 
 			print('error',tmpnewaddr)
+			print('additional check...')
+			tmparr=self.get_all_txs( zaddr)
+			if 'error' not in str(tmparr):
+				print('... ok - valid - finishing update ... ')
+				return {'address':zaddr, 'type':'sapling'}
+		
 			return {'error':tmpnewaddr}
 		
 		print('updating wallet addresses')
