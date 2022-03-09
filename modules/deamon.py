@@ -31,10 +31,10 @@ class DeamonInit(gui.QObject):
 	 
 	def update_wallet(self,*args): # syntetic args passed auto by elem
 		
-		idb=localdb.DB(self.db)
 		if self.started:
-			self.update_chain_status()
+			idb=localdb.DB(self.db)
 			utxo_change=self.the_wallet.refresh_wallet()
+			self.update_chain_status()
 			
 			if 'addr_book' in self.the_wallet.to_refresh:
 				self.update_addr_book.emit()
@@ -49,7 +49,7 @@ class DeamonInit(gui.QObject):
 			idb.upsert(table,['json_name','json_content','last_update_date_time'],{'json_name':['=',"'display_wallet'"]})
 			
 			if utxo_change>0 or 'channels' in self.the_wallet.to_refresh:
-				self.sending_signal.emit(['notif_update','tx_history_update'])
+				self.sending_signal.emit(['notif_update','tx_history_update' ]) #self.sending_signal.emit(['wallet'])
 				self.refresh_msgs_signal.emit()
 				
 				
@@ -85,6 +85,7 @@ class DeamonInit(gui.QObject):
 		history_notif_count=self.update_notarization()
 		 
 		waiting=idb.select('queue_waiting', ["type","wait_seconds","created_time","command","json","id","status"])
+		# print('waiting\n',waiting)
 		
 		if len(waiting)>0:
 			self.start_stop_enable.emit(False)
@@ -136,7 +137,12 @@ class DeamonInit(gui.QObject):
 			
 				self.sending_signal.emit(['cmd_queue'])
 				time.sleep(0.3)
-				
+			
+			# print('refreshing wallet before processing\n')
+			# self.the_wallet.refresh_wallet()
+			print('processing\n',rr)		
+			self.update_wallet()
+			self.sending_signal.emit(['wallet'])
 				
 			if rr[3]=='import_view_key': #json.dumps({'addr':tmpaddr,'viewkey':tmpvk})
 				adrvk=json.loads(rr[4])
@@ -435,16 +441,24 @@ class DeamonInit(gui.QObject):
 				ddict=json.loads(rr[4])
 				# print(453,ddict)
 				exceptions=[]
-				total_conf_per_addr=self.wallet_display_set.amount_per_address[ddict['fromaddr']]
-				# print(453,total_conf_per_addr)
+				# better use the wallet ! self.addr_amount_dict[aa]={'confirmed'
+				
+				# total_conf_per_addr=self.wallet_display_set.amount_per_address[ddict['fromaddr']]
 				
 				sum_cur_spending=0
-					
-				if ddict['fromaddr'] in self.wallet_display_set.amount_per_address :
+				total_conf_per_addr=0
+				if ddict['fromaddr'] in self.the_wallet.addr_amount_dict: #self.wallet_display_set.amount_per_address: #self.the_wallet.addr_amount_dict: #self.addr_amount_dict.amount_per_address :
+				
+					total_conf_per_addr=self.the_wallet.addr_amount_dict[ddict['fromaddr']]['confirmed']
+					# total_conf_per_addr=self.wallet_display_set.amount_per_address[ddict['fromaddr']]
 					for tt in ddict['to']:
 						sum_cur_spending+=float(tt['a'])
+				else:
+					print('addr not on the list?',ddict['fromaddr'],self.the_wallet.addr_amount_dict)
 						
+				# print(453,total_conf_per_addr)
 				# print('sum_cur_spending',sum_cur_spending,round(sum_cur_spending,8),round(total_conf_per_addr-0.0001,8))	
+				
 				if round(sum_cur_spending,8)>round(total_conf_per_addr-0.0001,8): # validate amoaunt to send
 					
 					table={}
@@ -518,7 +532,9 @@ class DeamonInit(gui.QObject):
 						
 						memo_orig.append([to['m'],float(to['a']),to['z']]) 
 					
-					# print('sending_summary\n',sending_summary)
+					print('sending_summary\n',sending_summary)
+					print('from',ddict['fromaddr'])
+					# print('to',tostr)
 					# return 
 					
 					tmpres={}
@@ -531,6 +547,7 @@ class DeamonInit(gui.QObject):
 						# print('SENDING',)
 						tmpres['opid']=str(self.the_wallet.send(ddict['fromaddr'],tostr))
 						tmpres['opid']=tmpres['opid'].strip()
+						# print('tmpres\n',tmpres)
 						
 						cmdloc=['z_getoperationstatus','["'+tmpres['opid']+'"]']
 
@@ -543,7 +560,10 @@ class DeamonInit(gui.QObject):
 							opj={'error':{'message':opstat}}
 						
 						if 'error' in opj:
-							tmpres['result_details']=str(opj['error']['message'].replace('shielded ','') )
+							if 'message' in opj['error']:
+								tmpres['result_details']=str(opj['error']['message'].replace('shielded ','') )
+							else:
+								tmpres['result_details']=str(opj['error'] )
 							tmpres["result"]='Failed'
 							
 							insert_notification(tmpres['result_details'], {'fromaddr':ddict['fromaddr'],'to':[to]})
@@ -741,7 +761,7 @@ class DeamonInit(gui.QObject):
 		if  new_notif_count + new_tx_history_count >0:
 			list_emit.append('wallet')
 			
-		self.sending_signal.emit(list_emit) # self.sending_signal.emit(['notif_update'])
+		self.sending_signal.emit(list_emit) # self.sending_signal.emit(['wallet'])
 		
 		# print('after delete emit')	
 		if 'notif_update' in list_emit or 'tx_history_update' in list_emit:
