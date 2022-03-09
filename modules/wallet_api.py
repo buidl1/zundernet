@@ -134,18 +134,34 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 				
 		# print('init self.historical_txs',self.historical_txs)
 				
+		# depends on self.historical_txs 
+		
 		
 	def refresh_wallet(self): # once a 1-2 minutes?
 		
 		if self.history_update_counter==0:
-			self.update_all_addr()
-			self.address_aliases()
+			self.update_all_addr() # disp_dict['addr_list']=self.addr_list # disp_dict['external_addr']=self.external_addr	
+			self.address_aliases() # self.alias_map
 			
+			# updates:
+		# disp_dict['unconfirmed']=self.unconfirmed
+		# disp_dict['confirmed']=self.confirmed
+		# disp_dict['all_unspent']=self.all_unspent	
 		freshutxo=self.update_unspent() #init=False,maxconf=str(blocks_div) )
-		# print(147)
-		tmptotal_balance=self.total_balance
+		
+		
+		
+		# updates: self.wl  
+		# disp_dict['amounts']=self.amounts
+		# disp_dict['amounts_conf']=self.amounts_conf
+		# disp_dict['amounts_unc']=self.amounts_unc
+		# self.addr_amount_dict 
+		# self.total_balance 
+		# self.total_conf 
+		# self.total_unconf 
 		self.wallet_summary() # updating self.total_balance
-		# print(150)
+		tmptotal_balance=self.total_balance
+		
 		total_change=round(self.total_balance-tmptotal_balance,8)
 		
 		other_chages=len(self.any_change)
@@ -717,6 +733,16 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 		return wl_str
 		
 		
+	# depends on self.historical_txs self.wl self.total_balance self.total_conf self.total_unconf
+	# self.alias_map self.last_block self.addr_amount_dict
+	# disp_dict['amounts']=self.amounts
+		# disp_dict['amounts_conf']=self.amounts_conf
+		# disp_dict['amounts_unc']=self.amounts_unc
+		# disp_dict['unconfirmed']=self.unconfirmed
+		# disp_dict['confirmed']=self.confirmed
+		# disp_dict['all_unspent']=self.all_unspent	
+		# disp_dict['addr_list']=self.addr_list
+		# disp_dict['external_addr']=self.external_addr
 	def display_wallet(self,sorting=None,rounding=1): 	
 	
 		sorting_lol=[]
@@ -748,8 +774,14 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 		return disp_dict
 		
 		
-	
-		
+		#    
+	#  self.last_block 
+		 
+	# updates:
+	# disp_dict['amounts']=self.amounts
+		# disp_dict['amounts_conf']=self.amounts_conf
+		# disp_dict['amounts_unc']=self.amounts_unc
+		# self.addr_amount_dict
 	def wallet_summary(self):
 				
 		self.addr_amount_dict={}
@@ -829,6 +861,11 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 	# z_listreceivedbyaddress “address” need this for view key ?	
 		
 	# in new addr reciving tx not refreshig self.confirmed ??
+
+	# updates:
+	# disp_dict['unconfirmed']=self.unconfirmed
+	# disp_dict['confirmed']=self.confirmed
+	# disp_dict['all_unspent']=self.all_unspent	
 	def update_unspent(self ): 
 	
 		cmdloc=['z_listunspent','0','999999999','true']
@@ -900,7 +937,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 
 	
 	def address_aliases(self ): # address_aliases(get_wallet(True))
-		# self.alias_map={}
+		# self.alias_map={} # to keep it consistent 
 		sorted_addr=sorted(self.addr_list) #self.addr_list
 		for aa in sorted_addr:
 		
