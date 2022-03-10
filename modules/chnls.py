@@ -548,7 +548,8 @@ class Chnls(gui.QObject):
 			
 		# need channel name 
 		adr_date=idb.select_max_val( 'msgs_inout',['in_sign_uid','date_time'],where=wwhere,groupby=['addr_to'])
-		# print('adr_date',adr_date)
+		
+		print('Channel threads available\n',idb.select_max_val( 'msgs_inout',['in_sign_uid','date_time'],where={ 'is_channel':['=',"'True'"]},groupby=['addr_to']))
 		# print('msgs',idb.select('msgs_inout'))
 		if hasattr(self,"adr_date") and self.adr_date==adr_date:
 			return 0
@@ -614,7 +615,7 @@ class Chnls(gui.QObject):
 	
 
 	def update_list(self ):
-		# print('\nupdate_list')
+		print('\nupdate_list')
 		idb=localdb.DB(self.db)
 		msg_filter=self.filter_table.cellWidget(0,3).currentText() #get_value('msg')
 		llimit=9999
@@ -629,13 +630,16 @@ class Chnls(gui.QObject):
 		for k in self.thr_ord:
 			 
 			tmpuid=threads_aa[k][0]
+			print('tmpuid',tmpuid)
 			
-			wwhere={}
+			# wwhere={}
 			 
-			wwhere={'proc_json':['=',"'True'"],'addr_to':['=',"'"+threads_aa[k][0]+"'"], 'in_sign_uid':['>',-2],'is_channel':['=',"'True'"], 'type':['=',"'in'"] } #, 'Type':
+			# wwhere={'proc_json':['=',"'True'"],'addr_to':['=',"'"+threads_aa[k][0]+"'"], 'in_sign_uid':['>',-2],'is_channel':['=',"'True'"], 'type':['=',"'in'"] } #, 'Type':
+			wwhere={'proc_json':['=',"'True'"],'addr_to':['=',"'"+threads_aa[k][0]+"'"], 'in_sign_uid':['>',-2],'is_channel':['=',"'True'"], 'type':[' like ',"'in%'"] } ## ' like ',"'in%'"
 				
 			# addr ext here is name of sender 
 			tmp_msg=idb.select('msgs_inout', ['type','msg','date_time','uid','in_sign_uid','addr_ext' ],where=wwhere, orderby=[ {'date_time':'desc'}], limit=llimit)
+			print('tmp_msg\n',tmp_msg) 
 			 
 			msg_flow=[]
 			
