@@ -264,6 +264,7 @@ class Msg(gui.QObject):
 			return tmpmsg, tmp_sender
 		
 		for mm in mio:
+			print('msg processing:\n',mm)
 		
 			mm1=mm[1]
 			tmpmsg=mm[3]
@@ -271,7 +272,7 @@ class Msg(gui.QObject):
 			
 			# unfinished ?
 			if mm[8]=='True': # if channel 
-				# print('\nanalizing msg for channel',mm)
+				print('\nanalizing msg for channel',mm)
 				refrsh_chnl+=1
 				if ('txt' in tmpmsg or 'channel_name' in tmpmsg) and 'CHANNEL ABUSE DETECTED SPOOFING CHANNEL INFO' not in tmpmsg:	
 					try: #decode regular message
@@ -306,9 +307,9 @@ class Msg(gui.QObject):
 					print('msg::not proper channel json - simple text msg',tmpmsg)
 			############## unfinished ?
 			else:
-				# print('check if msg is reg msg to channel to not write into regular msgs ?')
+				print('check if msg is reg msg to channel to not write into regular msgs ?')
 				test_addr=idb.select('channels',['address'], {'address':['=',"'"+mm[9]+"'"]}  ) #
-				# print('comparing',mm[9],test_addr)
+				print('comparing',mm[9],test_addr)
 				if len(test_addr)>0:
 					if test_addr[0][0]==mm[9]:
 						print('\n\n# correcting channel type optional\n\n')
@@ -323,8 +324,8 @@ class Msg(gui.QObject):
 					# tmp_sender=tmp_arr[-1]
 					tmpmsg, tmp_sender=split_simple_signature(tmpmsg) #tmpmsg, tmp_sender
 					
-				# print('\n\nREG MSG',tmpmsg)
-				# print('SENDER',tmp_sender)
+				print('\n\nREG MSG',tmpmsg)
+				print('SENDER',tmp_sender)
 				
 				# table['channels']={'address':'text', 'vk':'text', 'creator':'text', 'channel_name':'text', 'channel_intro':'text', 'status':'text', 'own':'text', 'channel_type':'text' }
 			
@@ -339,9 +340,9 @@ class Msg(gui.QObject):
 				
 				fsign=json.loads(mm1 )
 				
-				# print('\nchecking hash for\n',mm)
+				print('\nchecking hash for\n',mm)
 				uid,addr_from_book=self.match_sign( fsign, tmp_sender ) #mio
-				# print('\n\nfound match',uid,addr_from_book)
+				print('\n\nfound match',uid,addr_from_book)
 				
 				# TODO FOR CHANNLE:
 				# if externa l channel detected link with addr book zaddr
@@ -352,14 +353,14 @@ class Msg(gui.QObject):
 					tmpalias='uid_'+str(uid)
 					# print('tmpalias',tmpalias)
 					if mm[8]=='True': # if channel 	
-						# print("mm[8]=='True'")
+						print("mm[8]=='True'")
 						tmpalias=addr_from_book
 						# tmpmsg=tmpmsg #json.dumps({'sender':addr_from_book, 'txt':tmpmsg}) #addr_from_book+':\n'+tmpmsg
 						addr_ext=addr_from_book
 						# tmpalias=addr_from_book
 					
 					elif addr_from_book!='':
-						# print("addr_from_book!=''")
+						print("addr_from_book!=''")
 						addr_ext=addr_from_book
 						
 						tmpalias=idb.select('addr_book',['Alias'] , {'Address':['=',"'"+addr_from_book+"'"] } )
@@ -372,7 +373,7 @@ class Msg(gui.QObject):
 							# print(tmpalias)
 							tmpalias=tmpalias[0][0]
 					else:
-						# print("addr_ext=tmpalias")
+						print("addr_ext=tmpalias")
 						addr_ext=tmpalias
 						if tmp_sender!='': tmpalias=tmp_sender
 							
@@ -422,7 +423,7 @@ class Msg(gui.QObject):
 					# table['msgs_inout'][0]['is_channel']='True'
 				
 				# correcting channel type optional
-				# print("updating 'proc_json':'True'",mm[7])
+				print("\n\nupdating mm\n",table)
 				idb.update(table,['type','proc_json', 'in_sign_uid','addr_ext','msg','is_channel' ],{'uid':['=',mm[5]]})
 			# self.refresh_msgs_signal.emit()	
 		if refrsh_chnl>0:
@@ -952,7 +953,8 @@ class Msg(gui.QObject):
 			
 			wwhere={}
 			if threads_aa[k][0]=='unknown':
-				wwhere={'proc_json':['=',"'True'"],'type':['=',"'in'"],'in_sign_uid':['<',0],'is_channel':[['=',"'False'"],[' is ',"null"]] }				
+				wwhere={'proc_json':['=',"'True'"],'type':[' like ',"'in%'"],'in_sign_uid':['<',0],'is_channel':[['=',"'False'"],[' is ',"null"]] }		
+				# wwhere={'proc_json':['=',"'True'"],'type':['=',"'in'"],'in_sign_uid':['<',0],'is_channel':[['=',"'False'"],[' is ',"null"]] }			
 
 			elif 'uid_' in threads_aa[k][1]:
 			
