@@ -344,7 +344,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 		tmp_ord={}
 		
 		for aa in iterat_arr:
-			# print('\n\nanalyzing aa',aa)
+			print('\n\nanalyzing aa',aa)
 			
 			if True:
 				tt=[] # tt=aa
@@ -383,7 +383,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 				for tx in tt: 
 					
 						
-					# print(367,tx)
+					print('analyzing tx\n',tx)
 					if "txid" not in tx:
 						continue
 						
@@ -410,7 +410,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 						# print('new outindex',outindex)
 						continue
 						
-					# print(378,tx)
+					print(413)
 					dt,ts=app_fun.now_to_str(False,ret_timestamp=True)
 					tmp_timestamp=ts-60*tx["confirmations"]
 					tmp_date_time=app_fun.date2str(datetime.datetime.now()-datetime.timedelta(seconds=60*tx["confirmations"]) )
@@ -433,11 +433,13 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 							
 							continue
 					# print('NOT CHANGE!',outindex not in self.historical_txs[aa][tx["txid"]])
+					print(436)
 					
 					if outindex not in self.historical_txs[aa][tx["txid"]]: # 'Category'= "'outindex_"+str(outindex)+"'"
 					
 						# if tx['txid']=='2a0a99f9644dc9e05e1417208d326abeff0710851b204235b80bdd013bc4698b': 
 							# print('\nwallet api outindex not in tx=\n',tx)
+						print(442)
 					
 						tmpmemo=''
 						if "memoStr" in tx:
@@ -453,9 +455,9 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 								
 						# print('orig memmo',tmpmemo)
 						tmpmemo=self.clear_memo(tmpmemo)
-						# print('clear memmo',tmpmemo) 
+						print('clear memmo\n',tmpmemo) 
 						
-						if len(tmpmemo)<4:
+						if len(tmpmemo)<4: # in dev wallet change should fix this - taken by change:true
 							from_str='too short memo imply error in msg format: ['+tmpmemo+']' 
 							self.insert_history_tx('_'+str(outindex),tx["txid"],y["blocks"]-tx["confirmations"] , tmp_timestamp , tmp_date_time, from_str, aa, tx["amount"],ttype='in/change?') 
 							self.historical_txs[aa][tx["txid"]][outindex] = { "amount":tx["amount"]}
@@ -466,7 +468,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 						# print('\ncheckexist where ',tmpwhere)
 						checkexist=idb.select('tx_history', ["Type"],tmpwhere) # if not exist yet add for processing 
 						# if tx['txid']=='2a0a99f9644dc9e05e1417208d326abeff0710851b204235b80bdd013bc4698b': 
-						# print('\ncheckexist\n',checkexist)
+						print('\ncheckexist\n',checkexist)
 						
 						# print(idb.select('tx_history', [ ],{'to_str':['=',"'"+aa+"'"],'Type':[' like ',"'in%'"],'txid':['=',"'"+tx["txid"]+"'"]  }))
 						if len(checkexist)==0:
@@ -489,7 +491,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 							# dt,ts=app_fun.now_to_str(False,ret_timestamp=True)
 							
 							dt=localdb.blocks_to_datetime(y["blocks"]-tx["confirmations"]) # time it was sent 
-							# print('dt?',dt)
+							print('dt?',dt)
 							
 							##### prepare for inserting msg
 							if aa not in table_history_notif:
@@ -501,9 +503,10 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 								# merged_msg[aa][tx["txid"]]={}
 								table_history_notif[aa][tx["txid"]]={}
 								# print('added txid  to table_history_notif',tx["txid"])
-							# print(268)
+							print(506)
 							if outindex not in table_history_notif[aa][tx["txid"]]:
 								# merged_msg[aa][tx["txid"]][outindex]={'dt':dt, 'tmpmemo':tmpmemo } #table
+								print(509)
 								# print('times\n blocks_to_datetime dt',dt,'timestamp',ts-60*tx["confirmations"]   ,'date_time',app_fun.date2str(datetime.datetime.now()-datetime.timedelta(seconds=60*tx["confirmations"]) ))
 								q={'dt':dt
 									, 'tmpmemo':tmpmemo
@@ -539,7 +542,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 			except:
 				return False,channel_json
 			
-		# print('tmp_ord',tmp_ord) # tmp org should only contain not empty msgs found in the loop ... 
+		print('tmp_ord',tmp_ord) # tmp org should only contain not empty msgs found in the loop ... 
 		for_ord={}
 		for aa,txids in tmp_ord.items():
 			# print('aa,txids',aa,txids)
@@ -554,31 +557,31 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 		for_ord_keys=list( for_ord.keys())
 		sorted_for_ord_keys=sorted(for_ord_keys, reverse=True) 
 		
-		# print('for_ord',for_ord)
-		# print('sorted_for_ord_keys',sorted_for_ord_keys)
+		print('for_ord',for_ord)
+		print('sorted_for_ord_keys',sorted_for_ord_keys)
 		
 		for ss in sorted_for_ord_keys:
 			# print('for_ord[ss]',for_ord[ss])
 			for conf_ar_txid in for_ord[ss]:
 				aa=conf_ar_txid[0]
 				txid=conf_ar_txid[1]
-				# print('aa txid',aa,txid)
+				print('aa txid',aa,txid)
 			# aa=for_ord[ss][0]
 			# txid=for_ord[ss][1]
 			
 				is_aa_external=aa in self.external_addr
-				# print('\n\n for ss,aa,txids',ss,aa,txid) # selected txid on aa 
+				print('is_aa_external', is_aa_external) # selected txid on aa 
 				
 				if aa not in table_history_notif:
-					# print(aa,'not in ',table_history_notif)
+					print(aa,'not in ',table_history_notif)
 					continue
 					
 				if txid not in table_history_notif[aa]:
-					# print(txid,'not in ',table_history_notif[aa])
+					print(txid,'not in ',table_history_notif[aa])
 					continue
 					
 				iis=table_history_notif[aa][txid]
-				
+				print('iis',iis)
 				# for txid, iis in txids.items():
 				if True:
 					
@@ -591,7 +594,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 							init_table['tmpmemo']+=iis[ii]['tmpmemo'] #merge memos if multiple outindex and multiple memos 
 							init_table['outindex']+=iis[ii]['outindex']
 							
-					# print('init_table',init_table)		
+					print('init_table',init_table)		
 							
 					table_msg={} # insert only those after first block
 					from_str=''
@@ -600,7 +603,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 						table_msg=self.prep_msgs_inout(txid,[init_table['tmpmemo'],0,''],'in',init_table['date_time'],tx_status='received', in_sign_uid=-2,addr_to=aa ) # -2 to be detected
 						
 						from_str=table_msg['msgs_inout'][0]['msg']
-						# print(321,table_msg,from_str)
+						print(606,table_msg,from_str)
 						tmpmsg=from_str
 						# recognize if channel 
 						
@@ -618,18 +621,18 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 							if is_channel2  and aa not in self.addr_list:
 								
 								is_abuse='\n'.join( ['\n\nCHANNEL ABUSE DETECTED SPOOFING CHANNEL INFO',aa,str(txid),'\n'] )
-								# print(is_abuse,tmpmsg)
+								print('is_abuse,tmpmsg\n',is_abuse,tmpmsg)
 								tmpmsg= is_abuse+tmpmsg
 							
 						else: # if not recognized channel - check if needs registration?
 							is_channel=False # try recognize incoming channel
-							# print('553 CHANNEL NOT RECOGNIZED / external channel or not a channel ')
+							print('629 ')
 							
 							# if proper channel - register
 							try:
 								# channel_json=json.loads(tmpmsg)
 								is_channel,channel_json=check_is_channel(tmpmsg)
-								# print(channel_json)
+								print(635,channel_json)
 								
 								if is_channel: #'channel_name' in tmpmsg and 'channel_owner' in tmpmsg and 'channel_intro' in tmpmsg:
 									
@@ -647,7 +650,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 										# chnl_owner='ME:'+channel_json['channel_owner']
 									
 									table={'channels':[{'address':aa, 'vk':vkey, 'creator':chnl_owner, 'channel_name':channel_json['channel_name'], 'channel_intro':channel_json['channel_intro'], 'status':'active', 'own':is_chnl_own , 'channel_type':channel_json['channel_type']  }]}	
-									# print('channel recog:',table)
+									print('channel recog:',table)
 									idb.insert(table,['address' , 'vk' , 'creator' , 'channel_name', 'channel_intro' , 'status' , 'own','channel_type' ])
 									if 'channels' not in self.to_refresh: self.to_refresh.append('channels') # channels,
 									
@@ -668,7 +671,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 							table_msg['msgs_inout'][0]['msg']=tmpmsg
 							
 							
-						# print('msg before insert',table_msg)
+						print('674 msg before insert',table_msg)
 						# if is channel - add sender to anon addr book to mark same name each time : self name + init hash 
 						# if is_channel: # is channel difinition  
 						idb.insert(table_msg,['proc_json','type','addr_ext','txid','tx_status','date_time', 'msg','uid','in_sign_uid','addr_to','is_channel'])
