@@ -1071,6 +1071,10 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 	# "yes", "no" or "whenkeyisnew"
 	def imp_view_key(self,zaddr,vkey,rescan="whenkeyisnew",startHeight=1790000 ): #996000 1575757 1780000
 
+		if zaddr in self.addr_list: # self key quick return
+			print('View key is owned by the wallet - not need to import')
+			return {'address':zaddr, 'type':'sapling'}
+	
 		rescan="yes"
 		tmpnewaddr=''
 		print("started z_importviewingkey",vkey[:7]+'...','rescan',rescan,'start height',str(startHeight))
