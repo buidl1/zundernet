@@ -144,9 +144,13 @@ class DeamonInit(gui.QObject):
 			self.update_wallet()
 			self.sending_signal.emit(['wallet'])
 				
+				
+				
 			if rr[3]=='import_view_key': #json.dumps({'addr':tmpaddr,'viewkey':tmpvk})
 				adrvk=json.loads(rr[4])
-				tmpresult=self.the_wallet.imp_view_key( adrvk['addr'],adrvk['viewkey'] )
+				clean_vk=adrvk['viewkey'].strip() 
+				clean_addr=adrvk['addr'].strip() 
+				tmpresult=self.the_wallet.imp_view_key( clean_addr,clean_vk)
 				# print('202tmpresult',tmpresult)
 				table={}
 				table['queue_done']=[{"type":rr[0],"wait_seconds":rr[1],"created_time":rr[2],"command":rr[3],"json":rr[4],"id":rr[5],"result":json.dumps(tmpresult),'end_time':app_fun.now_to_str(False)}]
@@ -158,13 +162,13 @@ class DeamonInit(gui.QObject):
 					if tmpresult['type'].lower() in ['sapling','z-sapling','zsapling']:
 						table['addr_book']=[{ 'viewkey_verif':1 }]
 						
-						table_vk={'view_keys':[{'address':adrvk['addr'], 'vk':adrvk['viewkey'] }]}
-						idb.insert(table_vk,['address','vk']) # separate viewkey table
+						table_vk={'view_keys':[{'address':clean_addr, 'vk':clean_vk }]}
+						idb.upsert(table_vk,['address','vk']) # separate viewkey table - was insert
 				else:
 					table['addr_book']=[{ 'viewkey_verif':-1 }]
 					
 				if table!={}:
-					idb.update(table,[  'viewkey_verif'],{'Address':['=',"'"+adrvk['addr']+"'"]}) # update addr book table 
+					idb.update(table,[  'viewkey_verif'],{'Address':['=',"'"+clean_addr+"'"]}) # update addr book table 
 					self.update_addr_book.emit()
 					count_task_done+=1 
 					self.sending_signal.emit(['task_done','cmd_queue'])
@@ -536,6 +540,7 @@ class DeamonInit(gui.QObject):
 					print('from',ddict['fromaddr'])
 					# print('to',tostr)
 					# return 
+					self.sending_signal.emit(['cmd_queue']) # more frequent queue refresh
 					
 					tmpres={}
 					tmpres['opid']=''
@@ -547,6 +552,7 @@ class DeamonInit(gui.QObject):
 						# print('SENDING',)
 						tmpres['opid']=str(self.the_wallet.send(ddict['fromaddr'],tostr))
 						tmpres['opid']=tmpres['opid'].strip()
+						self.sending_signal.emit(['cmd_queue']) # more frequent queue refresh
 						# print('tmpres\n',tmpres)
 						
 						cmdloc=['z_getoperationstatus','["'+tmpres['opid']+'"]']
@@ -567,11 +573,23 @@ class DeamonInit(gui.QObject):
 							tmpres["result"]='Failed'
 							
 							insert_notification(tmpres['result_details'], {'fromaddr':ddict['fromaddr'],'to':[to]})
+							self.sending_signal.emit(['cmd_queue']) # more frequent queue refresh
 							
 						else:
 							ts=7
+							
+							def refrsh(ts):
+								tmpts=0
+								while tmpts<ts: 
+									self.sending_signal.emit(['cmd_queue']) # more frequent queue refresh
+									tmpts+=1
+									time.sleep(1)
+							
+							# self.sending_signal.emit(['cmd_queue']) # more frequent queue refresh
 							while "result" not in opj:
-								time.sleep(ts)
+							
+								refrsh(ts) 
+								
 								if ts>1:
 									ts=ts-1
 								
@@ -585,7 +603,8 @@ class DeamonInit(gui.QObject):
 							
 							if tmpres["result"]!='Failed':
 								while opj["status"]=="executing":
-									time.sleep(ts)
+									# time.sleep(ts)
+									refrsh(ts)
 									if ts>1:
 										ts=ts-1
 									
@@ -606,8 +625,8 @@ class DeamonInit(gui.QObject):
 						
 						del tmpres['opid'] # not needed later 
 						
-						tmpres["block"]=0 # get block nr for confirmation notarization validation later on 
-
+						tmpres["block"]=0 
+						print('# get block nr for confirmation notarization validation later on ')
 						while tmpres["block"]==0:
 							tmpinfo=self.the_wallet.getinfo()
 							try:
@@ -618,7 +637,8 @@ class DeamonInit(gui.QObject):
 							except:
 								print('Network problem')
 								pass
-							time.sleep(5)
+							# time.sleep(5)
+							refrsh(5)
 							
 							
 						# print(613,'sent',tmpres)
@@ -761,7 +781,7 @@ class DeamonInit(gui.QObject):
 		if  new_notif_count + new_tx_history_count >0:
 			list_emit.append('wallet')
 			
-		self.sending_signal.emit(list_emit) # self.sending_signal.emit(['wallet'])
+		self.sending_signal.emit(list_emit) # self.sending_signal.emit(['cmd_queue'])
 		
 		# print('after delete emit')	
 		if 'notif_update' in list_emit or 'tx_history_update' in list_emit:
