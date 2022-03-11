@@ -953,8 +953,8 @@ class Msg(gui.QObject):
 			
 			wwhere={}
 			if threads_aa[k][0]=='unknown':
-				wwhere={'proc_json':['=',"'True'"],'type':[' like ',"'in%'"],'in_sign_uid':['<',0],'is_channel':[['=',"'False'"],[' is ',"null"]] }		
-				# wwhere={'proc_json':['=',"'True'"],'type':['=',"'in'"],'in_sign_uid':['<',0],'is_channel':[['=',"'False'"],[' is ',"null"]] }			
+				# wwhere={'proc_json':['=',"'True'"],'type':[' like ',"'in%'"],'in_sign_uid':['<',0],'is_channel':[['=',"'False'"],[' is ',"null"]] }		
+				wwhere={'proc_json':['=',"'True'"],'type':['=',"'in'"],'in_sign_uid':['<',0],'is_channel':[['=',"'False'"],[' is ',"null"]] }			
 
 			elif 'uid_' in threads_aa[k][1]:
 			
