@@ -487,10 +487,18 @@ class Button(QPushButton):
 			self.clicked.disconnect()
 			self.fun=actionFun
 			self.args=args
-			if args!=None:
-				self.clicked.connect(lambda   : actionFun(self,*args))
-			else:
-				self.clicked.connect(lambda  : actionFun(self ))
+			
+			def fun_on_off():
+				self.setEnabled(False)
+				if args!=None: actionFun(self,*args) 
+				else: actionFun(self ) 
+				self.setEnabled(True)
+				
+			self.clicked.connect(lambda  : fun_on_off() )
+			# if args!=None:
+				# self.clicked.connect(lambda   : actionFun(self,*args))
+			# else:
+				# self.clicked.connect(lambda  : actionFun(self ))
 	
 		# print(actionFun,args)
 
@@ -505,15 +513,25 @@ class Button(QPushButton):
 			# print(actionFun,args)
 			self.fun=actionFun
 			
-			if args!=None:
-				self.clicked.connect(lambda   : actionFun(self,*args))
-			else:
-				self.clicked.connect(lambda  : actionFun(self ))
+			def fun_on_off():
+				self.setEnabled(False)
+				if args!=None: actionFun(self,*args) 
+				else: actionFun(self ) 
+				self.setEnabled(True)
+				
+			self.clicked.connect(lambda  : fun_on_off() )
+			
+			# if args!=None:
+				# self.clicked.connect(lambda   : actionFun(self,*args))
+			# else:
+				# self.clicked.connect(lambda  : actionFun(self ))
 			
 		if tooltip!='':
 			self.setToolTip(tooltip)
 			
 		self.setStyleSheet('QPushButton {padding:2px;font-size:13px;}')
+		
+		
 	
 	def set_fun(self,no_self,actionFun,*args):
 	
@@ -521,11 +539,21 @@ class Button(QPushButton):
 			return
 			
 		self.fun=actionFun
+		
+		def fun_on_off():
+			self.setEnabled(False)
+			if no_self: actionFun( *args) 
+			else: actionFun(self,*args ) 
+			self.setEnabled(True)
+				
+		self.clicked.connect(lambda  : fun_on_off() )
 	
-		if no_self:
-			self.clicked.connect(lambda  :  actionFun(*args))
-		else:
-			self.clicked.connect(lambda  :  actionFun(self,*args))
+		# if no_self:
+			# self.clicked.connect(lambda  :  actionFun(*args))
+		# else:
+			# self.clicked.connect(lambda  :  actionFun(self,*args))
+			
+			
 	# def keyPressEvent(self,event):
 		# self.fun(self,args)
 	
