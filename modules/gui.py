@@ -1056,6 +1056,7 @@ class Table(QTableWidget):
 					QTableWidget QPushButton:hover {background-color:#eee;   border-width: 1px; border-color: green;}
 					QTableWidget QPushButton:pressed {background-color:lightgreen;   border-width: 1px; border-color: green;}
 					QTableWidget QComboBox {background-color:white; border-style: solid;  border-width: 1px; border-color: #aaa;}
+					QTableWidget QComboBox:item { selection-background-color: lightgreen; } 
 					QTableWidget QComboBox QAbstractItemView {selection-background-color: lightgreen;border-style: solid;  border-width: 1px; }
 					QTableWidget QLineEdit {background-color:white; border-style: solid;  border-width: 1px; border-color: #aaa;}
 					QTableWidget {margin:2px;padding:2px;font-size:13px; font-family:'DejaVu';border-style:none; }
@@ -1865,6 +1866,7 @@ class MainWindow(QMainWindow):
 					 QPushButton:hover {background-color:#eee;   border-width: 1px; border-color: green;}
 					 QPushButton:pressed {background-color:lightgreen;   border-width: 1px; border-color: green;}
 					 QComboBox {background-color:white; border-style: solid;  border-width: 1px; border-color: #aaa; padding:3px; margin:3px;}
+					 QComboBox:item { selection-background-color: lightgreen; } 
 					 QComboBox QAbstractItemView {background-color:yellow;selection-background-color: lightgreen;border-style: solid;  border-width: 1px; }
 					 QLineEdit {background-color:white; border-style: solid;  border-width: 1px; border-color: #aaa; padding:3px; margin:3px;}
 					 QAbsractScrollArea {border-style:none}
