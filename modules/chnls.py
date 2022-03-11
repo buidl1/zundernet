@@ -634,8 +634,8 @@ class Chnls(gui.QObject):
 			
 			# wwhere={}
 			 
-			# wwhere={'proc_json':['=',"'True'"],'addr_to':['=',"'"+threads_aa[k][0]+"'"], 'in_sign_uid':['>',-2],'is_channel':['=',"'True'"], 'type':['=',"'in'"] } #, 'Type':
-			wwhere={'proc_json':['=',"'True'"],'addr_to':['=',"'"+threads_aa[k][0]+"'"], 'in_sign_uid':['>',-2],'is_channel':['=',"'True'"], 'type':[' like ',"'in%'"] } ## ' like ',"'in%'"
+			wwhere={'proc_json':['=',"'True'"],'addr_to':['=',"'"+threads_aa[k][0]+"'"], 'in_sign_uid':['>',-2],'is_channel':['=',"'True'"], 'type':['=',"'in'"] } #, 'Type':
+			# wwhere={'proc_json':['=',"'True'"],'addr_to':['=',"'"+threads_aa[k][0]+"'"], 'in_sign_uid':['>',-2],'is_channel':['=',"'True'"], 'type':[' like ',"'in%'"] } ## ' like ',"'in%'"
 				
 			# addr ext here is name of sender 
 			tmp_msg=idb.select('msgs_inout', ['type','msg','date_time','uid','in_sign_uid','addr_ext' ],where=wwhere, orderby=[ {'date_time':'desc'}], limit=llimit)
