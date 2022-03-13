@@ -14,6 +14,7 @@ import modules.localdb as localdb
 import modules.aes as aes
 
 import modules.gui as gui
+import traceback
 	
 
 	
@@ -140,7 +141,7 @@ class DeamonInit(gui.QObject):
 			
 			# print('refreshing wallet before processing\n')
 			# self.the_wallet.refresh_wallet()
-			print('processing\n',rr)		
+			# print('processing\n',rr)		
 			self.update_wallet()
 			self.sending_signal.emit(['wallet'])
 				
@@ -536,8 +537,8 @@ class DeamonInit(gui.QObject):
 						
 						memo_orig.append([to['m'],float(to['a']),to['z']]) 
 					
-					print('sending_summary\n',sending_summary)
-					print('from',ddict['fromaddr'])
+					# print('sending_summary\n',sending_summary)
+					# print('from',ddict['fromaddr'])
 					# print('to',tostr)
 					# return 
 					self.sending_signal.emit(['cmd_queue']) # more frequent queue refresh
@@ -626,7 +627,7 @@ class DeamonInit(gui.QObject):
 						del tmpres['opid'] # not needed later 
 						
 						tmpres["block"]=0 
-						print('# get block nr for confirmation notarization validation later on ')
+						# print('# get block nr for confirmation notarization validation later on ')
 						while tmpres["block"]==0:
 							tmpinfo=self.the_wallet.getinfo()
 							try:
