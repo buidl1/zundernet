@@ -615,7 +615,7 @@ class Chnls(gui.QObject):
 	
 
 	def update_list(self ):
-		print('\nupdate_list')
+		# print('\nupdate_list')
 		idb=localdb.DB(self.db)
 		msg_filter=self.filter_table.cellWidget(0,3).currentText() #get_value('msg')
 		llimit=9999
@@ -630,7 +630,7 @@ class Chnls(gui.QObject):
 		for k in self.thr_ord:
 			 
 			tmpuid=threads_aa[k][0]
-			print('tmpuid',tmpuid)
+			# print('tmpuid',tmpuid)
 			
 			# wwhere={}
 			 
@@ -639,7 +639,7 @@ class Chnls(gui.QObject):
 				
 			# addr ext here is name of sender 
 			tmp_msg=idb.select('msgs_inout', ['type','msg','date_time','uid','in_sign_uid','addr_ext' ],where=wwhere, orderby=[ {'date_time':'desc'}], limit=llimit)
-			print('tmp_msg\n',tmp_msg) 
+			# print('tmp_msg\n',tmp_msg) 
 			 
 			msg_flow=[]
 			
