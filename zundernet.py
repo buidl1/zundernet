@@ -1,5 +1,15 @@
 
 # TODO: 
+# chanel types - blog, set min fee  ... 
+# public signatures?
+# ann channels/categories ?
+# warning fo local backup folders
+# tail -f ~/.komodo/PIRATE/debug.log for rescan progress 
+# reordering msg when sent in the ame block: sort queue ? if first msg in a queue does not send but another sends (wallet status change) then return to main loop and first go with e first one 
+# DB err 397 - no db name
+# QThread: Destroyed while thread is still running
+# small bug merging regular tx got signature in between 
+
 # seems send wrongly? didnt merge properly ?
  
 # add sync start at 179... and per  key pair
@@ -165,6 +175,7 @@ def uploadTabs():
 	mmm.refreshChannels.connect(ccc.updateFilter)
 	mmm.refreshTxHistory.connect(wata.txhi.update_history_frame)
 	mmm.refreshNotifications.connect(wata.notif.update_notif_frame)
+	mmm.refreshAddrBook.connect(addrb.refresh_addr_book)
 	 
 	dmn.update_addr_book.connect(addrb.refresh_addr_book)
 	dmn.send_viewkey.connect(wds.set_channel)
