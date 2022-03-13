@@ -530,6 +530,11 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 		# print('blocks getinfo',tmpblocks)
 		self.last_block=tmpblocks
 		
+		
+		
+		
+		
+		
 		def check_is_channel(tmpmsg,test_json=['channel_name' , 'channel_owner', 'channel_intro','channel_type']):
 			channel_json=None
 			try:
@@ -562,14 +567,11 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 		if print_debug: print('for_ord',for_ord)
 		if print_debug: print('sorted_for_ord_keys',sorted_for_ord_keys)
 		
-		for ss in sorted_for_ord_keys:
-			# print('for_ord[ss]',for_ord[ss])
+		for ss in sorted_for_ord_keys: 
 			for conf_ar_txid in for_ord[ss]:
 				aa=conf_ar_txid[0]
 				txid=conf_ar_txid[1]
-				if print_debug: print('aa txid',aa,txid)
-			# aa=for_ord[ss][0]
-			# txid=for_ord[ss][1]
+				if print_debug: print('aa txid',aa,txid) 
 			
 				is_aa_external=aa in self.external_addr
 				if print_debug: print('is_aa_external', is_aa_external) # selected txid on aa 
@@ -583,12 +585,10 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 					continue
 					
 				iis=table_history_notif[aa][txid]
-				if print_debug: print('iis',iis)
-				# for txid, iis in txids.items():
+				if print_debug: print('iis',iis) 
 				if True:
 					
-					kk_ordered=sorted(iis.keys())
-					# print('320 wal api sorted ',kk_ordered)
+					kk_ordered=sorted(iis.keys()) 
 					init_table=iis[kk_ordered[0]]
 					
 					if len(kk_ordered)>1:
@@ -606,50 +606,45 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 						
 						from_str=table_msg['msgs_inout'][0]['msg']
 						if print_debug: print(606,table_msg,from_str)
-						tmpmsg=from_str
-						# recognize if channel 
+						tmpmsg=from_str 
 						
-						# create channel if not abused!
+						
+						
+						
+						# remove spoofing and add channe lupdate afte owner recognized in msg
+						
+						
+						
 						is_channel=idb.select('channels',['channel_name'],{'address':['=',"'"+aa+"'"]} ) # check if recognized channel
-						is_abuse=''
+						# is_abuse=''
 						channel_json={}
-						if len(is_channel)>0:
-							# print('349 RECOGNIZED CHANNEL MSG')
+						if len(is_channel)>0: 
 							is_channel=True
 							
-							is_channel2 ,channel_json=check_is_channel(tmpmsg) # check if msg has channel definition
-							# is_channel=True
-							# but not self is not abused
-							if is_channel2  and aa not in self.addr_list:
+							# is_channel2 ,channel_json=check_is_channel(tmpmsg) # check if msg has channel definition 
+							# if is_channel2  and aa not in self.addr_list:
 								
-								is_abuse='\n'.join( ['\n\nCHANNEL ABUSE DETECTED SPOOFING CHANNEL INFO',aa,str(txid),'\n'] )
-								if print_debug: print('is_abuse,tmpmsg\n',is_abuse,tmpmsg)
-								tmpmsg= is_abuse+tmpmsg
+								# is_abuse='\n'.join( ['\n\nCHANNEL ABUSE DETECTED SPOOFING CHANNEL INFO',aa,str(txid),'\n'] )
+								# if print_debug: print('is_abuse,tmpmsg\n',is_abuse,tmpmsg)
+								# tmpmsg= is_abuse+tmpmsg
 							
 						else: # if not recognized channel - check if needs registration?
 							is_channel=False # try recognize incoming channel
-							if print_debug: print('629 ')
-							
-							# if proper channel - register
-							try:
-								# channel_json=json.loads(tmpmsg)
+							if print_debug: print('629 ') # if proper channel - register
+							try: 
 								is_channel,channel_json=check_is_channel(tmpmsg)
 								if print_debug: print(635,channel_json)
 								
-								if is_channel: #'channel_name' in tmpmsg and 'channel_owner' in tmpmsg and 'channel_intro' in tmpmsg:
-									
-									# get view key from table :
+								if is_channel:  # get view key from table :
 									vk_list=idb.select('view_keys', ["vk"],{'address':['=',"'"+aa+"'"]})
 									vkey=''
 									if len(vk_list)>0:
 										vkey=vk_list[0][0]
 										
 									is_chnl_own='False'
-									chnl_owner=channel_json['channel_owner']
-									# own channel should be reigistered in creation 
+									chnl_owner=channel_json['channel_owner'] # own channel should be reigistered in creation 
 									if aa in self.addr_list:
-										is_chnl_own='True'
-										# chnl_owner='ME:'+channel_json['channel_owner']
+										is_chnl_own='True' 
 									
 									table={'channels':[{'address':aa, 'vk':vkey, 'creator':chnl_owner, 'channel_name':channel_json['channel_name'], 'channel_intro':channel_json['channel_intro'], 'status':'active', 'own':is_chnl_own , 'channel_type':channel_json['channel_type']  }]}	
 									if print_debug: print('channel recog:',table)
@@ -659,18 +654,21 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 									if aa in self.external_addr: # change addr book viekey alias category 
 								
 										table={}
-										table['addr_book']=[{'Category':'Channel: '+channel_json['channel_type'],'Alias': channel_json['channel_name'], 'Address':aa, 'ViewKey':vkey, 'viewkey_verif':1,'addr_verif':1 }] 
-										# print('updating addr book entry',table)
+										table['addr_book']=[{'Category':'Channel: '+channel_json['channel_type'],'Alias': channel_json['channel_name'], 'Address':aa, 'ViewKey':vkey, 'viewkey_verif':1,'addr_verif':1 }]  
 										idb.upsert(table,[ 'Category','Alias','Address' , 'ViewKey', 'viewkey_verif','addr_verif' ],{'Address':['=',"'"+aa+"'"]})
 										if 'addr_book' not in self.to_refresh: self.to_refresh.append('addr_book') # channels,addr_book
 								
 							except:
-								print("Not proper json channel",tmpmsg)
+								print("Not proper json channel / wallet api 662",tmpmsg)
 								pass
 						
 						table_msg['msgs_inout'][0]['is_channel']=str(is_channel)
-						if is_abuse!='':
-							table_msg['msgs_inout'][0]['msg']=tmpmsg
+						# if is_abuse!='':
+							# table_msg['msgs_inout'][0]['msg']=tmpmsg
+							
+							
+							
+							
 							
 							
 						if print_debug: print('674 msg before insert',table_msg)
@@ -678,18 +676,6 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 						# if is_channel: # is channel difinition  
 						idb.insert(table_msg,['proc_json','type','addr_ext','txid','tx_status','date_time', 'msg','uid','in_sign_uid','addr_to','is_channel'])
 					
-					
-					
-					# history and notifications only for own incoming addr 
-					# print('whil update tx history?')
-					# if True: # must update incoming to view to not repeat aa in self.addr_list: 
-						# tmptype='in'
-						# if is_aa_external: #is_aa_external=aa in self.external_addr
-							# tmptype='in/external'
-							
-						# print('insert_history_tx from_str',init_table['outindex'],txid)
-						# self.insert_history_tx( init_table['outindex'],txid,init_table["block"] ,init_table["timestamp"],init_table["date_time"],from_str,aa,init_table["amount"],tmptype)
-						
 					if not is_aa_external: #True: #init_table["block"]>=self.first_block:
 						table={}
 						toalias=' to address '+aa
