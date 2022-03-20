@@ -346,11 +346,14 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 		
 		tmp_ord={}
 		
+		# tmpiter=0
+		
 		for aa in iterat_arr:
 		
 			if aa!=test_addr and print_debug: continue # only pass the test addr 
 		
 			if print_debug: print('\n\nanalyzing aa',aa)
+			tmpiter=0
 			
 			if True:
 				tt=[] # tt=aa
@@ -388,7 +391,10 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 				
 				for tx in tt: 
 					
-						
+					tmpiter+=1
+					
+					if tmpiter>10: continue
+					
 					if print_debug  : print('analyzing tx\n',tx)
 					if "txid" not in tx:
 						continue
