@@ -420,7 +420,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 						
 					if outindex in self.historical_txs[aa][tx["txid"]]:
  
-						if print_debug: print('outindex already in self.historical_txs[aa][tx["txid"]]',outindex)
+						if print_debug: print('outindex already in self.historical_txs[aa][tx["txid"]]',self.historical_txs[aa][tx["txid"]])
 						continue
 						
 					if print_debug: print('before checking change')
