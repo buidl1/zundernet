@@ -1,4 +1,8 @@
 
+# debug:
+# debug_msgs->True
+# debug_threads->True
+
 import os
 # import datetime
 import json
@@ -535,7 +539,9 @@ class Chnls(gui.QObject):
 	# in msg channels = external addresses = external uids
 	# in channels = registered channels 
 	def update_threads(self):
-		# print('\nupdate_threads')
+		debug_threads=True #False #True
+		
+		if debug_threads: print('\nchannel_threads')
 	
 		idb=localdb.DB(self.db)
 		 
@@ -549,7 +555,11 @@ class Chnls(gui.QObject):
 		# need channel name 
 		adr_date=idb.select_max_val( 'msgs_inout',['in_sign_uid','date_time'],where=wwhere,groupby=['addr_to'])
 		
-		print('Channel threads available\n',idb.select_max_val( 'msgs_inout',['in_sign_uid','date_time'],where={ 'is_channel':['=',"'True'"]},groupby=['addr_to']))
+		
+		if debug_threads: 
+			print('Channel threads available\n',idb.select_max_val( 'msgs_inout',['in_sign_uid','date_time'],where={ 'is_channel':['=',"'True'"]},groupby=['addr_to']))
+			print('Displayed\n',adr_date)
+		
 		# print('msgs',idb.select('msgs_inout'))
 		if hasattr(self,"adr_date") and self.adr_date==adr_date:
 			return 0
@@ -608,14 +618,20 @@ class Chnls(gui.QObject):
 			self.valid_uids.append( threads_aa[k][0] ) 
 			self.valid_uid_to_name[threads_aa[k][0]] = {'name':threads_aa[k][1]['channel_name'],'owner':threads_aa[k][1]['creator'],'intro':threads_aa[k][1]['channel_intro'], 'vk':threads_aa[k][1]['vk']}
 			
-		# print(self.valid_uid_to_name)
+		if debug_threads: 
+			print('valid_uid_to_name',self.valid_uid_to_name)
+			print('valid_uids',self.valid_uids)
+			
 		return 1
 		
 			
 	
 
 	def update_list(self ):
-		# print('\nupdate_list')
+		debug_msgs=True #False
+		
+		if debug_msgs: print('\nupdate_chnl msgs')
+		
 		idb=localdb.DB(self.db)
 		msg_filter=self.filter_table.cellWidget(0,3).currentText() #get_value('msg')
 		llimit=9999
@@ -625,7 +641,9 @@ class Chnls(gui.QObject):
 		elif msg_filter=='Last 100':
 			llimit=100
 			
-		threads_aa=self.threads_aa		
+		threads_aa=self.threads_aa
+
+		if debug_msgs: print('threads_aa',threads_aa)
 		
 		for k in self.thr_ord:
 			 
@@ -639,7 +657,8 @@ class Chnls(gui.QObject):
 				
 			# addr ext here is name of sender 
 			tmp_msg=idb.select('msgs_inout', ['type','msg','date_time','uid','in_sign_uid','addr_ext' ],where=wwhere, orderby=[ {'date_time':'desc'}], limit=llimit)
-			# print('tmp_msg\n',tmp_msg) 
+			
+			if debug_msgs:  print('tmpuid tmp_msg\n',tmpuid,tmp_msg) 
 			 
 			msg_flow=[]
 			
