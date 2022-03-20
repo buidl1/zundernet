@@ -259,6 +259,8 @@ class Msg(gui.QObject):
 	
 	def proc_inout(self): # goal - set addr_ext and in_sign_uid for incoming msg removed ,'addr_to'
 	
+		debug_msg=True #False #True 
+	
 		if self.update_in_progress:
 			# print('already processing msgs - check next time')
 			return
@@ -268,7 +270,8 @@ class Msg(gui.QObject):
 		idb=localdb.DB(self.db)
 		
 		mio=idb.select('msgs_inout',['type','addr_ext','date_time','msg', 'in_sign_uid','uid','tx_status','txid','is_channel','addr_to'],{'proc_json':['=',"'False'"]},orderby=[{'date_time':'asc'}]) #
-		# print('processing msg \n',mio)	
+		if debug_msg:
+			print('processing msg \n',mio)	
 		
 		if len(mio)==0:
 			self.update_in_progress=False
@@ -284,7 +287,7 @@ class Msg(gui.QObject):
 			return tmpmsg, tmp_sender
 		
 		for mm in mio:
-			# print('msg processing:\n',mm)
+			if debug_msg: print('mm processing:\n',mm)
 		
 			mm1=mm[1]
 			tmpmsg=mm[3]
@@ -303,8 +306,11 @@ class Msg(gui.QObject):
 							tmp_sender=tmp_str['channel_owner'] 
 							tmpmsg='Channel info update\nChannel name: '+tmp_str['channel_name']+'\nOwner: '+tmp_str['channel_owner']+'\nType: '+tmp_str['channel_type']+'\nIntro: '+tmp_str['channel_intro']
 							tmp_channel_update=True
+							
+							if debug_msg: print('channel_name',tmp_str)
 						elif 'txt' in tmp_str:				
 						
+							if debug_msg: print('txt',tmp_str)
 							tmpmsg=tmp_str['txt']
 							
 							# sender recognition needed ?
@@ -317,47 +323,49 @@ class Msg(gui.QObject):
 								
 					except: # OR print channel init  
 						tmpmsg='BAD MSG FORMAT, SEE TERMINAL '
-						tmp_sender='Unknown'
-						# print('\n\n\nBAD MSG FORMAT '+mm[3])
+						tmp_sender='Unknown' 
+						if debug_msg: print('\n\n\nBAD MSG FORMAT '+mm[3])
 						traceback.print_exc()
 				else:
 					print('msg::not proper channel json - simple text msg',tmpmsg)
 			############## unfinished ?
 			else:
+				if debug_msg: print('NOT CHANNEL ' )
 				# print('check if msg is reg msg to channel to not write into regular msgs ?')
 				test_addr=idb.select('channels',['address'], {'address':['=',"'"+mm[9]+"'"]}  ) #
-				# print('comparing',mm[9],test_addr)
+				
 				if len(test_addr)>0:
 					if test_addr[0][0]==mm[9]:
-						# print('\n\n# correcting channel type optional\n\n')
+						if debug_msg: print('*\n correcting channel type optional ') 
 						mm[8]='True'
+						refrsh_chnl+=1
 				else:
-					 
+					if debug_msg: print('\n\nsplit_simple_signature') 
 					tmpmsg, tmp_sender=split_simple_signature(tmpmsg) #tmpmsg, tmp_sender
 					
 				# print('\n\nREG MSG',tmpmsg)
 				# print('SENDER',tmp_sender)
 				 
 			# confusing out and in msgs ... ?
-			if mm[0]=='out':
-				# print('outgoing msg\n',mm) 
+			if mm[0]=='out': 
+				if debug_msg: print('outgoing msg\n',mm) 
 				table={'msgs_inout':[{'proc_json':'True','msg': tmpmsg}]} 
 				idb.update(table,['proc_json','msg' ],{'uid':['=',mm[5]]})
 				
 			elif mm[0]=='in' :
-				# print('incoming msg\n',mm)
+				if debug_msg:  print('incoming msg\n',mm)
 				
 				fsign=json.loads(mm1 )
 				
 				# if channel update: tmp_sender must match!
 				# must recognized the signature comes from the same as orig msg signature owner!
 				
-				# print('\nchecking hash for\n',mm)
+				if debug_msg:  print('\nchecking hash for ',tmp_sender)
 				uid,addr_from_book=self.match_sign( fsign, tmp_sender ) #mio
-				# print('\n\nfound match',uid,addr_from_book)
+				if debug_msg:  print('\n found match',uid,addr_from_book)
 				
 				if tmp_channel_update:
-					# print('check if uid is good iwth init channel definition',mm[9])
+					if debug_msg:   print('tmp_channel_update',mm[9])
 					# print('all\n',idb.select('msgs_inout',[ 'uid','in_sign_uid','msg' ],where={'is_channel':['=',"'True'"] , 'addr_to': ['=',"'"+mm[9]+"'"],  'type': ['=',"'in'"]   } ))
 					
 					init_ch_id=idb.select_min_val( 'msgs_inout','uid',where={'is_channel':['=',"'True'"] , 'addr_to': ['=',"'"+mm[9]+"'"],  'type': ['=',"'in'"]  } ) # find first id for the channel
@@ -395,16 +403,16 @@ class Msg(gui.QObject):
 				addr_ext=''
 				if uid>-1:
 					tmpalias='uid_'+str(uid)
-					# print('tmpalias',tmpalias)
+					if debug_msg:   print('tmpalias',tmpalias)
 					if mm[8]=='True': # if channel 	
-						# print("mm[8]=='True'")
+						if debug_msg:   print("mm[8]=='True'")
 						tmpalias=addr_from_book
 						# tmpmsg=tmpmsg #json.dumps({'sender':addr_from_book, 'txt':tmpmsg}) #addr_from_book+':\n'+tmpmsg
 						addr_ext=addr_from_book
 						# tmpalias=addr_from_book
 					
 					elif addr_from_book!='':
-						# print("addr_from_book!=''")
+						if debug_msg:   print("addr_from_book!=''")
 						addr_ext=addr_from_book
 						
 						tmpalias=idb.select('addr_book',['Alias'] , {'Address':['=',"'"+addr_from_book+"'"] } )
@@ -417,11 +425,11 @@ class Msg(gui.QObject):
 							# print(tmpalias)
 							tmpalias=tmpalias[0][0]
 					else:
-						# print("addr_ext=tmpalias")
+						if debug_msg:   print("addr_ext=tmpalias")
 						addr_ext=tmpalias
 						if tmp_sender!='': tmpalias=tmp_sender
 							
-						
+					if debug_msg:   print("tmpalias",tmpalias)
 					table_h={}
 					uidtmp=tmpalias+';uid='+str(uid)+': '
 					table_h['tx_history']=[{'from_str':uidtmp+mm[3]}]
@@ -467,7 +475,7 @@ class Msg(gui.QObject):
 					# table['msgs_inout'][0]['is_channel']='True'
 				
 				# correcting channel type optional
-				# print("\n\nupdating mm\n",table)
+				if debug_msg:    print("\n\nupdating processed mm\n",table)
 				idb.update(table,['type','proc_json', 'in_sign_uid','addr_ext','msg','is_channel' ],{'uid':['=',mm[5]]})
 			# self.refresh_msgs_signal.emit()	
 		if refrsh_chnl>0:
