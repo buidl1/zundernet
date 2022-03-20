@@ -356,7 +356,12 @@ class Chnls(gui.QObject):
 		
 		
 		self.maxMsgColWidth=self.action_buttons.width() 
-		# self.update_list()
+		idb=localdb.DB(self.db)
+		# , 'in_sign_uid':['>',-2],'is_channel':['=',"'True'"], 'type':['=',"'in'"]
+		# 'proc_json':['=',"'True'"],
+		tmp_testing=idb.select('msgs_inout', ['type','msg','date_time','uid','in_sign_uid','addr_ext' ],where={'addr_to':['=',"'zs1z0uw20wnatjvj3u9spfdhl4tkj3ljqjnzsqlx4qyrwqfsrv5pdv4k64wgxzklspsxcwd6shhx9y'"] }, orderby=[ {'date_time':'asc'}], limit=9)
+		for rr in tmp_testing:
+			print(rr)
 		
 		self.msg_thrd_frame.insertWidget(self.frame2)	
 		 
@@ -630,12 +635,17 @@ class Chnls(gui.QObject):
 	def update_list(self ):
 		debug_msgs=True #False
 		
-		if debug_msgs: print('\nupdate_chnl msgs')
-		
 		idb=localdb.DB(self.db)
 		msg_filter=self.filter_table.cellWidget(0,3).currentText() #get_value('msg')
 		llimit=9999
 		
+		if debug_msgs: 
+			print('\nupdate_chnl msgs')
+			# idb=localdb.DB(self.db)
+			# , 'in_sign_uid':['>',-2],'is_channel':['=',"'True'"], 'type':['=',"'in'"]
+			# 'proc_json':['=',"'True'"],
+			# print(idb.select('msgs_inout', ['type','msg','date_time','uid','in_sign_uid','addr_ext' ],where={'addr_to':['=',"'zs1z0uw20wnatjvj3u9spfdhl4tkj3ljqjnzsqlx4qyrwqfsrv5pdv4k64wgxzklspsxcwd6shhx9y'"] }, orderby=[ {'date_time':'asc'}], limit=llimit))
+			
 		if msg_filter=='Last 10':
 			llimit=10
 		elif msg_filter=='Last 100':
