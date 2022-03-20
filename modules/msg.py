@@ -259,7 +259,7 @@ class Msg(gui.QObject):
 	
 	def proc_inout(self): # goal - set addr_ext and in_sign_uid for incoming msg removed ,'addr_to'
 	
-		debug_msg=True #False #True 
+		debug_msg= False #True 
 	
 		if self.update_in_progress:
 			# print('already processing msgs - check next time')
