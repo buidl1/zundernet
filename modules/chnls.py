@@ -356,12 +356,12 @@ class Chnls(gui.QObject):
 		
 		
 		self.maxMsgColWidth=self.action_buttons.width() 
-		idb=localdb.DB(self.db)
+		# idb=localdb.DB(self.db)
 		# , 'in_sign_uid':['>',-2],'is_channel':['=',"'True'"], 'type':['=',"'in'"]
 		# 'proc_json':['=',"'True'"],
-		tmp_testing=idb.select('msgs_inout', ['type','msg','date_time','uid','in_sign_uid','addr_ext' ],where={'addr_to':['=',"'zs1z0uw20wnatjvj3u9spfdhl4tkj3ljqjnzsqlx4qyrwqfsrv5pdv4k64wgxzklspsxcwd6shhx9y'"] }, orderby=[ {'date_time':'asc'}], limit=9)
-		for rr in tmp_testing:
-			print(rr)
+		# tmp_testing=idb.select('msgs_inout', ['type','msg','date_time','uid','in_sign_uid','addr_ext' ],where={'addr_to':['=',"'zs1z0uw20wnatjvj3u9spfdhl4tkj3ljqjnzsqlx4qyrwqfsrv5pdv4k64wgxzklspsxcwd6shhx9y'"] }, orderby=[ {'date_time':'asc'}], limit=9)
+		# for rr in tmp_testing:
+			# print(rr)
 		
 		self.msg_thrd_frame.insertWidget(self.frame2)	
 		 
@@ -544,7 +544,7 @@ class Chnls(gui.QObject):
 	# in msg channels = external addresses = external uids
 	# in channels = registered channels 
 	def update_threads(self):
-		debug_threads=True #False #True
+		debug_threads= False #True
 		
 		if debug_threads: print('\nchannel_threads')
 	
@@ -633,18 +633,14 @@ class Chnls(gui.QObject):
 	
 
 	def update_list(self ):
-		debug_msgs=True #False
+		debug_msgs= False
 		
 		idb=localdb.DB(self.db)
 		msg_filter=self.filter_table.cellWidget(0,3).currentText() #get_value('msg')
 		llimit=9999
 		
 		if debug_msgs: 
-			print('\nupdate_chnl msgs')
-			# idb=localdb.DB(self.db)
-			# , 'in_sign_uid':['>',-2],'is_channel':['=',"'True'"], 'type':['=',"'in'"]
-			# 'proc_json':['=',"'True'"],
-			# print(idb.select('msgs_inout', ['type','msg','date_time','uid','in_sign_uid','addr_ext' ],where={'addr_to':['=',"'zs1z0uw20wnatjvj3u9spfdhl4tkj3ljqjnzsqlx4qyrwqfsrv5pdv4k64wgxzklspsxcwd6shhx9y'"] }, orderby=[ {'date_time':'asc'}], limit=llimit))
+			print('\nupdate_chnl msgs') 
 			
 		if msg_filter=='Last 10':
 			llimit=10
