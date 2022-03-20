@@ -312,7 +312,8 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 	def update_historical_txs(self): #,freshutxo): # max count: 80*tps * 60 =4800 < 5000
 		idb=localdb.DB(self.db)	
 		
-		print_debug=False
+		print_debug=True
+		test_addr='zs1z0uw20wnatjvj3u9spfdhl4tkj3ljqjnzsqlx4qyrwqfsrv5pdv4k64wgxzklspsxcwd6shhx9y'
 		
 		# print('\n\ninit historical txs \n',self.historical_txs)
 		# print(' self.last_load self.last_block', self.last_load,self.last_block)
@@ -346,6 +347,9 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 		tmp_ord={}
 		
 		for aa in iterat_arr:
+		
+			if aa!=test_addr and print_debug: continue # only pass the test addr 
+		
 			if print_debug: print('\n\nanalyzing aa',aa)
 			
 			if True:
@@ -385,7 +389,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 				for tx in tt: 
 					
 						
-					if print_debug: print('analyzing tx\n',tx)
+					if print_debug  : print('analyzing tx\n',tx)
 					if "txid" not in tx:
 						continue
 						
@@ -409,10 +413,11 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 						outindex=tx['output']
 						
 					if outindex in self.historical_txs[aa][tx["txid"]]:
-						# print('new outindex',outindex)
+ 
+						if print_debug: print('outindex already in self.historical_txs[aa][tx["txid"]]',outindex)
 						continue
 						
-					if print_debug: print(413)
+					if print_debug: print('before checking change')
 					dt,ts=app_fun.now_to_str(False,ret_timestamp=True)
 					tmp_timestamp=ts-60*tx["confirmations"]
 					tmp_date_time=app_fun.date2str(datetime.datetime.now()-datetime.timedelta(seconds=60*tx["confirmations"]) )
@@ -435,13 +440,13 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 							
 							continue
 					# print('NOT CHANGE!',outindex not in self.historical_txs[aa][tx["txid"]])
-					if print_debug: print(436)
+					if print_debug: print('NOT CHANGE OK')
 					
 					if outindex not in self.historical_txs[aa][tx["txid"]]: # 'Category'= "'outindex_"+str(outindex)+"'"
 					
 						# if tx['txid']=='2a0a99f9644dc9e05e1417208d326abeff0710851b204235b80bdd013bc4698b': 
 							# print('\nwallet api outindex not in tx=\n',tx)
-						if print_debug: print(442)
+						if print_debug: print('before memo decode')
 					
 						tmpmemo=''
 						if "memoStr" in tx:
@@ -461,6 +466,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 						
 						if len(tmpmemo)<4: # in dev wallet change should fix this - taken by change:true
 							from_str='too short memo imply error in msg format: ['+tmpmemo+']' 
+							if print_debug: print(from_str) 
 							self.insert_history_tx('_'+str(outindex),tx["txid"],y["blocks"]-tx["confirmations"] , tmp_timestamp , tmp_date_time, from_str, aa, tx["amount"],ttype='in/change?') 
 							self.historical_txs[aa][tx["txid"]][outindex] = { "amount":tx["amount"]}
 							continue
@@ -489,11 +495,11 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 							tmp_date_time=app_fun.date2str(datetime.datetime.now()-datetime.timedelta(seconds=60*tx["confirmations"]) )
 							self.insert_history_tx( '_'+str(outindex),tx["txid"],y["blocks"]-tx["confirmations"] ,tmp_timestamp,tmp_date_time,tmpmemo,aa,tx["amount"],ttype)
 						
+							if print_debug: print('outindex inserted to history_tx ' )
 															
 							# dt,ts=app_fun.now_to_str(False,ret_timestamp=True)
 							
 							dt=localdb.blocks_to_datetime(y["blocks"]-tx["confirmations"]) # time it was sent 
-							if print_debug: print('dt?',dt)
 							
 							##### prepare for inserting msg
 							if aa not in table_history_notif:
@@ -505,10 +511,10 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 								# merged_msg[aa][tx["txid"]]={}
 								table_history_notif[aa][tx["txid"]]={}
 								# print('added txid  to table_history_notif',tx["txid"])
-							if print_debug: print(506)
+							if print_debug: print('before outindex in table_history_notif')
 							if outindex not in table_history_notif[aa][tx["txid"]]:
 								# merged_msg[aa][tx["txid"]][outindex]={'dt':dt, 'tmpmemo':tmpmemo } #table
-								if print_debug: print(509)
+								if print_debug: print(517)
 								# print('times\n blocks_to_datetime dt',dt,'timestamp',ts-60*tx["confirmations"]   ,'date_time',app_fun.date2str(datetime.datetime.now()-datetime.timedelta(seconds=60*tx["confirmations"]) ))
 								q={'dt':dt
 									, 'tmpmemo':tmpmemo
@@ -520,8 +526,13 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 									}
 								table_history_notif[aa][tx["txid"]][outindex]=q
 								# print('\n\nadded outindex  to table_history_notif',aa,'\n',outindex,'\n',q)
-							if aa not in tmp_ord: tmp_ord[aa]={}	
-							if tx["txid"] not in tmp_ord[aa]: tmp_ord[aa][tx["txid"]]=tx["confirmations"]
+							if aa not in tmp_ord: 
+								tmp_ord[aa]={}	
+								print('added aa to tmp_ord' )
+								
+							if tx["txid"] not in tmp_ord[aa]: 
+								tmp_ord[aa][tx["txid"]]=tx["confirmations"]
+								print('added txid to tmp_ord[aa]' )
 								
 								
 		self.addr_for_full_recalc=[] # reset 
