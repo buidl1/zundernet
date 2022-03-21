@@ -1087,7 +1087,8 @@ class WalDispSet(gui.QObject):
 	
 	def prepare_queue_frame(self,init=False):	
 
-		# print('11 os.path.exists(self.db)',os.path.exists(self.db) )
+		
+		# print('preparing prepare_queue_frame' )
 		idb=localdb.DB(self.db)
 		grid_lol3=[]
 		tmpdict2={}
@@ -1133,6 +1134,9 @@ class WalDispSet(gui.QObject):
 		if len(disp_dict)>0:		
 		
 			for ii,rr in enumerate(disp_dict):
+			
+				# print(ii,rr)
+			
 				tmpid=rr[5] #ii #rr[5]
 				status_label={'T':'LabelV', 'L': rr[2] }
 				
@@ -1182,6 +1186,8 @@ class WalDispSet(gui.QObject):
 								]
 				grid_lol3.append(tmpdict2)
 				
+		# print('DONE preparing prepare_queue_frame' )
+		
 		return grid_lol3,colnames
 
 
