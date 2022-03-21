@@ -175,7 +175,7 @@ def json_to_str(dd,tt=''):
 				nextt=''
 			x=json_to_str(d,nextt)
 			tmp+=tt+ x +'\n'
-	else:
+	elif type(dd)==type({}):
 		for k,v in dd.items():
 			if type(v)==type([]):
 				tmp+=tt+str(k)+':\n'
@@ -184,6 +184,8 @@ def json_to_str(dd,tt=''):
 					tmp+=y #+'\n'
 			else:
 				tmp+=tt+str(k)+': '+str(v)+'\n'
+	else:
+		return str(dd)
 
 	return tmp
 	
