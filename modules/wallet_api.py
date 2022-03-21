@@ -10,11 +10,12 @@ import json
 # import re
 import modules.localdb as localdb
 import modules.app_fun as app_fun
+import modules.gui as gui
 # import modules.aes as aes
 # save in db last block nr, last time loaded, last loading time
 
-class Wallet: # should store last values in DB for faster preview - on preview wallt commands frozen/not active
-
+class Wallet(gui.QObject): # should store last values in DB for faster preview - on preview wallt commands frozen/not active
+	sending_signal = gui.Signal(list)
 	# in outgoing either addr to or addr ext should be own...
 	# now 2 times the same is eddr to ...
 	
@@ -50,6 +51,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 
 
 	def __init__(self,CLI_STR,last_load,db):
+		super(Wallet, self).__init__()
 		self.db=db
 		self.last_load=last_load # prev session load 
 		# self.first_block=None
@@ -263,6 +265,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 				for recieved in txid['received']:
 					tmp={'txid':txid['txid'],
 						'confirmations':txid['confirmations'],
+						'rawconfirmations':txid['confirmations'],
 						'fee':txid['fee'],
 						"blockHeight":txid['blockHeight'],
 						"change":recieved['change'],
@@ -310,11 +313,27 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 	
 	#freshutxo [{"address","txid","amount"},..]
 	def update_historical_txs(self): #,freshutxo): # max count: 80*tps * 60 =4800 < 5000
+	
+		# print('update_historical_txs')
 		idb=localdb.DB(self.db)	
 		
-		print_debug=False #True
-		test_addr='zs1z0uw20wnatjvj3u9spfdhl4tkj3ljqjnzsqlx4qyrwqfsrv5pdv4k64wgxzklspsxcwd6shhx9y'
+		print_debug=  False #True
+		# test_addr='zs1z0uw20wnatjvj3u9spfdhl4tkj3ljqjnzsqlx4qyrwqfsrv5pdv4k64wgxzklspsxcwd6shhx9y'
+		test_addr='zs1qds8vy37aewz0ersgnxexj3w96gs642p0d0mh3vzlschgyn9ahfrvu7lq96wmff4l8lg7a8rpg6'
+		 
+		# if True:
 		
+		queue_table={}
+		queue_table['queue_waiting']=[localdb.set_que_waiting(command='process tx' )] #,jsonstr=json.dumps({'left':'0 of N'})
+		queue_table['queue_waiting'][0]['status']='processing' 
+		queue_table['queue_waiting'][0]["type"]='auto'
+		queue_id=queue_table['queue_waiting'][0]['id']
+		idb.insert(queue_table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
+		self.sending_signal.emit(['cmd_queue'])
+		
+		# print('update_historical_txs 2')
+		
+			
 		# print('\n\ninit historical txs \n',self.historical_txs)
 		# print(' self.last_load self.last_block', self.last_load,self.last_block)
 		# iterat_arr=freshutxo # REPLACE????????????????
@@ -352,9 +371,19 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 			elif 'output' in tx: return tx['output']
 			else: return 0
 		
-		for aa in iterat_arr:
+		# print('update_historical_txs 3')
+		for ind, aa in enumerate(iterat_arr):
 		
+			# print('update_historical_txs 4',ind,aa)
+			working_on='Address '+str(ind+1)+' of '+str(len(iterat_arr))
+			
+			# print('update_historical_txs 5',working_on,queue_id) #queue_table['queue_waiting'][0]['status']='processing' 
+			idb.update( {'queue_waiting':[{'status':'processing\n'+working_on }]} ,['status'],{'id':[ '=',queue_id ]})
+			self.sending_signal.emit(['cmd_queue'])
+		 
 			if aa!=test_addr and print_debug: continue # only pass the test addr 
+			
+			# if aa!=test_addr: continue
 		
 			if print_debug: print('\n\nanalyzing aa',aa)
 			tmpiter=0
@@ -401,19 +430,23 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 				# reordering tt
 				# get confirmation 'confirmations'
 				# ordering by conf number, grouped by txid, and order again by outindex
+				
+				idb.update( {'queue_waiting':[{'status':'processing\nreordering tx\'s '+str(len(tt)) }]} ,['status'],{'id':[ '=',queue_id ]})
+				self.sending_signal.emit(['cmd_queue'])
+			
 				conf_dict={}
 				# ttiter=0
 				for tx in tt: 
-					if tx['confirmations'] not in conf_dict:
-						conf_dict[tx['confirmations']]={}
+					if tx['rawconfirmations'] not in conf_dict:
+						conf_dict[tx['rawconfirmations']]={}
 					# print(ttiter,conf_dict[tx['confirmations']] )
-					if tx['txid'] not in conf_dict[tx['confirmations']]:
-						conf_dict[tx['confirmations']][tx['txid']]={}
+					if tx['txid'] not in conf_dict[tx['rawconfirmations']]:
+						conf_dict[tx['rawconfirmations']][tx['txid']]={}
 					# print(ttiter,conf_dict[tx['confirmations']][tx['txid']] )
 						
 					outindex=get_outindex(tx)
-					if outindex not in conf_dict[tx['confirmations']][tx['txid']]:
-						conf_dict[tx['confirmations']][tx['txid']][outindex]=tx
+					if outindex not in conf_dict[tx['rawconfirmations']][tx['txid']]:
+						conf_dict[tx['rawconfirmations']][tx['txid']][outindex]=tx
 						
 					# print(ttiter,conf_dict[tx['confirmations']][tx['txid']][outindex])
 					# ttiter+=1
@@ -422,7 +455,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 				
 				# print(conf_dict)
 				# rebuild tt based on proper ordering:
-				ord_conf=sorted(conf_dict.keys()) 
+				ord_conf=sorted(conf_dict.keys(),reverse=True) 
 				# print('ord_conf',ord_conf)
 				tt_rebuilt=[]
 				for oc in ord_conf:
@@ -432,7 +465,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 						tmp_tx=txids[ti]
 						# print('tmp_tx',tmp_tx)
 						# print('tmp_tx.keys()',tmp_tx.keys())
-						ord_oi=sorted(tmp_tx.keys()) 
+						ord_oi=sorted(tmp_tx.keys(),reverse=True) 
 						# print('ord_oi',ord_oi)
 						for oi in ord_oi:
 							tt_rebuilt.append(tmp_tx[oi])
@@ -452,7 +485,13 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 					
 				y=self.getinfo()
 				
-				for tx in tt: 
+				for txind, tx in enumerate(tt): 
+					
+					# working_on_tx='TX '+str(txind+1)+' of '+str(len(tt) ) 
+					# idb.update( {'queue_waiting':[{'status':'processing\n'+working_on+'\n'+working_on_tx }]} ,['status'],{'id':[ '=',queue_id ]})
+					# self.sending_signal.emit(['cmd_queue'])
+					
+					
 					
 					# tmpiter+=1
 					
@@ -466,6 +505,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 						# max_block_analized=max( tx["blockindex"], self.last_analized_block)
 					# # if aa not in tmp_ord: tmp_ord[aa]={}	
 					# if tx["txid"] not in tmp_ord[aa]: tmp_ord[aa][tx["txid"]]=tx["confirmations"]
+					tx_confirmations = tx["rawconfirmations"]
 					
 					
 					if tx["txid"] not in self.historical_txs[aa]:  # if this ever change - may be needed to update some records in case of reorg ?
@@ -483,13 +523,13 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 						
 					if outindex in self.historical_txs[aa][tx["txid"]]:
  
-						if print_debug: print('outindex already in self.historical_txs[aa][tx["txid"]]',self.historical_txs[aa][tx["txid"]])
+						if print_debug: print('outindex already in self.historical_txs[aa][tx["txid"]]' )
 						continue
 						
 					if print_debug: print('before checking change')
 					dt,ts=app_fun.now_to_str(False,ret_timestamp=True)
-					tmp_timestamp=ts-60*tx["confirmations"]
-					tmp_date_time=app_fun.date2str(datetime.datetime.now()-datetime.timedelta(seconds=60*tx["confirmations"]) )
+					tmp_timestamp=ts-60*tx_confirmations
+					tmp_date_time=app_fun.date2str(datetime.datetime.now()-datetime.timedelta(seconds=60*tx_confirmations) )
 					
 					
 					
@@ -502,7 +542,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 							# table_msg=self.prep_msgs_inout(txid,[init_table['tmpmemo'],0,''],'in',init_table['dt'],tx_status='received', in_sign_uid=-2,addr_to=aa ) 
 							from_str='self change from '+aa #'self' #table_msg['msgs_inout'][0]['msg']
 							# print('inserting chnge tx ',from_str,tx["txid"])
-							self.insert_history_tx('_'+str(outindex),tx["txid"],y["blocks"]-tx["confirmations"] , tmp_timestamp , tmp_date_time, from_str, aa, tx["amount"],ttype='in/change')
+							self.insert_history_tx('_'+str(outindex),tx["txid"],y["blocks"]-tx_confirmations , tmp_timestamp , tmp_date_time, from_str, aa, tx["amount"],ttype='in/change')
 							
 							self.historical_txs[aa][tx["txid"]][outindex] = { "amount":tx["amount"]}
 							# is_aa_external
@@ -536,7 +576,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 						if len(tmpmemo)<4: # in dev wallet change should fix this - taken by change:true
 							from_str='too short memo imply error in msg format: ['+tmpmemo+']' 
 							if print_debug: print(from_str) 
-							self.insert_history_tx('_'+str(outindex),tx["txid"],y["blocks"]-tx["confirmations"] , tmp_timestamp , tmp_date_time, from_str, aa, tx["amount"],ttype='in/change?') 
+							self.insert_history_tx('_'+str(outindex),tx["txid"],y["blocks"]-tx_confirmations , tmp_timestamp , tmp_date_time, from_str, aa, tx["amount"],ttype='in/change?') 
 							self.historical_txs[aa][tx["txid"]][outindex] = { "amount":tx["amount"]}
 							continue
 						
@@ -560,15 +600,15 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 								
 							
 							dt,ts=app_fun.now_to_str(False,ret_timestamp=True)
-							tmp_timestamp=ts-60*tx["confirmations"]
-							tmp_date_time=app_fun.date2str(datetime.datetime.now()-datetime.timedelta(seconds=60*tx["confirmations"]) )
-							self.insert_history_tx( '_'+str(outindex),tx["txid"],y["blocks"]-tx["confirmations"] ,tmp_timestamp,tmp_date_time,tmpmemo,aa,tx["amount"],ttype)
+							tmp_timestamp=ts-60*tx_confirmations
+							tmp_date_time=app_fun.date2str(datetime.datetime.now()-datetime.timedelta(seconds=60*tx_confirmations) )
+							self.insert_history_tx( '_'+str(outindex),tx["txid"],y["blocks"]-tx_confirmations ,tmp_timestamp,tmp_date_time,tmpmemo,aa,tx["amount"],ttype)
 						
 							if print_debug: print('outindex inserted to history_tx ' )
 															
 							# dt,ts=app_fun.now_to_str(False,ret_timestamp=True)
 							
-							dt=localdb.blocks_to_datetime(y["blocks"]-tx["confirmations"]) # time it was sent 
+							dt=localdb.blocks_to_datetime(y["blocks"]-tx_confirmations) # time it was sent 
 							
 							##### prepare for inserting msg
 							if aa not in table_history_notif:
@@ -587,7 +627,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 								# print('times\n blocks_to_datetime dt',dt,'timestamp',ts-60*tx["confirmations"]   ,'date_time',app_fun.date2str(datetime.datetime.now()-datetime.timedelta(seconds=60*tx["confirmations"]) ))
 								q={'dt':dt
 									, 'tmpmemo':tmpmemo
-									,'block':y["blocks"]-tx["confirmations"]
+									,'block':y["blocks"]-tx_confirmations
 									,'timestamp':tmp_timestamp #ts-60*tx["confirmations"]   
 									, 'date_time':tmp_date_time #app_fun.date2str(datetime.datetime.now()-datetime.timedelta(seconds=60*tx["confirmations"]) )
 									, 'amount':tx["amount"]
@@ -600,10 +640,12 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 								if print_debug: print('added aa to tmp_ord' )
 								
 							if tx["txid"] not in tmp_ord[aa]: 
-								tmp_ord[aa][tx["txid"]]=tx["confirmations"]
+								tmp_ord[aa][tx["txid"]]=tx_confirmations
 								if print_debug: print('added txid to tmp_ord[aa]' )
 								
-								
+		idb.update( {'queue_waiting':[{'json':'TX processed, analyzing messages'}]} ,['json'],{'id':[ '=',queue_id ]})
+		self.sending_signal.emit(['cmd_queue'])
+		
 		self.addr_for_full_recalc=[] # reset 
 		
 		tmpblocks=self.getinfo()["blocks"]
@@ -775,8 +817,16 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 						
 						idb.insert(table,['opname','datetime','status','details', 'closed','orig_json' ,'uid'])
 						if 'notifications' not in self.to_refresh: self.to_refresh.append('notifications') #self.to_refresh=[] channels,addr_book,tx_history,notifications
-				
-		# print('return',table_history_notif)
+		
+		
+		
+		idb.update( {'queue_waiting':[{'status':'done','json':'TX and msgs processind completed'}]} ,['status','json'],{'id':[ '=',queue_id ]})
+		self.sending_signal.emit(['cmd_queue'])	
+		 
+		idb.delete_where('queue_waiting',{'id':['=',queue_id ]})
+		# print('processing tx done')
+		# time.sleep(10)
+		
 		return len(table_history_notif)		
 				
 				
@@ -969,6 +1019,9 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 					tmptxid+=' outindex '+str(jj["jsoutindex"])
 															
 				tmpconf=jj["confirmations"]
+				if "rawconfirmations" in jj:
+					tmpconf=jj["rawconfirmations"]
+				
 				if tmpconf<30:
 					fresh_tx.append(jj)
 				
