@@ -312,7 +312,7 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 	def update_historical_txs(self): #,freshutxo): # max count: 80*tps * 60 =4800 < 5000
 		idb=localdb.DB(self.db)	
 		
-		print_debug=True
+		print_debug=False #True
 		test_addr='zs1z0uw20wnatjvj3u9spfdhl4tkj3ljqjnzsqlx4qyrwqfsrv5pdv4k64wgxzklspsxcwd6shhx9y'
 		
 		# print('\n\ninit historical txs \n',self.historical_txs)
@@ -346,7 +346,11 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 		
 		tmp_ord={}
 		
-		# tmpiter=0
+		def get_outindex(tx): 
+			if 'outindex' in tx: return tx['outindex']
+			elif 'jsindex' in tx:return tx['jsindex']
+			elif 'output' in tx: return tx['output']
+			else: return 0
 		
 		for aa in iterat_arr:
 		
@@ -384,6 +388,65 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 				# if aa not in tmp_ord: tmp_ord[aa]={}
 				
 				
+				
+				
+				
+				
+				
+				# if print_debug: 
+					# print('\ntt before\n ',tt)
+				
+				#####################################################33
+				# todo: test ordering is bad before and good after ... 
+				# reordering tt
+				# get confirmation 'confirmations'
+				# ordering by conf number, grouped by txid, and order again by outindex
+				conf_dict={}
+				# ttiter=0
+				for tx in tt: 
+					if tx['confirmations'] not in conf_dict:
+						conf_dict[tx['confirmations']]={}
+					# print(ttiter,conf_dict[tx['confirmations']] )
+					if tx['txid'] not in conf_dict[tx['confirmations']]:
+						conf_dict[tx['confirmations']][tx['txid']]={}
+					# print(ttiter,conf_dict[tx['confirmations']][tx['txid']] )
+						
+					outindex=get_outindex(tx)
+					if outindex not in conf_dict[tx['confirmations']][tx['txid']]:
+						conf_dict[tx['confirmations']][tx['txid']][outindex]=tx
+						
+					# print(ttiter,conf_dict[tx['confirmations']][tx['txid']][outindex])
+					# ttiter+=1
+					
+					# if ttiter>10: break
+				
+				# print(conf_dict)
+				# rebuild tt based on proper ordering:
+				ord_conf=sorted(conf_dict.keys()) 
+				# print('ord_conf',ord_conf)
+				tt_rebuilt=[]
+				for oc in ord_conf:
+					txids=conf_dict[oc]
+					# print('txids',txids)
+					for ti in txids:
+						tmp_tx=txids[ti]
+						# print('tmp_tx',tmp_tx)
+						# print('tmp_tx.keys()',tmp_tx.keys())
+						ord_oi=sorted(tmp_tx.keys()) 
+						# print('ord_oi',ord_oi)
+						for oi in ord_oi:
+							tt_rebuilt.append(tmp_tx[oi])
+				
+				tt=tt_rebuilt
+				#####################################################33
+				
+				if print_debug: 
+					print('\ntt after\n ',tt)
+				
+				# time.sleep(4)
+				# return 0
+				
+				
 				if aa not in self.historical_txs:
 					self.historical_txs[aa]={}
 					
@@ -391,9 +454,9 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 				
 				for tx in tt: 
 					
-					tmpiter+=1
+					# tmpiter+=1
 					
-					if tmpiter>10: continue
+					# if tmpiter>10: continue
 					
 					if print_debug  : print('analyzing tx\n',tx)
 					if "txid" not in tx:
@@ -409,14 +472,14 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 						self.historical_txs[aa][tx["txid"]]={}
 						
 						
-					outindex=0
+					outindex=get_outindex(tx)
 					
-					if 'outindex' in tx:
-						outindex=tx['outindex']
-					elif 'jsindex' in tx:
-						outindex=tx['jsindex']
-					elif 'output' in tx:
-						outindex=tx['output']
+					# if 'outindex' in tx:
+						# outindex=tx['outindex']
+					# elif 'jsindex' in tx:
+						# outindex=tx['jsindex']
+					# elif 'output' in tx:
+						# outindex=tx['output']
 						
 					if outindex in self.historical_txs[aa][tx["txid"]]:
  
@@ -534,11 +597,11 @@ class Wallet: # should store last values in DB for faster preview - on preview w
 								# print('\n\nadded outindex  to table_history_notif',aa,'\n',outindex,'\n',q)
 							if aa not in tmp_ord: 
 								tmp_ord[aa]={}	
-								print('added aa to tmp_ord' )
+								if print_debug: print('added aa to tmp_ord' )
 								
 							if tx["txid"] not in tmp_ord[aa]: 
 								tmp_ord[aa][tx["txid"]]=tx["confirmations"]
-								print('added txid to tmp_ord[aa]' )
+								if print_debug: print('added txid to tmp_ord[aa]' )
 								
 								
 		self.addr_for_full_recalc=[] # reset 
