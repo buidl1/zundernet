@@ -1,39 +1,4 @@
 
-# TODO: 
-# chanel types - blog, set min fee  ... 
-# public signatures?
-# ann channels/categories ?
-# warning fo local backup folders
-# tail -f ~/.komodo/PIRATE/debug.log for rescan progress 
-# reordering msg when sent in the ame block: sort queue ? if first msg in a queue does not send but another sends (wallet status change) then return to main loop and first go with e first one 
-# DB err 397 - no db name
-# QThread: Destroyed while thread is still running
-# small bug merging regular tx got signature in between 
-
-# seems send wrongly? didnt merge properly ?
- 
-# add sync start at 179... and per  key pair
-#call setprimarykey to set main key 
-# block quit when wallet being encrypted after blockchain stop!
-# use db in memoery
-# load backup to memory on start
-# shared db object between classes
-
-# bad foramt channel message show only in notifications and history but not in channels if possible ?
- 
-
-# todo: refresh interface only when change in window tab etc 
-# ?? store keys encrypted in local db to recover in case it is needed
- 
-
-# NEXT:
- 
-# verus exception not enough fee
-  
-# pycryptodome
-# python -m pip install pywin32
-
-# compile: pyinstaller zundernet.py --onefile #--windowed
 
 
 import os
@@ -109,6 +74,10 @@ def upload_0():
 	dmn.wallet_status_update.connect(wata.updateStatus) #self.start_stop_enable.emit(True)
 	dmn.wallet_synced_signal.connect(init_app.check_if_new_wallet_backup_needed)
 	dmn.wallet_synced_signal.connect(wds.setSynced)
+	
+	# must be synced to connect
+	dmn.set_obj(wata.updateWalletDisplay)
+	# dmn.the_wallet.sending_signal.connect(wata.updateWalletDisplay) 
  
 	
 gui.QTimer.singleShot(500,upload_0)
