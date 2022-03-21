@@ -34,6 +34,7 @@ class DeamonInit(gui.QObject):
 		
 		if self.started:
 			idb=localdb.DB(self.db)
+			# print('refreshing wallet')
 			utxo_change=self.the_wallet.refresh_wallet()
 			self.update_chain_status()
 			
@@ -56,15 +57,18 @@ class DeamonInit(gui.QObject):
 				
 	def init_clear_queue(self):	
 		idb=localdb.DB(self.db)
-		waiting=idb.select('queue_waiting', ["type","wait_seconds","created_time","command","json","id","status"],{'command':['<>',"'automerge'"]})
+		waiting=idb.select('queue_waiting', ["type","wait_seconds","created_time","command","json","id","status"],{'command':['<>',"'automerge'"]}) # , 'command':['<>',"'process tx'"]
 		
 		for ii,rr in enumerate(waiting):
 
-			if rr[6]=='processing': # and len(idb.select('queue_done',['id'],{'id':['=',rr[5]]} ) )>0:
-				table={}
-				table['queue_done']=[{"type":rr[0],"wait_seconds":rr[1],"created_time":rr[2],"command":rr[3],"json":rr[4],"id":rr[5],"result":'old - forced failed on app init','end_time':app_fun.now_to_str(False)}]
+			if 'processing' in rr[6] or  'done' in rr[6]: # and len(idb.select('queue_done',['id'],{'id':['=',rr[5]]} ) )>0:
+			
+				if rr[3]!='process tx':
+					table={}
+					table['queue_done']=[{"type":rr[0],"wait_seconds":rr[1],"created_time":rr[2],"command":rr[3],"json":rr[4],"id":rr[5],"result":'old - forced failed on app init','end_time':app_fun.now_to_str(False)}]
+					idb.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
 				
-				idb.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
+				
 				idb.delete_where('queue_waiting',{'id':['=',rr[5] ]})
 
 				
@@ -141,7 +145,8 @@ class DeamonInit(gui.QObject):
 			
 			# print('refreshing wallet before processing\n')
 			# self.the_wallet.refresh_wallet()
-			# print('processing\n',rr)		
+			# print('processing\n',rr)	
+			# print( 'process_queue update_wallet' )	
 			self.update_wallet()
 			self.sending_signal.emit(['wallet'])
 				
@@ -173,7 +178,7 @@ class DeamonInit(gui.QObject):
 					self.update_addr_book.emit()
 					count_task_done+=1 
 					self.sending_signal.emit(['task_done','cmd_queue'])
-					# print('# run wallet api refresh 	')
+					# print('process_queue import_view_key update_wallet')
 					self.update_wallet()
 					# print('wallet refreshed ')
 				
@@ -736,6 +741,7 @@ class DeamonInit(gui.QObject):
 							time.sleep(0.3)
 							
 						self.update_wallet()
+						# print('process_queue send update_wallet')
 						time.sleep(0.3)
 					
 					else:
@@ -766,6 +772,7 @@ class DeamonInit(gui.QObject):
 		
 		idb.delete_where('queue_waiting',{ 'status':[' not in ',"('awaiting_balance','waiting')"]  }  )  #, "command":[' not in ',"('send','automerge')"]  
 		idb.delete_where('queue_waiting',{ "command":[' not in ',"('send','automerge')"]  }  )  #, "command":[' not in ',"('send','automerge')"]  
+		# table['queue_done']
 		# idb.delete_where('queue_waiting',{ 'status':['<>',"'awaiting_balance'"], 'status':['<>',"'waiting'"], "command":['<>',"'send'"], "command":['<>',"'automerge'"]  }) 
 		# do not delete if awaiting balance or waiting or command is send (delete in another thread time based) or command is autom merge - cancelled manually
 		
@@ -899,7 +906,7 @@ class DeamonInit(gui.QObject):
 				
 				if xx%modv==0 and self.started:
 				# if xx%modv==modv-1 and self.started:
-					# print(818,'\n\n\nmodv',xx)
+					# print( 'update_status update_wallet' )
 					self.update_wallet()
 					ret_val.append('wallet')
 				# print('\nupdate_status 721',ret_val)
@@ -979,6 +986,8 @@ class DeamonInit(gui.QObject):
 		# print('after outpost')
 		self.run_subprocess(self.cli_cmd,'stop',2)
 		
+	def set_obj(self,obj_updateWalletDisplay):
+		self.obj_updateWalletDisplay=obj_updateWalletDisplay
 
 	@gui.Slot()
 	def start_deamon(self, addrescan=False ): # if pirate-cli process exist - do not create another one !
@@ -1008,6 +1017,8 @@ class DeamonInit(gui.QObject):
 				
 			if self.the_wallet==None: #hasattr(self,'the_wallet')==False or :
 				self.the_wallet=wallet_api.Wallet(self.cli_cmd,self.get_last_load(),self.db)
+				print('connetcing wal api signal 1013')
+				self.the_wallet.sending_signal.connect(self.obj_updateWalletDisplay) 
 		
 			y = json.loads(gitmp)
 			# print('y:',y,"synced" in y,type(y["synced"]))
@@ -1207,6 +1218,8 @@ class DeamonInit(gui.QObject):
 				
 		if cmd_orig=='start':		
 			self.the_wallet=wallet_api.Wallet(self.cli_cmd,self.get_last_load(),self.db)
+			print('connetcing wal api signal 1214')
+			self.the_wallet.sending_signal.connect(self.obj_updateWalletDisplay) 
 			
 			tend=time.time()
 			tdiff=int(tend-t0)
