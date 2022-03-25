@@ -181,7 +181,7 @@ class WalletTab:
 		# print('updateWalletDisplay',wallet_part)
 		cc=3
 		while self.locked:
-			# print('waiting, locked')
+			print('waiting, locked')
 			time.sleep(2)
 			cc=cc-1
 			if cc<0: return
@@ -285,7 +285,7 @@ class WalletTab:
 		pTabCornerWidget.setLayout(pHLayout)
 		self.tab_corner_widget=gui.Label(pTabCornerWidget,'Loops [0/0]',transparent=False)
 		# self.tab_corner_widget.setMinimumHeight(32)
-		self.tab_corner_widget.setStyleSheet("QLabel {font-size:12px;color:#aaa}")#;margin-top:-50px;padding-top:-50px;
+		self.tab_corner_widget.setStyleSheet("QLabel {font-size:9px;color:#aaa}")#;margin-top:-50px;padding-top:-50px;
 		pHLayout.addWidget(self.tab_corner_widget)
 		self.tabs1.setCornerWidget(pTabCornerWidget, gui.Qt.TopRightCorner)
 		
