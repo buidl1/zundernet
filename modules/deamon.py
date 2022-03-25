@@ -1017,7 +1017,7 @@ class DeamonInit(gui.QObject):
 				
 			if self.the_wallet==None: #hasattr(self,'the_wallet')==False or :
 				self.the_wallet=wallet_api.Wallet(self.cli_cmd,self.get_last_load(),self.db)
-				print('connetcing wal api signal 1013')
+				# print('connetcing wal api signal 1013')
 				self.the_wallet.sending_signal.connect(self.obj_updateWalletDisplay) 
 		
 			y = json.loads(gitmp)
@@ -1218,7 +1218,7 @@ class DeamonInit(gui.QObject):
 				
 		if cmd_orig=='start':		
 			self.the_wallet=wallet_api.Wallet(self.cli_cmd,self.get_last_load(),self.db)
-			print('connetcing wal api signal 1214')
+			# print('connetcing wal api signal 1214')
 			self.the_wallet.sending_signal.connect(self.obj_updateWalletDisplay) 
 			
 			tend=time.time()
