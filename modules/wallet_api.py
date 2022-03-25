@@ -52,6 +52,8 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 
 	def __init__(self,CLI_STR,last_load,db):
 		super(Wallet, self).__init__()
+		
+		self.processing_update_historical_txs=False
 		self.db=db
 		self.last_load=last_load # prev session load 
 		# self.first_block=None
@@ -314,10 +316,16 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 	#freshutxo [{"address","txid","amount"},..]
 	def update_historical_txs(self): #,freshutxo): # max count: 80*tps * 60 =4800 < 5000
 	
-		# print('update_historical_txs')
+		
+		if self.processing_update_historical_txs:
+			print('update_historical_txs busy - return ')
+			return 0
+			
+		self.processing_update_historical_txs=True
+		
 		idb=localdb.DB(self.db)	
 		
-		print_debug=  False #True
+		print_debug=  False
 		# test_addr='zs1z0uw20wnatjvj3u9spfdhl4tkj3ljqjnzsqlx4qyrwqfsrv5pdv4k64wgxzklspsxcwd6shhx9y'
 		test_addr='zs1qds8vy37aewz0ersgnxexj3w96gs642p0d0mh3vzlschgyn9ahfrvu7lq96wmff4l8lg7a8rpg6'
 		 
@@ -371,7 +379,8 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 			elif 'output' in tx: return tx['output']
 			else: return 0
 		
-		# print('update_historical_txs 3')
+		#bug: first process 140 then once again 90 ... 
+		
 		for ind, aa in enumerate(iterat_arr):
 		
 			# print('update_historical_txs 4',ind,aa)
@@ -381,7 +390,7 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 			idb.update( {'queue_waiting':[{'status':'processing\n'+working_on }]} ,['status'],{'id':[ '=',queue_id ]})
 			self.sending_signal.emit(['cmd_queue'])
 		 
-			if aa!=test_addr and print_debug: continue # only pass the test addr 
+			# if aa!=test_addr and print_debug: continue # only pass the test addr 
 			
 			# if aa!=test_addr: continue
 		
@@ -416,7 +425,8 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 				
 				# if aa not in tmp_ord: tmp_ord[aa]={}
 				
-				
+				if aa not in self.historical_txs:
+					self.historical_txs[aa]={}
 				
 				
 				
@@ -431,30 +441,45 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 				# get confirmation 'confirmations'
 				# ordering by conf number, grouped by txid, and order again by outindex
 				
-				idb.update( {'queue_waiting':[{'status':'processing\nreordering tx\'s '+str(len(tt)) }]} ,['status'],{'id':[ '=',queue_id ]})
+				idb.update( {'queue_waiting':[{'status':'processing\n'+working_on+'\nanalyzing tx\'s '+str(len(tt)) }]} ,['status'],{'id':[ '=',queue_id ]})
 				self.sending_signal.emit(['cmd_queue'])
 			
 				conf_dict={}
+				tx_to_process=0
 				# ttiter=0
 				for tx in tt: 
+				
+					outindex=get_outindex(tx)
+					
+					# if aa in self.historical_txs :
+					if tx['txid'] in self.historical_txs[aa]:
+						if outindex in self.historical_txs[aa][tx['txid']]:
+							continue
+				
 					if tx['rawconfirmations'] not in conf_dict:
 						conf_dict[tx['rawconfirmations']]={}
-					# print(ttiter,conf_dict[tx['confirmations']] )
+					# print(ttiter,conf_dict[tx['rawconfirmations']] )
 					if tx['txid'] not in conf_dict[tx['rawconfirmations']]:
 						conf_dict[tx['rawconfirmations']][tx['txid']]={}
 					# print(ttiter,conf_dict[tx['confirmations']][tx['txid']] )
 						
-					outindex=get_outindex(tx)
 					if outindex not in conf_dict[tx['rawconfirmations']][tx['txid']]:
 						conf_dict[tx['rawconfirmations']][tx['txid']][outindex]=tx
+						tx_to_process+=1
 						
 					# print(ttiter,conf_dict[tx['confirmations']][tx['txid']][outindex])
 					# ttiter+=1
 					
 					# if ttiter>10: break
 				
-				# print(conf_dict)
+				# if print_debug: print('conf_dict',conf_dict)
 				# rebuild tt based on proper ordering:
+				if tx_to_process<1:
+					continue
+				
+				idb.update( {'queue_waiting':[{'status':'processing\n'+working_on+'\nreordering tx\'s '+str(tx_to_process) }]} ,['status'],{'id':[ '=',queue_id ]})
+				self.sending_signal.emit(['cmd_queue'])
+				
 				ord_conf=sorted(conf_dict.keys(),reverse=True) 
 				# print('ord_conf',ord_conf)
 				tt_rebuilt=[]
@@ -465,39 +490,63 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 						tmp_tx=txids[ti]
 						# print('tmp_tx',tmp_tx)
 						# print('tmp_tx.keys()',tmp_tx.keys())
-						ord_oi=sorted(tmp_tx.keys(),reverse=True) 
+						ord_oi=sorted(tmp_tx.keys()) #,reverse=True
 						# print('ord_oi',ord_oi)
 						for oi in ord_oi:
+							# print(oi)
+							# print(' self.historical_txs ', self.historical_txs  )
+							# print( self.historical_txs[aa]  )
+							# print( self.historical_txs[aa][tx["txid"]] )
+							
 							tt_rebuilt.append(tmp_tx[oi])
+							# if ti not in self.historical_txs[aa]: 	
+								# tt_rebuilt.append(tmp_tx[oi])
+								
+							# elif oi not in self.historical_txs[aa][ti]: 
+								# tt_rebuilt.append(tmp_tx[oi])
 				
 				tt=tt_rebuilt
+				
+				# print('TX t oprocess for aa',aa,len(tt))
+				if len(tt)>3:
+					working_on_tx='TX\'s to process: '+ str(len(tt))
+					# print(working_on_tx)
+					idb.update( {'queue_waiting':[{'status':'processing\n'+working_on+'\n'+working_on_tx }]} ,['status'],{'id':[ '=',queue_id ]})
+					self.sending_signal.emit(['cmd_queue'])
+					time.sleep(0.3)
+				# else:
+					# print('TX t oprocess for aa',aa,len(tt))
 				#####################################################33
 				
-				if print_debug: 
-					print('\ntt after\n ',tt)
+				# if print_debug: 
+					# print('\ntt after\n ',tt)
 				
 				# time.sleep(4)
 				# return 0
 				
 				
-				if aa not in self.historical_txs:
-					self.historical_txs[aa]={}
+				# if aa not in self.historical_txs:
+					# self.historical_txs[aa]={}
 					
 				y=self.getinfo()
 				
+				
 				for txind, tx in enumerate(tt): 
 					
-					# working_on_tx='TX '+str(txind+1)+' of '+str(len(tt) ) 
-					# idb.update( {'queue_waiting':[{'status':'processing\n'+working_on+'\n'+working_on_tx }]} ,['status'],{'id':[ '=',queue_id ]})
-					# self.sending_signal.emit(['cmd_queue'])
+					if (txind+1)%max([10,int(tx_to_process/100) ])==0:
+						working_on_tx='TX\'s done: '+str((txind+1))+'/' +str(tx_to_process)
+						# print('working_on_tx',working_on_tx)
+						idb.update( {'queue_waiting':[{'status':'processing\n'+working_on+'\n'+working_on_tx }]} ,['status'],{'id':[ '=',queue_id ]})
+						self.sending_signal.emit(['cmd_queue'])
+						# time.sleep(0.3)
 					
+					# tx_done+=1
 					
+					if print_debug: tmpiter+=1
 					
-					# tmpiter+=1
+					# if print_debug and tmpiter>50: continue # can create bug in debug mode 
 					
-					# if tmpiter>10: continue
-					
-					if print_debug  : print('analyzing tx\n',tx)
+					if print_debug  : print('analyzing tx\n',tx["txid"])
 					if "txid" not in tx:
 						continue
 						
@@ -571,7 +620,7 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 								
 						# print('orig memmo',tmpmemo)
 						tmpmemo=self.clear_memo(tmpmemo)
-						if print_debug: print('clear memmo\n',tmpmemo) 
+						if print_debug: print('clear memmo 64\n',tmpmemo[:64]) 
 						
 						if len(tmpmemo)<4: # in dev wallet change should fix this - taken by change:true
 							from_str='too short memo imply error in msg format: ['+tmpmemo+']' 
@@ -643,8 +692,8 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 								tmp_ord[aa][tx["txid"]]=tx_confirmations
 								if print_debug: print('added txid to tmp_ord[aa]' )
 								
-		idb.update( {'queue_waiting':[{'json':'TX processed, analyzing messages'}]} ,['json'],{'id':[ '=',queue_id ]})
-		self.sending_signal.emit(['cmd_queue'])
+		# idb.update( {'queue_waiting':[{'status':'processing tx\'s done'}]} ,['status'],{'id':[ '=',queue_id ]})
+		# self.sending_signal.emit(['cmd_queue'])
 		
 		self.addr_for_full_recalc=[] # reset 
 		
@@ -671,7 +720,7 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 			except:
 				return False,channel_json
 			
-		if print_debug: print('tmp_ord',tmp_ord) # tmp org should only contain not empty msgs found in the loop ... 
+		# if print_debug: print('tmp_ord',tmp_ord) # tmp org should only contain not empty msgs found in the loop ... 
 		for_ord={}
 		for aa,txids in tmp_ord.items():
 			# print('aa,txids',aa,txids)
@@ -688,6 +737,10 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 		
 		if print_debug: print('for_ord',for_ord)
 		if print_debug: print('sorted_for_ord_keys',sorted_for_ord_keys)
+		
+		idb.update( {'queue_waiting':[{'status':'processing\n'+'merging messages'  }]} ,['status'],{'id':[ '=',queue_id ]})
+		self.sending_signal.emit(['cmd_queue'])
+				
 		
 		for ss in sorted_for_ord_keys: 
 			for conf_ar_txid in for_ord[ss]:
@@ -707,7 +760,7 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 					continue
 					
 				iis=table_history_notif[aa][txid]
-				if print_debug: print('iis',iis) 
+				if print_debug: print('iis',str(iis)[:64]) 
 				if True:
 					
 					kk_ordered=sorted(iis.keys()) 
@@ -718,7 +771,7 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 							init_table['tmpmemo']+=iis[ii]['tmpmemo'] #merge memos if multiple outindex and multiple memos 
 							init_table['outindex']+=iis[ii]['outindex']
 							
-					if print_debug: print('init_table',init_table)		
+					if print_debug: print('init_table',str(init_table)[:64]) 	
 							
 					table_msg={} # insert only those after first block
 					from_str=''
@@ -727,7 +780,7 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 						table_msg=self.prep_msgs_inout(txid,[init_table['tmpmemo'],0,''],'in',init_table['date_time'],tx_status='received', in_sign_uid=-2,addr_to=aa ) # -2 to be detected
 						
 						from_str=table_msg['msgs_inout'][0]['msg']
-						if print_debug: print(606,table_msg,from_str)
+						# if print_debug: print(606,table_msg,from_str)
 						tmpmsg=from_str 
 						
 						
@@ -737,11 +790,12 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 						
 						
 						
-						is_channel=idb.select('channels',['channel_name'],{'address':['=',"'"+aa+"'"]} ) # check if recognized channel
+						is_channel=idb.select('channels',['channel_name','vk'],{'address':['=',"'"+aa+"'"]} ) # check if recognized channel
 						# is_abuse=''
 						channel_json={}
 						if len(is_channel)>0: 
 							is_channel=True
+							# print(' CHANNEL DETECTED? OWN?',idb.select('channels',['channel_name','own',   'channel_intro'],{'address':['=',"'"+aa+"'"]} ))
 							
 							# is_channel2 ,channel_json=check_is_channel(tmpmsg) # check if msg has channel definition 
 							# if is_channel2  and aa not in self.addr_list:
@@ -751,6 +805,7 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 								# tmpmsg= is_abuse+tmpmsg
 							
 						else: # if not recognized channel - check if needs registration?
+							# print('is_channel=',is_channel)
 							is_channel=False # try recognize incoming channel
 							if print_debug: print('629 ') # if proper channel - register
 							try: 
@@ -758,10 +813,28 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 								if print_debug: print(635,channel_json)
 								
 								if is_channel:  # get view key from table :
-									vk_list=idb.select('view_keys', ["vk"],{'address':['=',"'"+aa+"'"]})
+									vk_list=idb.select('view_keys', ["vk"],{'address':['=',"'"+aa+"'"]}) # created when importing view keys ... 
+									
+									# here potential bug ?
+									# is view key required?
+									# why not here ?
+									## this recognizes only imported channel, not own ?
+									
+									
+									
+									channel_json['channel_name']=channel_json['channel_name']+'-'+aa[3:6]
+									
+									
 									vkey=''
 									if len(vk_list)>0:
 										vkey=vk_list[0][0]
+									else:
+										vk_list=idb.select('channels', ["vk"],{'address':['=',"'"+aa+"'"]})
+										if len(vk_list)>0:
+											vkey=vk_list[0][0]
+											table={'view_keys':[{'address':aa, 'vk':vkey }]}	
+											idb.upsert(table,[ 'address','vk' ],{'address':['=',"'"+aa+"'"]})
+										# print('not recognized own channel vk? taking current',aa[:12],vkey[:55])
 										
 									is_chnl_own='False'
 									chnl_owner=channel_json['channel_owner'] # own channel should be reigistered in creation 
@@ -793,7 +866,7 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 							
 							
 							
-						if print_debug: print('674 msg before insert',table_msg)
+						if print_debug: print('674 msg before insert',str(table_msg)[:64])
 						# if is channel - add sender to anon addr book to mark same name each time : self name + init hash 
 						# if is_channel: # is channel difinition  
 						idb.insert(table_msg,['proc_json','type','addr_ext','txid','tx_status','date_time', 'msg','uid','in_sign_uid','addr_to','is_channel'])
@@ -820,12 +893,13 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 		
 		
 		
-		idb.update( {'queue_waiting':[{'status':'done','json':'TX and msgs processind completed'}]} ,['status','json'],{'id':[ '=',queue_id ]})
-		self.sending_signal.emit(['cmd_queue'])	
+		# idb.update( {'queue_waiting':[{'status':'done','json':'TX and msgs processing completed'}]} ,['status','json'],{'id':[ '=',queue_id ]})
+		# self.sending_signal.emit(['cmd_queue'])	
 		 
 		idb.delete_where('queue_waiting',{'id':['=',queue_id ]})
 		# print('processing tx done')
 		# time.sleep(10)
+		self.processing_update_historical_txs=False
 		
 		return len(table_history_notif)		
 				
