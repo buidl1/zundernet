@@ -1,6 +1,5 @@
 
 
-
 import os
 import sys
 import queue
@@ -145,6 +144,7 @@ def uploadTabs():
 	mmm.refreshTxHistory.connect(wata.txhi.update_history_frame)
 	mmm.refreshNotifications.connect(wata.notif.update_notif_frame)
 	mmm.refreshAddrBook.connect(addrb.refresh_addr_book)
+	mmm.sending_signal.connect(wata.updateWalletDisplay)
 	 
 	dmn.update_addr_book.connect(addrb.refresh_addr_book)
 	dmn.send_viewkey.connect(wds.set_channel)
