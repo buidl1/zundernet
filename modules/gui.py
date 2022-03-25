@@ -163,7 +163,7 @@ def messagebox_showinfo(fr_title,fr_content,parent=None):
 		msgBox=QMessageBox(parent)
 		
 	msgBox.setSizePolicy(  QSizePolicy.Expanding,QSizePolicy.Expanding )
-	msgBox.setStyleSheet('QPushButton {padding:3px;font-size:13px;}')
+	msgBox.setStyleSheet('QPushButton {padding:3px;font-size:9px;}')
 	msgBox.setWindowTitle(fr_title)
 	msgBox.setText(fr_content)
 	msgBox.layout().setSizeConstraint(QLayout.SetNoConstraint)
@@ -176,7 +176,7 @@ def showinfo(tit,lbl,parent=None):
 def msg_yes_no(a,b,parent=None):
 	
 	msgBox=QMessageBox(parent)
-	msgBox.setStyleSheet('QPushButton {padding:3px;font-size:13px;}')
+	msgBox.setStyleSheet('QPushButton {padding:3px;font-size:9x;}')
 	# reply=msgBox.question(parent,a, b,QMessageBox.Yes|QMessageBox.No)
 	reply = QMessageBox.question(msgBox,a, b,QMessageBox.Yes|QMessageBox.No)
 	if reply==QMessageBox.Yes:
@@ -529,7 +529,7 @@ class Button(QPushButton):
 		if tooltip!='':
 			self.setToolTip(tooltip)
 			
-		self.setStyleSheet('QPushButton {padding:2px;font-size:13px;}')
+		self.setStyleSheet('QPushButton {padding:2px;font-size:9px;}')
 		
 		
 	
@@ -668,7 +668,7 @@ class Combox(QComboBox):
 					# self.activated.connect(lambda : actionFun(self ))
 					self.currentTextChanged.connect(lambda  : actionFun(self))	# self.currentText() self.currentData(Qt.UserRole) inside actionFun will get our values 
 		
-		self.setStyleSheet('QComboBox {padding:3px;font-size:13px;}')
+		self.setStyleSheet('QComboBox {padding:3px;font-size:9px;}')
 		
 	def text(self):
 		return self.currentText()
@@ -1087,9 +1087,9 @@ class Table(QTableWidget):
 					QTableWidget QComboBox:item { selection-background-color: lightgreen; } 
 					QTableWidget QComboBox QAbstractItemView {selection-background-color: lightgreen;border-style: solid;  border-width: 1px; }
 					QTableWidget QLineEdit {background-color:white; border-style: solid;  border-width: 1px; border-color: #aaa;}
-					QTableWidget {margin:2px;padding:2px;font-size:13px; font-family:'DejaVu';border-style:none; }
-					QHeaderView {font-size: 13px; padding:0px; margin:0px;font-family:'DejaVu';border-style:none;  }
-					QHeaderView::section:horizontal {font-size: 13px; padding:0px; margin:0px;font-family:'DejaVu';border-style:none;  }
+					QTableWidget {margin:2px;padding:2px;font-size:9px; font-family:'DejaVu';border-style:none; }
+					QHeaderView {font-size: 9px; padding:0px; margin:0px;font-family:'DejaVu';border-style:none;  }
+					QHeaderView::section:horizontal {font-size: 9px; padding:0px; margin:0px;font-family:'DejaVu';border-style:none;  }
 					""" % (
 			
 			tmp_header_bg_color,
@@ -1697,7 +1697,7 @@ class Table(QTableWidget):
 			if 'style' in w:
 				bbb.setStyleSheet("QPushButton {%s}" % w['style'])
 			else:
-				bbb.setStyleSheet("QPushButton {font-size:13px;padding:2px;}" )
+				bbb.setStyleSheet("QPushButton {font-size:9px;padding:2px;}" )
 				# print("QPushButton {%s}" % w['style'])
 				# print(bbb.styleSheet() )
 			
