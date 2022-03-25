@@ -1,6 +1,5 @@
-# to work with signals need:
-# Msg(gui.QObject)
-# super(Msg, self).__init__()
+# todo: check tavern duplicity reason
+# check why not nice channel display ? channel display in api ro msgs ?
 
 import os
 # import datetime
@@ -18,6 +17,7 @@ class Msg(gui.QObject):
 	refreshTxHistory= gui.Signal()
 	refreshNotifications= gui.Signal()
 	refreshAddrBook= gui.Signal()
+	sending_signal = gui.Signal(list)
 	
 # checking hash for
  # ('in', '{"sign1": "\\u00066Y\\u001eN2.2\\u0012*t,M(>\\u007ftd<gU+g?h_&bv\\u000f7l", "sign1_n": 15865}', '2022-03-13 20:48:59', '{"channel_name": "ii", "channel_owner": "i", "channel_intro": "iii", "channel_type": "Forum"}', -2, 357, 'received', '3bfb4b14474387ba8af717133f953c224b9b373df86c77d6f31b9cc29f15b598', 'True', 'zs1avkprmlsaumw9kymq2fjhshv0umpqmhx6va4qrx6jz4vylje3fekhn9dcd5pghzdtdg3w60h2lx')
@@ -271,11 +271,25 @@ class Msg(gui.QObject):
 		
 		mio=idb.select('msgs_inout',['type','addr_ext','date_time','msg', 'in_sign_uid','uid','tx_status','txid','is_channel','addr_to'],{'proc_json':['=',"'False'"]},orderby=[{'date_time':'asc'}]) #
 		if debug_msg:
-			print('processing msg \n',mio)	
+			print('all msgs to processing msg \n\n',mio,'\n\n')	
 		
-		if len(mio)==0:
+		mm_count=len(mio)
+		if mm_count==0:
 			self.update_in_progress=False
 			return
+			
+			
+		queue_table={}
+		queue_table['queue_waiting']=[localdb.set_que_waiting(command='process msgs' )] #,jsonstr=json.dumps({'left':'0 of N'})
+		queue_table['queue_waiting'][0]['status']='processing\n'+str(mm_count)+' msgs'
+		queue_table['queue_waiting'][0]["type"]='auto'
+		queue_id=queue_table['queue_waiting'][0]['id']
+		
+		idb.insert(queue_table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
+		self.sending_signal.emit(['cmd_queue'])	
+		# print('queue_table',queue_table)
+		# time.sleep(0.3)
+			
 			
 		refrsh_hist,refrsh_notif,refrsh_chnl =0,0,0
 		
@@ -285,14 +299,22 @@ class Msg(gui.QObject):
 			if len(tmp_arr)>2: tmpmsg='\nFrom:'.join(tmp_arr[:-1]) 
 			tmp_sender=tmp_arr[-1] 
 			return tmpmsg, tmp_sender
-		
-		for mm in mio:
-			if debug_msg: print('mm processing:\n',mm)
+			
+		for iind, mm in enumerate(mio):
+			if debug_msg: print('mm processing:\n', mm[3][:128])
+			
+			if (iind+1)%max([20,int(mm_count/100) ])==0:
+				working_on_tx='msgs done: '+str((iind+1))+'/' +str(mm_count) 
+				# print('working_on_msg',working_on_tx)
+				idb.update( {'queue_waiting':[{'status':'processing\n'+working_on_tx }]} ,['status'],{'id':[ '=',queue_id ]})
+				self.sending_signal.emit(['cmd_queue'])
+				# time.sleep(0.1)
 		
 			mm1=mm[1]
 			tmpmsg=mm[3]
 			tmp_sender=''
 			tmp_channel_update=False
+			init_ch_id=[]
 			
 			# unfinished ?
 			if mm[8]=='True': # if channel 
@@ -301,11 +323,18 @@ class Msg(gui.QObject):
 				if ('txt' in tmpmsg or 'channel_name' in tmpmsg): # and 'CHANNEL ABUSE DETECTED SPOOFING CHANNEL INFO' not in tmpmsg:	
 					try:  
 						tmp_str=json.loads(tmpmsg) #'channel_name':chname,'channel_owner':creator, 'channel_intro'
-						 	
+							
 						if 'channel_name' in tmp_str: # channel creation
 							tmp_sender=tmp_str['channel_owner'] 
-							tmpmsg='Channel info update\nChannel name: '+tmp_str['channel_name']+'\nOwner: '+tmp_str['channel_owner']+'\nType: '+tmp_str['channel_type']+'\nIntro: '+tmp_str['channel_intro']
-							tmp_channel_update=True
+							tmpmsg='#Channel created#\nChannel name: '+tmp_str['channel_name']+'\nOwner: '+tmp_str['channel_owner']+'\nType: '+tmp_str['channel_type']+'\nIntro: '+tmp_str['channel_intro']
+						
+							# ensure there is channel to update or it is init insert?
+							# and it is not related to current but historical entry!
+							init_ch_id=idb.select_min_val( 'msgs_inout','uid',where={'is_channel':['=',"'True'"] , 'addr_to': ['=',"'"+mm[9]+"'"],  'type': ['=',"'in'"]  } )  														
+							
+							if len(init_ch_id)>0 and init_ch_id[0][0]!=mm[5]:# and it is not related to current but historical entry!																								 
+								tmp_channel_update=True
+								tmpmsg='Channel info update\nChannel name: '+tmp_str['channel_name']+'\nOwner: '+tmp_str['channel_owner']+'\nType: '+tmp_str['channel_type']+'\nIntro: '+tmp_str['channel_intro']
 							
 							if debug_msg: print('channel_name',tmp_str)
 						elif 'txt' in tmp_str:				
@@ -367,14 +396,18 @@ class Msg(gui.QObject):
 				if tmp_channel_update:
 					if debug_msg:   print('tmp_channel_update',mm[9])
 					# print('all\n',idb.select('msgs_inout',[ 'uid','in_sign_uid','msg' ],where={'is_channel':['=',"'True'"] , 'addr_to': ['=',"'"+mm[9]+"'"],  'type': ['=',"'in'"]   } ))
+					# why spoofing when first time ?
 					
-					init_ch_id=idb.select_min_val( 'msgs_inout','uid',where={'is_channel':['=',"'True'"] , 'addr_to': ['=',"'"+mm[9]+"'"],  'type': ['=',"'in'"]  } ) # find first id for the channel
-					# print(init_ch_id) # ok
-					if len(init_ch_id)>0:
+					# init_ch_id=idb.select_min_val( 'msgs_inout','uid',where={'is_channel':['=',"'True'"] , 'addr_to': ['=',"'"+mm[9]+"'"],  'type': ['=',"'in'"]  } ) # find first id for the channel
+					
+					if tmp_channel_update: #len(init_ch_id)>0:
 						in_sign_uid=idb.select('msgs_inout',[ 'in_sign_uid' ],{'uid':['=',init_ch_id[0][0] ]} ) #
+						
+						# BUG? when channel recognized first time uid =-2 before updated ... 
+						# additional condition? first msg in channel ?
 						# print(in_sign_uid,uid)
 						if len(in_sign_uid)>0 and in_sign_uid[0][0]==uid:
-							
+							tmp_str['channel_name']=tmp_str['channel_name']+'-'+mm[9][3:6]
 							table={'channels':[{ 'creator':tmp_str['channel_owner'], 'channel_name':tmp_str['channel_name'], 'channel_intro':tmp_str['channel_intro'] , 'channel_type':tmp_str['channel_type']  }]}	
 							# print('updating channel  ',table) 
 							idb.update(table,[ 'creator','channel_name','channel_intro' , 'channel_type' ],{'address':['=',"'"+mm[9]+"'"]})  
@@ -390,8 +423,9 @@ class Msg(gui.QObject):
 							# print('channel updated?')
 						else:
 							tmpmsg='CHANNEL SPOOFING DETECTED 1 '+tmpmsg
-					else:
-						tmpmsg='CHANNEL SPOOFING DETECTED 2 '+tmpmsg
+							print(init_ch_id,uid,in_sign_uid)
+					# else:
+						# tmpmsg='CHANNEL SPOOFING DETECTED 2 '+tmpmsg
 							
 					# select 'in_sign_uid' from 'msgs_inout' where 'proc_json':'True'  'in_sign_uid':uid ,'is_channel':mm[8] and 'msg': like ... and ,'addr_to': mm[9]
 					# table={'msgs_inout':[{'type':tmptype,'proc_json':'True', 'in_sign_uid':uid, 'addr_ext':addr_ext,'msg':tmpmsg,'is_channel':mm[8]}]}
@@ -485,6 +519,9 @@ class Msg(gui.QObject):
 		if refrsh_notif>0: 
 			self.refreshNotifications.emit()	
 			
+		idb.update( {'queue_waiting':[{'status':'processing\nmsgs done'}]} ,['status'],{'id':[ '=',queue_id ]})
+		self.sending_signal.emit(['cmd_queue'])
+		
 		self.update_in_progress=False
 		
 			
