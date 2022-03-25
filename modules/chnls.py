@@ -291,7 +291,11 @@ class Chnls(gui.QObject):
 	#todo next:
 	# add adj texedit in msg
 	# create nice channel creation info on channel init
-	# 
+	# after reset channels must be recognized automatically again / import is partiallt cancelled in db# this requires to add to addr book (excetp own chnanel)
+	# add to view keys / except own
+	# add to channels table INCLUDE OWN
+	
+	
 	def __init__(self, msg_obj,addr_book):
 		super(Chnls, self).__init__()
 		# detect channels active!
