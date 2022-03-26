@@ -385,7 +385,7 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 		
 		for ind, aa in enumerate(iterat_arr):
 		
-			# print('update_historical_txs 4',ind,aa)
+			if print_debug2: print('update_historical_txs 4',ind,aa)
 			working_on='Address '+str(ind+1)+' of '+str(len(iterat_arr))
 			
 			# print('update_historical_txs 5',working_on,queue_id) #queue_table['queue_waiting'][0]['status']='processing' 
@@ -396,7 +396,7 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 			
 			# if aa!=test_addr: continue
 		
-			if print_debug: print('\n\nanalyzing aa',aa)
+			if print_debug2: print('\n\nanalyzing aa',aa)
 			tmpiter=0
 			
 			if True:
