@@ -259,7 +259,7 @@ class Msg(gui.QObject):
 	
 	def proc_inout(self): # goal - set addr_ext and in_sign_uid for incoming msg removed ,'addr_to'
 	
-		debug_msg= False #True 
+		debug_msg=True
 	
 		if self.update_in_progress:
 			# print('already processing msgs - check next time')
@@ -301,7 +301,7 @@ class Msg(gui.QObject):
 			return tmpmsg, tmp_sender
 			
 		for iind, mm in enumerate(mio):
-			if debug_msg: print('mm processing:\n', mm[3][:128])
+			if debug_msg: print('\n\n\nmm processing:\n', mm[3][:128])
 			
 			if (iind+1)%max([20,int(mm_count/100) ])==0:
 				working_on_tx='msgs done: '+str((iind+1))+'/' +str(mm_count) 
@@ -400,7 +400,7 @@ class Msg(gui.QObject):
 					
 					# init_ch_id=idb.select_min_val( 'msgs_inout','uid',where={'is_channel':['=',"'True'"] , 'addr_to': ['=',"'"+mm[9]+"'"],  'type': ['=',"'in'"]  } ) # find first id for the channel
 					
-					if tmp_channel_update: #len(init_ch_id)>0:
+					if True: #tmp_channel_update: #len(init_ch_id)>0:
 						in_sign_uid=idb.select('msgs_inout',[ 'in_sign_uid' ],{'uid':['=',init_ch_id[0][0] ]} ) #
 						
 						# BUG? when channel recognized first time uid =-2 before updated ... 
