@@ -327,7 +327,7 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 		
 		print_debug=  False
 		
-		print_debug2=True
+		print_debug2=False
 		test_addr='zs1z0uw20wnatjvj3u9spfdhl4tkj3ljqjnzsqlx4qyrwqfsrv5pdv4k64wgxzklspsxcwd6shhx9y'
 		# test_addr='zs1qds8vy37aewz0ersgnxexj3w96gs642p0d0mh3vzlschgyn9ahfrvu7lq96wmff4l8lg7a8rpg6'
 		 
@@ -385,7 +385,7 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 		
 		for ind, aa in enumerate(iterat_arr):
 		
-			if print_debug2: print('update_historical_txs 4',ind,aa)
+			# print('update_historical_txs 4',ind,aa)
 			working_on='Address '+str(ind+1)+' of '+str(len(iterat_arr))
 			
 			# print('update_historical_txs 5',working_on,queue_id) #queue_table['queue_waiting'][0]['status']='processing' 
@@ -396,7 +396,7 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 			
 			# if aa!=test_addr: continue
 		
-			if print_debug2: print('\n\nanalyzing aa',aa)
+			if print_debug: print('\n\nanalyzing aa',aa)
 			tmpiter=0
 			
 			if True:
@@ -452,12 +452,19 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 				for tx in tt: 
 				
 					
-						
+					
+					# if print_debug and ttiter>3: break
+					
+					# if print_debug: print('\ntaking tx\n',tx)
+					
+					
+					# ttiter+=1
 					outindex=get_outindex(tx)
 					
 					# if aa in self.historical_txs :
 					if tx['txid'] in self.historical_txs[aa]:
 						if outindex in self.historical_txs[aa][tx['txid']]:
+							print('already in')
 							continue
 				
 					if tx['rawconfirmations'] not in conf_dict:
@@ -477,9 +484,7 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 						tx_to_process+=1
 						
 					# print(ttiter,conf_dict[tx['confirmations']][tx['txid']][outindex])
-					# ttiter+=1
 					
-					# if ttiter>10: break
 				
 				# if print_debug: print('conf_dict',conf_dict)
 				# rebuild tt based on proper ordering:
@@ -532,8 +537,16 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 					# print('TX t oprocess for aa',aa,len(tt))
 				#####################################################33
 				
-				# if print_debug: 
-					# print('\ntt after\n ',tt)
+				
+				
+				
+				
+				if print_debug: 
+					print('\ntt after\n ',tt)
+					# change ???
+					# txe dfe433d45bc39179d08377620970115a751d8b17b5e58b29e831d61ee058f12c
+					# txe 1a0d30ead204f21eaf0cec641a8ab4048a962552a021b478eb9e3d6c06be85ae
+					
 				
 				# time.sleep(4)
 				# return 0
@@ -598,7 +611,20 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 					
 					if 'change' in tx: # not interested in change tx ??
 						if tx['change']:
-							# print('\n\tchange found - pass by ;')
+							if print_debug:  
+								print('\n\tchange found - pass by ;')
+							
+								# tmpmemo=''
+								# if "memoStr" in tx:
+									# tmpmemo=tx["memoStr"]
+								# else:
+									# tmpmemo=tx["memo"] # when no memostr needs decode 
+									# try:
+										# tmpmemo=bytes.fromhex(tmpmemo).decode('utf-8') #int(tx["memo"], 16)
+									# except:									
+										# pass
+										
+								# print('memo change',tmpmemo)
 							
 							# if outindex not in self.historical_txs[aa][tx["txid"]]:
 							
