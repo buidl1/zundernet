@@ -8,12 +8,13 @@ import os
 
 import json
 import time
-import modules.localdb as localdb
+# import modules.localdb as localdb
 import modules.app_fun as app_fun
 import modules.gui as gui
 
 import modules.aes as aes
 
+global global_db
 
 # import operator
 
@@ -142,9 +143,9 @@ class AddressBook:
 		colnames=['Date Time', 'Message' ]
 		grid_lol_msg=[]
 		
-		idb=localdb.DB(self.db)
+		# idb=global_db #localdb.DB(self.db)
 		
-		sel_view=idb.select('msgs_inout',[ 'date_time', 'msg' ],{'addr_to':['=',"'"+addr+"'"]}, orderby=[{'date_time':'desc'}] )
+		sel_view=global_db.select('msgs_inout',[ 'date_time', 'msg' ],{'addr_to':['=',"'"+addr+"'"]}, orderby=[{'date_time':'desc'}] )
 		
 		if len(sel_view)>0:
 			# print(sel_view)
@@ -171,9 +172,9 @@ class AddressBook:
 		colnames=[ 'Usage','Category','Alias','Full address','Valid','View Key','Valid','','','','','']
 		grid_lol_select=[]
 					
-		idb=localdb.DB(self.db)
+		# idb=global_db #localdb.DB(self.db)
 		
-		sel_addr_book=idb.select('addr_book',[ 'Category','Alias','Address','ViewKey','usage','addr_verif','viewkey_verif'], orderby=[{'usage':'desc'},{'Category':'asc'},{'Alias':'asc' }] )
+		sel_addr_book=global_db.select('addr_book',[ 'Category','Alias','Address','ViewKey','usage','addr_verif','viewkey_verif'], orderby=[{'usage':'desc'},{'Category':'asc'},{'Alias':'asc' }] )
 		
 		# print(170,sel_addr_book)
 		
@@ -263,8 +264,8 @@ class AddressBook:
 			tf=gui.msg_yes_no('Delete from address book?','Please confirm to delete address\n\n'+addr+'\n\nof alias\n\n'+alias+'\n',btn)
 			
 			if tf:
-				idb=localdb.DB(self.db)
-				idb.delete_where('addr_book',{'Address':['=',"'"+addr+"'"]})
+				# idb=global_db #localdb.DB(self.db)
+				global_db.delete_where('addr_book',{'Address':['=',"'"+addr+"'"]})
 				grid_settings,colnames,cur_addr=self.addr_book_view()
 				self.main_table.updateTable(grid_settings,colnames)
 				
@@ -296,7 +297,7 @@ class AddressBook:
 			grid1.append( [{'T':'LabelC', 'L':'Obligatory:', 'span':2}] )
 			grid1.append( [{'T':'LabelC', 'L':'Request amount'}, {'T':'LineEdit','V':'0.0001', 'L':'amount', 'width':32, 'valid':{'ttype':float,'rrange':[0.0001, 1000000]}} ]  )
 			
-			select=localdb.get_last_addr_from("'last_payment_to_addr'")
+			select=global_db.get_last_addr_from("'last_payment_to_addr'")
 			# print(self.wds.addr_cat_map)
 			cat1=''
 			if select in self.wds.addr_cat_map:
@@ -310,7 +311,7 @@ class AddressBook:
 			grid1.append( [{'T':'LabelC', 'L':'Title'}, {'T':'LineEdit', 'L':'Payment request for invoice nr ', 'uid':'title' } ] )
 			grid1.append(  [{'T':'LabelC', 'L':'Document URI'}, {'T':'LineEdit', 'uid':'docuri', 'width':32} ] )
 			
-			select=localdb.get_last_addr_from("'last_book_from_addr'")
+			select=global_db.get_last_addr_from("'last_book_from_addr'")
 			
 			cat2=''
 			if select in self.wds.addr_cat_map:
@@ -331,8 +332,8 @@ class AddressBook:
 				tmptoaddr=tw.cellWidget(2,1).toolTip() #g1_table.get_value('toaddr')
 				tmpfromaddr=tw.cellWidget(6,1).toolTip() #g1_table.get_value('sendfromaddr')
 			
-				localdb.set_last_addr_from(tmpfromaddr,"'last_book_from_addr'")  #g1_table.get_value('sendfromaddr')
-				localdb.set_last_addr_from(tmptoaddr ,"'last_payment_to_addr'") #g1_table.get_value('toaddr')
+				global_db.set_last_addr_from(tmpfromaddr,"'last_book_from_addr'")  #g1_table.get_value('sendfromaddr')
+				global_db.set_last_addr_from(tmptoaddr ,"'last_payment_to_addr'") #g1_table.get_value('toaddr')
 			
 				tmpam=round(float(tw.cellWidget(1,1).text() ),8) #g1_table.get_value('amount')
 				
@@ -352,7 +353,7 @@ class AddressBook:
 					gui.showinfo('Title too long','Please correct request title to be less then 64 characters long.',btn7)
 					return
 				
-				tmpsignature=localdb.get_addr_to_hash(addr)
+				tmpsignature=global_db.get_addr_to_hash(addr)
 				
 				memo_json={'amount':tmpam
 							,'toaddress':tmptoaddr
@@ -362,9 +363,9 @@ class AddressBook:
 				# add sign 
 				ddict={'fromaddr':tmpfromaddr, 'to':[{'z':addr,'a':0.0001,'m':'PaymentRequest;'+json.dumps(memo_json)+tmpsignature }]	} 
 				table={}
-				table['queue_waiting']=[localdb.set_que_waiting('send',jsonstr=json.dumps(ddict) ) ]
-				idb=localdb.DB(self.db)
-				idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
+				table['queue_waiting']=[global_db.set_que_waiting('send',jsonstr=json.dumps(ddict) ) ]
+				# idb=localdb.DB(self.db)
+				global_db.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 				# print(table)
 				tw.parent().close() #.destroy()
 				
@@ -402,11 +403,11 @@ class AddressBook:
 								
 			
 	def increment_usage(self,addr): # when copy or sendto
-		idb=localdb.DB(self.db)
-		sel_addr_book=idb.select('addr_book',[ 'usage'],{'Address':['=',"'"+addr+"'"]} )
+		# idb=localdb.DB(self.db)
+		sel_addr_book=global_db.select('addr_book',[ 'usage'],{'Address':['=',"'"+addr+"'"]} )
 		table={}
 		table['addr_book']=[{'usage':int(sel_addr_book[0][0])+1}]  
-		idb.upsert(table,['usage'],{'Address':['=',"'"+addr+"'"]})
+		global_db.upsert(table,['usage'],{'Address':['=',"'"+addr+"'"]})
 		
 		grid_settings,colnames,cur_addr=self.addr_book_view()
 		self.main_table.updateTable(grid_settings,colnames)
@@ -482,7 +483,7 @@ class AddressBook:
 		def save_new():
 			# global idb, form_grid, grid_settings
 			# table={}
-			idb=localdb.DB(self.db)
+			# idb=localdb.DB(self.db)
 			tmpaddr=self.form_table.cellWidget(3,1).text().strip() #.get_value('addr').strip()
 			# print(468,tmpaddr)
 			if tmpaddr=='':
@@ -492,7 +493,7 @@ class AddressBook:
 			tmpcat=self.form_table.cellWidget(1,1).text().strip() #.get_value('cat').strip()
 			tmpalia=self.form_table.cellWidget(2,1).text().strip() #.get_value('alia').strip()
 			
-			sel_addr_book=idb.select('addr_book',[ 'ViewKey','addr_verif','viewkey_verif'],{'Address':['=',"'"+tmpaddr+"'"]})
+			sel_addr_book=global_db.select('addr_book',[ 'ViewKey','addr_verif','viewkey_verif'],{'Address':['=',"'"+tmpaddr+"'"]})
 			# print(477,sel_addr_book)
 			# print(tmpvk)
 			
@@ -512,26 +513,26 @@ class AddressBook:
 			# print('self.cur_addr',self.cur_addr,tmpvk_valid,tmpvk)
 			if tmpaddr in self.cur_addr: # = editing addr already in 
 				table['addr_book']=[{'Category':tmpcat,'Alias':tmpalia,'Address':tmpaddr,'ViewKey':tmpvk,'addr_verif':tmpaddr_valid,'viewkey_verif':tmpvk_valid }] 
-				idb.upsert(table,[ 'Category','Alias','Address','ViewKey','addr_verif','viewkey_verif' ],{'Address':['=',"'"+tmpaddr+"'"]})
+				global_db.upsert(table,[ 'Category','Alias','Address','ViewKey','addr_verif','viewkey_verif' ],{'Address':['=',"'"+tmpaddr+"'"]})
 				
 				if tmpvk_valid==-2: # if not valid add validation 
 					table={}
 					tmpjson=json.dumps({'addr':tmpaddr,'viewkey':tmpvk})
-					table['queue_waiting']=[localdb.set_que_waiting(command='import_view_key',jsonstr=tmpjson, wait_seconds=0)]
-					idb.upsert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ],{'command':['=',"'import_view_key'"],'json':['=',"'"+tmpjson+"'"] })
+					table['queue_waiting']=[global_db.set_que_waiting(command='import_view_key',jsonstr=tmpjson, wait_seconds=0)]
+					global_db.upsert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ],{'command':['=',"'import_view_key'"],'json':['=',"'"+tmpjson+"'"] })
 			else: # new 
 				table['addr_book']=[{'Category':tmpcat,'Alias':tmpalia,'Address':tmpaddr,'ViewKey':tmpvk,'usage':0,'addr_verif':tmpaddr_valid,'viewkey_verif':tmpvk_valid}]  
-				idb.insert(table,[ 'Category','Alias','Address','ViewKey','usage','addr_verif','viewkey_verif'])
+				global_db.insert(table,[ 'Category','Alias','Address','ViewKey','usage','addr_verif','viewkey_verif'])
 				
 				table={} # valid addr
-				table['queue_waiting']=[localdb.set_que_waiting(command='validate_addr',jsonstr=json.dumps({'addr':tmpaddr }), wait_seconds=0)]
-				idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
+				table['queue_waiting']=[global_db.set_que_waiting(command='validate_addr',jsonstr=json.dumps({'addr':tmpaddr }), wait_seconds=0)]
+				global_db.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 				
 				if tmpvk!='':
 					table={}
 					tmpjson=json.dumps({'addr':tmpaddr,'viewkey':tmpvk})
-					table['queue_waiting']=[localdb.set_que_waiting(command='import_view_key',jsonstr=tmpjson, wait_seconds=0)]
-					idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
+					table['queue_waiting']=[global_db.set_que_waiting(command='import_view_key',jsonstr=tmpjson, wait_seconds=0)]
+					global_db.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 				
 				# idb.upsert(table,[ 'Category','Alias','Address','ViewKey','usage'],{'Address':['=',"'"+tmpaddr+"'"]})
 			
