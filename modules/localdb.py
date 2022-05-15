@@ -3,17 +3,6 @@
 # and do not write to init - set default create new option / delete last file value 
 
 
-# Traceback (most recent call last):
-  # File "D:\zunqt\zundernet.py", line 279, in upload_settings
-    # wata_settings=Settings( wds, init_app )
-  # File "D:\zunqt\modules\frame_settings.py", line 147, in __init__
-    # grid_db, colnames=update_db_info()
-  # File "D:\zunqt\modules\frame_settings.py", line 102, in update_db_info
-    # tmpsize_multi=self.db_main.table_size(['jsons','tx_history','notifications','queue_done'])
-  # File "D:\zunqt\modules\localdb.py", line 293, in table_size
-    # curs=self.connection.cursor()
-# sqlite3.ProgrammingError: Cannot operate on a closed database.
-
 # import sqlite3 as sql
 import modules.app_fun as app_fun
 import modules.aes as aes
