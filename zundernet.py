@@ -1,5 +1,4 @@
 
-
 import os
 import sys
 import queue
@@ -33,12 +32,26 @@ from modules.frame_settings import Settings
 
 init_app=InitApp() 
 
+# share db:
+addr_book.global_db=init_app.db_main 
+wallet_tab.global_db=init_app.db_main 
+wallet_api.global_db=init_app.db_main 
+wallet_api.init_db=init_app.init_db 
+msg.global_db=init_app.db_main 
+chnls.global_db=init_app.db_main  
+# Settings.global_db=init_app.db_main 
 
 tabs0=gui.Tabs(None)
 
 # print(' tabs0 dt',time.time()-t0)
 # t0=time.time()
-new_root=gui.MainWindow(title="zUndernet | Wallet file: "+init_app.data_files['wallet'],central_widget=tabs0)
+
+top_title_wallet=init_app.data_files['wallet']
+if init_app.creating_new_wallet:
+	top_title_wallet='*'+init_app.data_files['wallet']+' (pending - start blockchain to create)'
+
+new_root=gui.MainWindow(title="zUndernet | Wallet file: "+top_title_wallet,central_widget=tabs0)
+# self.setWindowTitle(title)
 new_root.setOnClose(init_app.on_closing)
 new_root.show()
 # print(' new_root dt',time.time()-t0)
@@ -47,7 +60,7 @@ new_root.show()
 
 queue_start_stop = queue.Queue()	
 
-wds=WalDispSet([init_app.app_password],init_app.data_files )
+wds=WalDispSet([init_app.app_password],init_app.data_files, _db_main=init_app.db_main , _db_init=init_app.init_db   )
 
 init_app.wds_addr_cat_map=wds.addr_cat_map # pointer to object for next init ? 
 init_app.wds_addr_book=wds.grid_lol_select # pointer to object for next init ? grid_lol_select
@@ -57,7 +70,9 @@ init_app.wds_disp_dict=wds.disp_dict # pointer to object for next init ? grid_lo
 # print(' WalDispSet dt',time.time()-t0) #0.16
 # t0=time.time()
   
-wata=wallet_tab.WalletTab(init_app.is_started,queue_start_stop, wds)
+wata=wallet_tab.WalletTab(init_app.is_started,queue_start_stop, wds, new_root, init_app.data_files['wallet'])
+
+# not needed pointers?
 init_app.wallet_tab_byaddr_frame =wata.byaddr_frame  # pointer to object for next init ?
 init_app.wallet_tab_summary_frame =wata.summary_frame  # pointer to object for next init ?
 init_app.wallet_tab_summary_options =wata.summary_options  # pointer to object for next init ?
@@ -174,13 +189,13 @@ gui.QTimer.singleShot(2000,uploadTabs)
 
 def upload_settings():
 	# t0=time.time()
-	wata_settings=Settings( wds, init_app)
+	wata_settings=Settings( wds, init_app )
 	init_app.tab_settings_grid=wata_settings.grid_settings # pointer to object for next init ?
 	wata.tabs1.insertTab(tab_dict={'Settings': wata_settings.parent_frame}  )
 	dmn.start_stop_enable.connect(wata_settings.updatePassChangeState )
 	# print(' Settings dt',time.time()-t0) #0.74
 	# t0=time.time()
-gui.QTimer.singleShot(5000,upload_settings)
+gui.QTimer.singleShot(2000,upload_settings)
 
 
 app.exec_()
