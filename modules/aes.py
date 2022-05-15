@@ -6,7 +6,7 @@ from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad,unpad
 from Crypto.Random import get_random_bytes, random
 from Crypto.Hash import SHA256, SHA224
-import modules.gui as gui
+# import modules.gui as gui
 
 
 
@@ -64,9 +64,10 @@ class Crypto:
 		return n
 
 
-	def __init__(self,hashalgo=256,charset_opt=1):
+	def __init__(self,hashalgo=256,charset_opt=1,gui_copy_progr=None):
 		self.principal4="Individuals security and privacy on the internet are fundamental and must not be treated as optional."
 		self.hashalgo=SHA256
+		self.copy_progress_fun=gui_copy_progr
 		if hashalgo==224:
 			self.hashalgo=SHA224
 		# 126
@@ -211,14 +212,24 @@ class Crypto:
 		
 	
 	def aes_decrypt_file(self,path1,path2,password):
-		
+		# print(path1,path2)
 		if os.path.exists(path1):
 			try:
 			# if True:
 				ddata=self.read_file( path1)
-				decr_dd=self.aes_decrypt( ddata ,password,False)
+				# print(ddata[:45])
+				decr_dd=self.aes_decrypt( ddata ,password, False) #False
+				# print(decr_dd[:15])
 				if path2==None:
-					return decr_dd.decode('utf-8').replace(self.principal4,'')
+					
+					try: # usually for path2=None needed decoding
+						decr_dd=decr_dd.decode('utf-8') #.replace(self.principal4,'')
+						return decr_dd.replace(self.principal4,'')
+						
+					except: # for in-mem read does not require decoding - binary sql file example 
+						return decr_dd
+						# pass # cant decode
+					# return decr_dd.replace(self.principal4,'')
 				else:
 					self.write_bin_file(path2,decr_dd)
 				return True
@@ -310,7 +321,7 @@ class Crypto:
 
 	def read_file(self,path):
 		rstr=""
-		with open(path, "r") as f:
+		with open(path, "r", encoding="utf-8") as f:
 			rstr = f.read()
 	
 		return rstr
@@ -323,7 +334,15 @@ class Crypto:
 		return bytes
 		
 	def write_file(self,path,wstr):
-		return gui.copy_progress(path,'Encrypting to '+path,wstr,path, False)
+		if self.copy_progress_fun!=None:
+			#          copy_progress(path,deftxt               ,src ,dest,fromfile=True)
+			return gui.copy_progress(path,'Encrypting to '+path,wstr,path, False)
+		else:
+			print('[Encrypting]\n Gui copy progress not passed!') #'[Encrypting] Not writing file to',path,
+			with open(path, 'w', encoding="utf-8") as fo:
+				fo.write(wstr)
+			return 'wstr'
+		# return (path,'Encrypting to '+path,wstr,path, False)
 		# with open(path, "w") as f:
 			# f.write(wstr)
 			
@@ -331,7 +350,16 @@ class Crypto:
 	def write_bin_file(self,path,bstr):
 		# with open(path, "wb") as f:
 			# f.write(bstr)
-		return gui.copy_progress(path,'Decrypting to '+path,bstr,path, False)
+		# return gui.copy_progress(path,'Decrypting to '+path,bstr,path, False)
+		# return (path,'Decrypting to '+path,bstr,path, False)
+		if self.copy_progress_fun!=None:
+			#          copy_progress(path,deftxt               ,src ,dest,fromfile=True)
+			return gui.copy_progress(path,'Decrypting to '+path,bstr,path, False)
+		else:
+			print('[Decrypting]\n Gui copy progress not passed!') #'[Decrypting] Not writing file to',path,
+			with open(path, 'wb') as fo:
+				fo.write(bstr)
+			return 'bstr'
 			
 			
 	def init_hash_seed(self):
