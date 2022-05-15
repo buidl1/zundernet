@@ -14,6 +14,76 @@ import modules.aes as aes
 
 import modules.usb as usb
 import getpass
+
+# import collections
+
+# class OrderedSet(collections.MutableSet): # https://code.activestate.com/recipes/576694/
+
+	# def __init__(self, iterable=None):
+		# self.end = end = [] 
+		# end += [None, end, end]		 # sentinel node for doubly linked list
+		# self.map = {}				   # key --> [key, prev, next]
+		# if iterable is not None:
+			# self |= iterable
+
+	# def __len__(self):
+		# return len(self.map)
+
+	# def __contains__(self, key):
+		# return key in self.map
+
+	# def add(self, key):
+		# if key not in self.map:
+			# end = self.end
+			# curr = end[1]
+			# curr[2] = end[1] = self.map[key] = [key, curr, end]
+
+	# def discard(self, key):
+		# if key in self.map:		
+			# key, prev, next = self.map.pop(key)
+			# prev[2] = next
+			# next[1] = prev
+
+	# def __iter__(self):
+		# end = self.end
+		# curr = end[2]
+		# while curr is not end:
+			# yield curr[0]
+			# curr = curr[2]
+
+	# def __reversed__(self):
+		# end = self.end
+		# curr = end[1]
+		# while curr is not end:
+			# yield curr[0]
+			# curr = curr[1]
+
+	# def pop(self, last=True):
+		# if not self:
+			# raise KeyError('set is empty')
+		# key = self.end[1][0] if last else self.end[2][0]
+		# self.discard(key)
+		# return key
+
+	# def __repr__(self):
+		# if not self:
+			# return '%s()' % (self.__class__.__name__,)
+		# return '%s(%r)' % (self.__class__.__name__, list(self))
+
+	# def __eq__(self, other):
+		# if isinstance(other, OrderedSet):
+			# return len(self) == len(other) and list(self) == list(other)
+		# return set(self) == set(other)
+
+
+
+
+
+
+
+
+
+
 # import pythoncom #win only
 
 def listProd(ll):
@@ -77,7 +147,9 @@ def check_deamon_running():
 
 	is_komodod_running=False
 	tmppid=-1
-	
+	name=''
+	cmdline=''
+	cwd=''
 	for proc in psutil.process_iter(): 
 		try:
 			# Get process name & pid from process object.
@@ -92,12 +164,15 @@ def check_deamon_running():
 				
 				is_komodod_running=True
 				tmppid=zxc['pid']
+				name=zxc['name']
+				cmdline=zxc['cmdline']
+				cwd=zxc['cwd']
 				break
 					
 		except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
 			x=1
 			
-	return is_komodod_running, tmppid	
+	return is_komodod_running, tmppid	, name, cmdline, cwd
 
 	
 def split_memo( tmpmemo,sign_as_hash=True):
@@ -259,48 +334,48 @@ class CompactCharInt89:  # excluded |`;\
 
 		
 	
-class TmpFilesOE:
+# class TmpFilesOE:
 	
-	def __init__(self):
+	# def __init__(self):
 	
-		if not os.path.exists('logs'):
-			os.mkdir('logs')
+		# if not os.path.exists('logs'):
+			# os.mkdir('logs')
 	
-		tmp_time=now_to_str()
-		self.tmp_output=os.path.join('logs','o_'+tmp_time+'.tmp')
-		self.tmp_err=os.path.join('logs','e_'+tmp_time+'.tmp')
+		# tmp_time=now_to_str()
+		# self.tmp_output=os.path.join('logs','o_'+tmp_time+'.tmp')
+		# self.tmp_err=os.path.join('logs','e_'+tmp_time+'.tmp')
 
-	def get_files_names(self):
-		return self.tmp_output, self.tmp_err
+	# def get_files_names(self):
+		# return self.tmp_output, self.tmp_err
 		
-	def get_files(self,mmode):
-		fo=open(self.tmp_output,mmode)
-		fe=open(self.tmp_err,mmode)
+	# def get_files(self,mmode):
+		# fo=open(self.tmp_output,mmode)
+		# fe=open(self.tmp_err,mmode)
 		
-		return fo, fe
+		# return fo, fe
 		
-	def get_files_content(self):
-		f1,f2=self.get_files('r')
-		v1=f1.read()
-		v2=f2.read()
-		self.close_files(f1,f2)
+	# def get_files_content(self):
+		# f1,f2=self.get_files('r')
+		# v1=f1.read()
+		# v2=f2.read()
+		# self.close_files(f1,f2)
 		
-		return v1,v2
+		# return v1,v2
 		
-	def close_files(self,fo,fe):
-		fo.close()
-		fe.close()
+	# def close_files(self,fo,fe):
+		# fo.close()
+		# fe.close()
 		
 		
-	def delete_files(self):
-		if hasattr(self,'tmp_output') and hasattr(self,'tmp_err'):
-			if os.path.exists(self.tmp_output):
+	# def delete_files(self):
+		# if hasattr(self,'tmp_output') and hasattr(self,'tmp_err'):
+			# if os.path.exists(self.tmp_output):
 				
-				secure_delete(self.tmp_output)
+				# secure_delete(self.tmp_output)
 				
-			if os.path.exists(self.tmp_err):
+			# if os.path.exists(self.tmp_err):
 				
-				secure_delete(self.tmp_err)
+				# secure_delete(self.tmp_err)
 
 
 def now_to_timestamp():
@@ -397,7 +472,7 @@ def proces_return_oe(oo,ee):
 	
 
 def save_file(ppath,tt):
-	fo=open(ppath,'w')
+	fo=open(ppath,'w', encoding="utf-8")
 	fo.write(tt)
 	fo.close()
 	
