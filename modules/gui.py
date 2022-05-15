@@ -1,7 +1,8 @@
 # lambda bugs
 # lambda:  actionFun(*args)
 # sgould be# lambda *args:  actionFun(*args)
-import os,time
+import os,time,  traceback
+
 
 from PySide2.QtCore import (
 	QAbstractTableModel,
@@ -60,7 +61,30 @@ from PySide2.QtWidgets import (
 	QShortcut
 )
 
-import traceback
+
+# FONT SIZE SET
+
+global FONT_SIZE, FONT_SIZE_STR
+FONT_SIZE=12
+cwd_path=os.getcwd()	
+fontsize_path=os.path.join(cwd_path ,  'fontsize.txt')
+if os.path.exists(fontsize_path):
+	try:
+		rstr=""
+		with open(fontsize_path, "r", encoding="utf-8") as f:
+			rstr = f.read()
+			
+		FONT_SIZE=int(rstr.strip())
+		if FONT_SIZE<6 or FONT_SIZE>32:
+			FONT_SIZE=12
+	except:
+		FONT_SIZE=12 
+		
+FONT_SIZE_STR=str(FONT_SIZE)
+
+# switch to encoding:
+# open ,encoding="utf8"
+
 
 def copy_progress(path,deftxt,src,dest,fromfile=True):
 
@@ -93,8 +117,11 @@ def copy_progress(path,deftxt,src,dest,fromfile=True):
 			bb1=src
 		
 		chunks=max(1,int(src_size/50))
-		
-		fo=open(dest, writemode)
+		fo=None
+		if writemode=='w':
+			fo=open(dest, writemode, encoding="utf-8")
+		else:
+			fo=open(dest, writemode)
 		
 		bts=bb1[0:chunks]
 		# time.sleep(1)
@@ -163,7 +190,7 @@ def messagebox_showinfo(fr_title,fr_content,parent=None):
 		msgBox=QMessageBox(parent)
 		
 	msgBox.setSizePolicy(  QSizePolicy.Expanding,QSizePolicy.Expanding )
-	msgBox.setStyleSheet('QPushButton {padding:3px;font-size:9px;}')
+	msgBox.setStyleSheet('QPushButton {padding:3px;font-size:'+'+FONT_SIZE_STR+'+'px;}')
 	msgBox.setWindowTitle(fr_title)
 	msgBox.setText(fr_content)
 	msgBox.layout().setSizeConstraint(QLayout.SetNoConstraint)
@@ -176,7 +203,7 @@ def showinfo(tit,lbl,parent=None):
 def msg_yes_no(a,b,parent=None):
 	
 	msgBox=QMessageBox(parent)
-	msgBox.setStyleSheet('QPushButton {padding:3px;font-size:9x;}')
+	msgBox.setStyleSheet('QPushButton {padding:3px;font-size:'+FONT_SIZE_STR+'px;}')
 	# reply=msgBox.question(parent,a, b,QMessageBox.Yes|QMessageBox.No)
 	reply = QMessageBox.question(msgBox,a, b,QMessageBox.Yes|QMessageBox.No)
 	if reply==QMessageBox.Yes:
@@ -529,7 +556,7 @@ class Button(QPushButton):
 		if tooltip!='':
 			self.setToolTip(tooltip)
 			
-		self.setStyleSheet('QPushButton {padding:2px;font-size:9px;}')
+		self.setStyleSheet('QPushButton {padding:2px;font-size:'+FONT_SIZE_STR+'px;}')
 		
 		
 	
@@ -668,7 +695,7 @@ class Combox(QComboBox):
 					# self.activated.connect(lambda : actionFun(self ))
 					self.currentTextChanged.connect(lambda  : actionFun(self))	# self.currentText() self.currentData(Qt.UserRole) inside actionFun will get our values 
 		
-		self.setStyleSheet('QComboBox {padding:3px;font-size:9px;}')
+		self.setStyleSheet('QComboBox {padding:3px;font-size:'+FONT_SIZE_STR+'px;}')
 		
 	def text(self):
 		return self.currentText()
@@ -1087,16 +1114,19 @@ class Table(QTableWidget):
 					QTableWidget QComboBox:item { selection-background-color: lightgreen; } 
 					QTableWidget QComboBox QAbstractItemView {selection-background-color: lightgreen;border-style: solid;  border-width: 1px; }
 					QTableWidget QLineEdit {background-color:white; border-style: solid;  border-width: 1px; border-color: #aaa;}
-					QTableWidget {margin:2px;padding:2px;font-size:9px; font-family:'DejaVu';border-style:none; }
-					QHeaderView {font-size: 9px; padding:0px; margin:0px;font-family:'DejaVu';border-style:none;  }
-					QHeaderView::section:horizontal {font-size: 9px; padding:0px; margin:0px;font-family:'DejaVu';border-style:none;  }
+					QTableWidget {margin:2px;padding:2px;font-size:%spx; font-family:'DejaVu';border-style:none; }
+					QHeaderView {font-size: %spx; padding:0px; margin:0px;font-family:'DejaVu';border-style:none;  }
+					QHeaderView::section:horizontal {font-size: %spx; padding:0px; margin:0px;font-family:'DejaVu';border-style:none;  }
 					""" % (
 			
-			tmp_header_bg_color,
-			tmp_header_bg_color,
-			tmp_header_bg_color, #"rgba(45, 245, 245, 1);", #tmp_header_bg_color,
-			tmp_header_bg_color
-		)
+					tmp_header_bg_color,
+					tmp_header_bg_color,
+					tmp_header_bg_color, #"rgba(45, 245, 245, 1);", #tmp_header_bg_color,
+					tmp_header_bg_color,
+					FONT_SIZE_STR,
+					FONT_SIZE_STR,
+					FONT_SIZE_STR
+				) 
 # QTableWidget QLineEdit {background-color:white; border:inset;}
 		self.setStyleSheet(tmp_style)
 		# print(tmp_style)
@@ -1697,7 +1727,7 @@ class Table(QTableWidget):
 			if 'style' in w:
 				bbb.setStyleSheet("QPushButton {%s}" % w['style'])
 			else:
-				bbb.setStyleSheet("QPushButton {font-size:9px;padding:2px;}" )
+				bbb.setStyleSheet("QPushButton {font-size:"+FONT_SIZE_STR+"px;padding:2px;}" )
 				# print("QPushButton {%s}" % w['style'])
 				# print(bbb.styleSheet() )
 			
@@ -1936,20 +1966,35 @@ class MainWindow(QMainWindow):
 			event.ignore()
 			return
 		
+		waititer=9
+		while self.wrkr.block_closing and waititer>-1:
+			time.sleep(0.2)
+			waititer=waititer-1
+			
 		if self.wrkr.block_closing:
-			messagebox_showinfo('Cannot close at this moment','Application is doing some background job (e.g. encryption)',self)
+			messagebox_showinfo('Cannot close at this moment','Application is doing some background job.',self)
 			event.ignore()
 			return
 			
-		if not self.on_close(self):
+		if not self.on_close(self): # aks confirm when deamon still running 
 			event.ignore()
 			return
+			# wrk_thread.finished.connect(wrk_thread.deleteLater)
+	# wrk.finished.connect(wrk_thread.quit)
+	# wrk.finished.connect(wrk.deleteLater)
+		self.wrkr.init_app.close_thread=True # loop should stop asap
 		
-		self.wrkr.init_app.close_thread=True
-		# print('1106 self.wrkr.init_app.close_thread',self.wrkr.init_app.close_thread)
+		print('terminating thread')
 		self.thrd.terminate()
 		self.thrd.wait()
-		
+		# try:
+			# while self.thrd.isRunning():
+				# time.sleep(1)
+				# print('thread still running')
+		# except:
+			# print('exception - no thread - ok')
+			# pass
+		# print('thread over close')
 	
 		
 		self.close()
