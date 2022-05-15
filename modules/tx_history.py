@@ -8,11 +8,13 @@ import os
 import datetime
 import json
 import time
-import modules.localdb as localdb
+# import modules.localdb as localdb
 import modules.app_fun as app_fun
 # import operator
 # import modules.flexitable as flexitable
 import modules.gui as gui
+
+global global_db
 
 class TransactionsHistory:
 
@@ -77,7 +79,7 @@ class TransactionsHistory:
 	
 	def update_list(self):
 	
-		idb=localdb.DB(self.db)
+		# idb=localdb.DB(self.db)
 		
 			# ['Category','Type','Last','Status']
 		wwhere={}
@@ -116,7 +118,7 @@ class TransactionsHistory:
 				wwhere['Category']=[' not in ',"('send','merge')"]
 		
 		# print('wwhere',wwhere)
-		task_done=idb.select('tx_history', ['Category','Type','status','txid','block','date_time','from_str','to_str','amount','uid'],where=wwhere,orderby=[{'block':'desc'},{'Type':'asc'},{'timestamp':'desc'}])
+		task_done=global_db.select('tx_history', ['Category','Type','status','txid','block','date_time','from_str','to_str','amount','uid'],where=wwhere,orderby=[{'block':'desc'},{'Type':'asc'},{'timestamp':'desc'}])
 		
 		# self.filter_table.cellWidget(0,1).set_fun(self.update_history_frame) # update filter based on this 
 		dist_types=['All','in','out']
