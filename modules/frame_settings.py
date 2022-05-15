@@ -4,7 +4,7 @@ import os
 # import datetime
 import json
 # import time
-import modules.localdb as localdb
+# import modules.localdb as localdb
 import modules.app_fun as app_fun
 # import operator
 # import modules.flexitable as flexitable
@@ -18,6 +18,7 @@ class Settings:
 		# global idb
 		self.db=wds.db
 		self.grid_settings=[]
+		self.db_main=initApp.db_main
 		self.parent_frame = gui.ContainerWidget(None,layout=gui.QVBoxLayout() )
 		
 		################ PASS CHANGE
@@ -36,14 +37,14 @@ class Settings:
 					wds.password=newpass
 					initApp.app_password=newpass
 					
-					db=localdb.DB(self.db )
+					# db=localdb.DB(self.db )
 					cc=aes.Crypto()
 					table={} 
 					salttmp= cc.init_hash_seed() 
 					passhashtmp= cc.hash(newpass+salttmp) 
 					disp_dict={'salt':salttmp,'passhash':passhashtmp} # 
 					table['jsons']=[{'json_name':"password_hash", 'json_content':json.dumps(disp_dict), 'last_update_date_time': app_fun.now_to_str(False)}]
-					db.upsert(table,['json_name','json_content','last_update_date_time'],{'json_name':['=',"'password_hash'"]})
+					self.db_main.upsert(table,['json_name','json_content','last_update_date_time'],{'json_name':['=',"'password_hash'"]})
 
 					
 					# clear
@@ -91,14 +92,18 @@ class Settings:
 		self.parent_frame.insertWidget(frame1)
 		
 		def update_db_info():
-			idb=localdb.DB(self.db)
+			# idb=localdb.DB(self.db)
 			
 			grid_db= []
 			colnames=['Table name','Table size','' ]
 			
-			tmpsize_multi=idb.table_size(['jsons','tx_history','notifications','queue_done'])
+			# print('self.db_main.all_tables()',self.db_main.all_tables() )
+			
+			tmpsize_multi=self.db_main.table_size(['jsons','tx_history','notifications','queue_done'])
 			 # {'jsons': {'total_chars': 4645, 'total_rows': 6, 'older_chars': 0, 'old_rows': 0}, 'tx_history': {'total_chars': 0, 'total_rows': 0, 'older_chars': 0, 'old_rows': 0}}
-			# print('tmpsize_multi',tmpsize_multi)
+			# print('\n\n\ntmpsize_multi',tmpsize_multi)
+			# if 'jsons' not in tmpsize_multi: return grid_db, colnames 
+			
 			
 			tmpsize=tmpsize_multi['jsons'] #idb.table_size('jsons')
 			tmpdict={}
@@ -152,8 +157,8 @@ class Settings:
 		
 		
 		def delete_old(tname,datetime_colname,ddays,*evargs):
-			idb=localdb.DB(self.db)
-			idb.delete_old( tname,datetime_colname,ddays )
+			# idb=localdb.DB(self.db)
+			self.db_main.delete_old( tname,datetime_colname,ddays )
 			grid_db, colnames=update_db_info()
 			self.db_table.updateTable(grid_db)
 			
@@ -163,13 +168,18 @@ class Settings:
 		
 		
 		def reset_messages(*evargs):
-			idb=localdb.DB(self.db)
-			idb.delete_where( 'in_signatures' )
-			idb.delete_where( 'msgs_inout' )
-			idb.delete_where( 'tx_history' )
-			idb.delete_where( 'notifications' )
-			idb.delete_where( 'channels' ) 
+			# idb=localdb.DB(self.db)
+			self.db_main.delete_where( 'in_signatures' )
+			self.db_main.delete_where( 'msgs_inout' )
+			self.db_main.delete_where( 'tx_history' )
+			self.db_main.delete_where( 'notifications' )
+			self.db_main.delete_where( 'channels' ) 
 			gui.showinfo("Transactions cleared", "DB transactions clear - can recalc now!",self.parent_frame )
+			try:
+				initApp.dmn.the_wallet.historical_txs={}
+				print('reset also historical_txs')
+			except:
+				pass
 			
 		self.db_table.cellWidget(5,2).set_fun(True,reset_messages )
 			# to recalc msg and signatures: 
