@@ -5,7 +5,7 @@ import os, sys
 import datetime
 import json
 import time
-import modules.localdb as localdb
+# import modules.localdb as localdb
 import modules.app_fun as app_fun
 import modules.usb as usb
 import operator
@@ -20,9 +20,11 @@ WAIT_S=900
 class WalDispSet(gui.QObject):
 	sending_signal = gui.Signal(list)
 
-	def __init__(self,password=[''], data_files={} ):
+	def __init__(self,password=[''], data_files={}, _db_main=None, _db_init=None ):
 	
 		# self.wallet=wallet
+		self.db_main=_db_main
+		self.db_init=_db_init
 		self.db=data_files['db']+'.db'
 		self.wallet=data_files['wallet']+'.dat'
 		self.data_files=data_files #self.data_files['db']
@@ -48,8 +50,8 @@ class WalDispSet(gui.QObject):
 		self.is_synced=bb
 		
 	def update_addr_cat_map(self):
-		idb=localdb.DB(self.db)
-		addr_cat=idb.select('address_category',['address','category'] )
+		# idb=localdb.DB(self.db)
+		addr_cat=self.db_main.select('address_category',['address','category'] )
 		self.addr_cat_map={}
 		for rr in addr_cat:
 			self.addr_cat_map[rr[0].strip()]=rr[1]
@@ -61,10 +63,10 @@ class WalDispSet(gui.QObject):
 	def show_bills(self,btn,addr):
 		table={}
 		ddict={'addr':addr}
-		table['queue_waiting']=[localdb.set_que_waiting('show_bills',jsonstr=json.dumps(ddict) ) ]
+		table['queue_waiting']=[self.db_main.set_que_waiting('show_bills',jsonstr=json.dumps(ddict) ) ]
 								
-		idb=localdb.DB(self.db)
-		idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
+		# idb=localdb.DB(self.db)
+		self.db_main.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 		
 		# self.queue_com.put([ table['queue_waiting'][0]['id'],'Bills for '+addr, self.display_bills])
 		
@@ -76,16 +78,16 @@ class WalDispSet(gui.QObject):
 	# run after new addr created !
 	def wallet_copy_progress(self ):
 	
-		idb=localdb.DB('init.db')
-		tt=idb.select('init_settings',columns=[ "datadir" ])  
+		# idb=localdb.DB('init.db')
+		tt=self.db_init.select('init_settings',columns=[ "datadir" ])  
 		src=os.path.join(tt[0][0],self.wallet)
 		
 		if app_fun.wallet_copy_progress( src_dir=tt[0][0], add_msg=['Please insert USB/pendrive','To create new address wallet backup to pendrive is required. '], wallet_name=self.data_files['wallet'], gui=gui ):
 			# save new hash 
 			dat_file=src
 			cc=aes.Crypto()
-			db=localdb.DB(self.db)
-			last_wallet_hash=db.select('jsons', ['json_content'],{'json_name':['=',"'backup_wallet_hash'"]})
+			# db=localdb.DB(self.db)
+			last_wallet_hash=self.db_main.select('jsons', ['json_content'],{'json_name':['=',"'backup_wallet_hash'"]})
 			last_wallet_hash_arr=json.loads(last_wallet_hash[0][0])
 			cur_dat_hash= cc.hash2utf8_1b( cc.read_bin_file( dat_file),1)
 			last_wallet_hash_arr.append(cur_dat_hash)
@@ -93,7 +95,7 @@ class WalDispSet(gui.QObject):
 			# print('Inserting hash at addr creation after backup',cur_dat_hash) 
 			table={}
 			table['jsons']=[{'json_name':"backup_wallet_hash", 'json_content':json.dumps(last_wallet_hash_arr), 'last_update_date_time': app_fun.now_to_str(False)}]
-			db.upsert(table,['json_name','json_content','last_update_date_time'],{'json_name':['=',"'backup_wallet_hash'"]})
+			self.db_main.upsert(table,['json_name','json_content','last_update_date_time'],{'json_name':['=',"'backup_wallet_hash'"]})
 		 
 
 		
@@ -101,7 +103,7 @@ class WalDispSet(gui.QObject):
 		
 	def send_to_addr(self,btn,addr,exampleval=0.0001): 
 	
-		tmpsignature=localdb.get_addr_to_hash(addr)
+		tmpsignature=self.db_main.get_addr_to_hash(addr)
 		
 		tmpcat=''
 		tmpalia=''
@@ -134,10 +136,10 @@ class WalDispSet(gui.QObject):
 		send_from=gui.Table(None,{'dim':[2,4],'updatable':1, 'toContent':1}) #flexitable.FlexiTable(rootframe,grid_settings)
 		send_from.updateTable(grid_settings)
 		
-		last_addr=localdb.get_last_addr_from("'last_book_from_addr'")
+		last_addr=self.db_main.get_last_addr_from("'last_book_from_addr'")
 		if last_addr not in ['','...']:
 			send_from.cellWidget(1,0).setText(last_addr) #set_textvariable( 'z1',last_addr)
-			idb=localdb.DB(self.db)
+			# idb=localdb.DB(self.db)
 			disp_dict=self.disp_dict[0][0] #idb.select('jsons',['json_content','last_update_date_time'],{'json_name':['=',"'display_wallet'"]})
 			if len(disp_dict)>0:
 				disp_dict=json.loads(disp_dict )
@@ -239,14 +241,14 @@ class WalDispSet(gui.QObject):
 			
 			table={}
 			if asap:
-				table['queue_waiting']=[localdb.set_que_waiting('send',jsonstr=json.dumps(ddict) ) ]
+				table['queue_waiting']=[self.db_main.set_que_waiting('send',jsonstr=json.dumps(ddict) ) ]
 			else:
-				table['queue_waiting']=[localdb.set_que_waiting('send',jsonstr=json.dumps(ddict) , wait_seconds=WAIT_S) ]
+				table['queue_waiting']=[self.db_main.set_que_waiting('send',jsonstr=json.dumps(ddict) , wait_seconds=WAIT_S) ]
 				
-			idb=localdb.DB(self.db)
-			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
+			# idb=localdb.DB(self.db)
+			self.db_main.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 			
-			localdb.set_last_addr_from( z,"'last_book_from_addr'")
+			self.db_main.set_last_addr_from( z,"'last_book_from_addr'")
 			btn.parent().parent().close() #destroy()
 				
 	 
@@ -270,7 +272,7 @@ class WalDispSet(gui.QObject):
 	
 		if type(int(1))!=type(initbytes): 
 			tmpaddrto=initbytes.text()
-			initbytes=512-localdb.get_addr_to_hash(tmpaddrto,True)
+			initbytes=512-self.db_main.get_addr_to_hash(tmpaddrto,True)
 	
 		mm=mm_elem.text() #get()
 		try:
@@ -316,8 +318,8 @@ class WalDispSet(gui.QObject):
 	@gui.Slot()	
 	def addr_book_data_refresh(self):
 		self.addr_book_colnames=['','Usage','Category','Alias','Full address']
-		idb=localdb.DB(self.db)
-		sel_addr_book=idb.select('addr_book',[ 'Category','Alias','Address','usage'] ,orderby=[{'usage':'desc'},{'Category':'asc'},{'Alias':'asc' }] )
+		# idb=localdb.DB(self.db)
+		sel_addr_book=self.db_main.select('addr_book',[ 'Category','Alias','Address','usage'] ,orderby=[{'usage':'desc'},{'Category':'asc'},{'Alias':'asc' }] )
 		
 		# print('\n\n\n addr_book_data_refresh',sel_addr_book)
 		
@@ -495,7 +497,7 @@ class WalDispSet(gui.QObject):
 					if len(a)>0:
 						sending_amount+=float(a)
 						m+=' @zUnderNet'
-						tmpsignature=localdb.get_addr_to_hash(z)
+						tmpsignature=self.db_main.get_addr_to_hash(z)
 						origlen,m=self.valid_memo_len(m,512-len(tmpsignature),suggest=True)
 						m+=tmpsignature
 						tosend.append({'z':z,'a':a,'m':m})
@@ -513,12 +515,12 @@ class WalDispSet(gui.QObject):
 			ddict={'fromaddr':addr,	'to':tosend	}
 			table={}
 			if asap:
-				table['queue_waiting']=[localdb.set_que_waiting('send',jsonstr=json.dumps(ddict) ) ]
+				table['queue_waiting']=[self.db_main.set_que_waiting('send',jsonstr=json.dumps(ddict) ) ]
 			else:
-				table['queue_waiting']=[localdb.set_que_waiting('send',jsonstr=json.dumps(ddict) , wait_seconds=WAIT_S) ]
+				table['queue_waiting']=[self.db_main.set_que_waiting('send',jsonstr=json.dumps(ddict) , wait_seconds=WAIT_S) ]
 				
-			idb=localdb.DB(self.db)
-			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
+			# idb=localdb.DB(self.db)
+			self.db_main.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 			
 			btn2.parent().parent().close()  
 			self.sending_signal.emit(['cmd_queue'])
@@ -613,7 +615,7 @@ class WalDispSet(gui.QObject):
 			if len(path1)>1:
 				if os.path.exists(path1):
 					rstr=''
-					with open(path1, "r") as f:
+					with open(path1, "r", encoding="utf-8") as f:
 						rstr = f.read()
 					keys=''	
 					if 'iv' in rstr and 'ct' in rstr:
@@ -658,10 +660,10 @@ class WalDispSet(gui.QObject):
 			# print('importing',keys)		
 			ddict={'keys': keys	}
 			table={}
-			table['queue_waiting']=[localdb.set_que_waiting('import_priv_keys',jsonstr=json.dumps(ddict) ) ]
+			table['queue_waiting']=[self.db_main.set_que_waiting('import_priv_keys',jsonstr=json.dumps(ddict) ) ]
 			
-			idb=localdb.DB(self.db)
-			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
+			# idb=localdb.DB(self.db)
+			self.db_main.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 			
 			expo=btn3.parent().parent()
 			expo.close() #.parent()
@@ -804,12 +806,12 @@ class WalDispSet(gui.QObject):
 			ddict={'fromaddr':from_addr, 'limit':int(lim)	,'to': to_addr 	} #,'to':'"'+to_addr+'"'	}
 			table={}
 			# if asap:
-			table['queue_waiting']=[localdb.set_que_waiting(merge_type,jsonstr=json.dumps(ddict), wait_seconds=wait_seconds_tmp ) ]
+			table['queue_waiting']=[self.db_main.set_que_waiting(merge_type,jsonstr=json.dumps(ddict), wait_seconds=wait_seconds_tmp ) ]
 			# else:
 				# table['queue_waiting']=[localdb.set_que_waiting('send',jsonstr=json.dumps(ddict) , wait_seconds=WAIT_S) ]
 			# print(table)
-			idb=localdb.DB(self.db)
-			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
+			# idb=localdb.DB(self.db)
+			self.db_main.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 			self.sending_signal.emit(['cmd_queue'])
 			
 			btn5.parent().parent().parent().parent().close()
@@ -863,8 +865,8 @@ class WalDispSet(gui.QObject):
 			# print(ddict)	
 			if ddict['opt']=='Wallet' or ddict['opt']=='Database' :
 			
-				idb=localdb.DB('init.db')
-				ppath=idb.select('init_settings',['datadir'] )
+				# idb=localdb.DB('init.db')
+				ppath=self.db_init.select('init_settings',['datadir'] )
 				
 					
 				pfrom=os.path.join(ppath[0][0],self.wallet)
@@ -922,10 +924,10 @@ class WalDispSet(gui.QObject):
 					
 					
 			table={}
-			table['queue_waiting']=[localdb.set_que_waiting('export_wallet',jsonstr=json.dumps(ddict) ) ]
+			table['queue_waiting']=[self.db_main.set_que_waiting('export_wallet',jsonstr=json.dumps(ddict) ) ]
 			
-			idb=localdb.DB(self.db)
-			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
+			# idb=localdb.DB(self.db)
+			self.db_main.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 			
 			# rootframe.destroy()
 			expo.parent().close() #.destroy()
@@ -1022,9 +1024,9 @@ class WalDispSet(gui.QObject):
 						'password':cc.rand_password(32)
 						}
 					
-			table['queue_waiting']=[localdb.set_que_waiting('export_viewkey',jsonstr=json.dumps(ddict)) ]
-			idb=localdb.DB(self.db)
-			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
+			table['queue_waiting']=[self.db_main.set_que_waiting('export_viewkey',jsonstr=json.dumps(ddict)) ]
+			# idb=localdb.DB(self.db)
+			self.db_main.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 			expo.parent().close() #.destroy()
 			
 					
@@ -1063,7 +1065,7 @@ class WalDispSet(gui.QObject):
 			# print ('create_addr wds ')
 			addr_num, addr_cat, addr_cat_counter, new_seed =addr_num.text().strip(), addr_cat.text().strip(), addr_cat_counter.currentText(), new_seed.currentText()
 		
-			idb=localdb.DB(self.db)
+			# idb=localdb.DB(self.db)
 			
 			if addr_cat_counter=='No': 	addr_cat_counter=False
 			else: addr_cat_counter=True
@@ -1072,9 +1074,9 @@ class WalDispSet(gui.QObject):
 			else: new_seed=True 
 				
 			table={}
-			table['queue_waiting']=[localdb.set_que_waiting('new_addr', json.dumps({'addr_count':int(addr_num),'addr_cat':addr_cat,'addr_cat_counter':addr_cat_counter, 'new_seed':new_seed}) ) ]
+			table['queue_waiting']=[global_db.set_que_waiting('new_addr', json.dumps({'addr_count':int(addr_num),'addr_cat':addr_cat,'addr_cat_counter':addr_cat_counter, 'new_seed':new_seed}) ) ]
  
-			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
+			self.db_main.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 
 			btn_c.parent().parent().parent().close() #.destroy()
 			
@@ -1089,13 +1091,13 @@ class WalDispSet(gui.QObject):
 
 		
 		# print('preparing prepare_queue_frame' )
-		idb=localdb.DB(self.db)
+		# idb=localdb.DB(self.db)
 		grid_lol3=[]
 		tmpdict2={}
 		colnames=['Task','Created time','Status','Wait[s]','Cancel']
 		
 		# print('22 os.path.exists(self.db)',os.path.exists(self.db) )
-		disp_dict=idb.select('queue_waiting', ["command","created_time","status","wait_seconds","json","id"],orderby=[{'created_time':'desc' }])
+		disp_dict=self.db_main.select('queue_waiting', ["command","created_time","status","wait_seconds","json","id"],orderby=[{'created_time':'desc' }])
 		# print(disp_dict)
 		
 		
@@ -1104,7 +1106,7 @@ class WalDispSet(gui.QObject):
 			# print(btn,id)
 			# if True:
 			try:
-				disp_dict=idb.select('queue_waiting', ["type","command","created_time","status","wait_seconds","json","id"],{'id':['=',id]})
+				disp_dict=self.db_main.select('queue_waiting', ["type","command","created_time","status","wait_seconds","json","id"],{'id':['=',id]})
 				# print('disp_dict',disp_dict)
 				if len(disp_dict)>0:
 					table={}	
@@ -1119,10 +1121,10 @@ class WalDispSet(gui.QObject):
 										, "result":'canceled'
 										, 'end_time':app_fun.now_to_str(False)
 										} ]
-						idb.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
+						self.db_main.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
 				
 				# print('before delete',idb.select('queue_waiting'))
-				idb.delete_where('queue_waiting',{'id':['=',id]})
+				self.db_main.delete_where('queue_waiting',{'id':['=',id]})
 				# self.sending_signal.emit(['cmd_queue']) # dead loop
 				
 			except:
@@ -1146,7 +1148,7 @@ class WalDispSet(gui.QObject):
 					status_label={'T':'LabelV', 'L': rr[2] , 'style':{'bgc':'blue','fgc':'white'} }
 				elif rr[2]=='done':
 					sstyle={'bgc':'white','fgc':'#aaa'}
-					task_done=idb.select('queue_done', ['result'],{'id':['=',tmpid]})
+					task_done=self.db_main.select('queue_done', ['result'],{'id':['=',tmpid]})
 					
 					tmpres=' no results yet ... '
 					if len(task_done)>0: 
@@ -1223,9 +1225,9 @@ class WalDispSet(gui.QObject):
 			# print('get_rounding_str',self.set_rounding_str(direct_value))
 			return self.set_rounding_str(direct_value)
 		
-		idb=localdb.DB(self.db)
-		if idb.check_table_exist('wallet_display'):
-			rounding=idb.select('wallet_display',['value'],{'option':['=',"'rounding'"]})
+		# idb=localdb.DB(self.db)
+		if self.db_main.check_table_exist('wallet_display'):
+			rounding=self.db_main.select('wallet_display',['value'],{'option':['=',"'rounding'"]})
 				
 			if len(rounding)>0:
 				rounding=rounding[0][0]
@@ -1241,9 +1243,9 @@ class WalDispSet(gui.QObject):
 		
 		
 	def get_options(self,strval=False):
-		idb=localdb.DB(self.db)
+		# idb=localdb.DB(self.db)
 		retdict={'sorting':'amounts','filtering': 'All','rounding':'0.0001' } #",.4f"
-		opt=idb.select('wallet_display',['option','value'],{'option':[' in ',"('sorting','filtering','rounding')"]} )
+		opt=self.db_main.select('wallet_display',['option','value'],{'option':[' in ',"('sorting','filtering','rounding')"]} )
 		# print('opt',opt)
 		for oo in opt:
 			retdict[ oo[0] ] = oo[1]
@@ -1289,8 +1291,8 @@ class WalDispSet(gui.QObject):
 		
 		
 	def set_disp_dict(self):
-		idb=localdb.DB(self.db)
-		self.disp_dict=idb.select('jsons',['json_content','last_update_date_time'],{'json_name':['=',"'display_wallet'"]})
+		# idb=localdb.DB(self.db)
+		self.disp_dict=self.db_main.select('jsons',['json_content','last_update_date_time'],{'json_name':['=',"'display_wallet'"]})
 		if len(self.disp_dict)==0: return
 		tmp_disp_dict=json.loads(self.disp_dict[0][0])
 		self.alias_map=tmp_disp_dict['aliasmap']
@@ -1301,7 +1303,7 @@ class WalDispSet(gui.QObject):
 		
 	def prepare_summary_frame(self ):	
 		
-		idb=localdb.DB(self.db)
+		# idb=localdb.DB(self.db)
 		
 		grid_lol_wallet_sum=[]
 		col_names=['Total','Confirmed','Pending','Round','Filter','Wallet']
@@ -1361,8 +1363,8 @@ class WalDispSet(gui.QObject):
 	@gui.Slot(str,str)
 	def set_channel(self,addr,vkey):
 		# check if channels active:
-		idb=localdb.DB(self.db)
-		xx=idb.select_max_val( 'channels',['address' ], groupby=[ ])
+		# idb=localdb.DB(self.db)
+		xx=self.db_main.select_max_val( 'channels',['address' ], groupby=[ ])
 		
 		if len(xx)==0 or xx[0][0]==None:
 			gui.messagebox_showinfo('Channels not yet active','Please activate channels in Channels tab!\n Will be active after view key is validated.',None)
@@ -1469,7 +1471,7 @@ class WalDispSet(gui.QObject):
 			ch_type=expo.cellWidget(4,1).text().strip() #.currentText()
 			
 			msg=json.dumps({'channel_name':chname,'channel_owner':creator, 'channel_intro':initcontent, 'channel_type':ch_type })
-			got_bad_char, msg_arr=localdb.prep_msg(msg,addr)
+			got_bad_char, msg_arr=global_db.prep_msg(msg,addr)
 			
 			if got_bad_char:
 				gui.showinfo(msg_arr[0], msg_arr[1])
@@ -1480,25 +1482,25 @@ class WalDispSet(gui.QObject):
 				ddict['to'].append({'z':addr,'a':0.0001,'m':mm})
 				
 			table={}
-			table['queue_waiting']=[localdb.set_que_waiting('send',jsonstr=json.dumps(ddict) ) ]
+			table['queue_waiting']=[global_db.set_que_waiting('send',jsonstr=json.dumps(ddict) ) ]
 			table['queue_waiting'][0]['type']='channel'
 			
-			idb=localdb.DB(self.db)
-			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])	
+			# idb=localdb.DB(self.db)
+			self.db_main.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])	
 			
 			# all went through - save channel
 			# table['channels']={'address':'text', 'vk':'text', 'creator':'text', 'channel_name':'text', 'channel_intro':'text', 'status':'text', 'own':'text', 'channel_type':'text' }
 			table={'channels':[{'address':addr, 'vk':vkey, 'creator':creator, 'channel_name':chname, 'status':'active', 'own':'True',   'channel_intro':initcontent , 'channel_type':ch_type}]}	
 			# print('1507 CREATING CHANNEL\n',table)
 			# idb=localdb.DB(self.db)
-			idb.insert(table,['address' , 'vk' , 'creator' , 'channel_name' , 'status' , 'own',   'channel_intro' , 'channel_type' ])
+			self.db_main.insert(table,['address' , 'vk' , 'creator' , 'channel_name' , 'status' , 'own',   'channel_intro' , 'channel_type' ])
 			gui.showinfo('Channel created','Channel created.\nTo start using it - export channel view key and share with others.')
 			
 			# update addr category
 			
 			date_str=app_fun.now_to_str(False)
 			table={'address_category':[{'address':addr, 'category':'Channel '+chname, 'last_update_date_time':date_str}]}			
-			idb.upsert(table,['address','category','last_update_date_time'],{'address':['=',"'"+addr+"'"]})
+			self.db_main.upsert(table,['address','category','last_update_date_time'],{'address':['=',"'"+addr+"'"]})
 			
 			# wallet_details.update_frame(self.prepare_summary_frame()) # update categories
 			# grid1,col1=self.prepare_byaddr_frame()
@@ -1507,7 +1509,7 @@ class WalDispSet(gui.QObject):
 			self.sending_signal.emit(['wallet'])
 			
 			table={'channel_signatures':[{'addr':addr,'signature':creator}]} 
-			idb.upsert( table, [ 'addr' ,'signature' ], {'addr':['=',  "'"+addr+"'" ] } )
+			self.db_main.upsert( table, [ 'addr' ,'signature' ], {'addr':['=',  "'"+addr+"'" ] } )
 			
 				
 			expo.parent().close() 
@@ -1549,9 +1551,9 @@ class WalDispSet(gui.QObject):
 							# 'password':''
 							# }
 				table={}	
-				table['queue_waiting']=[localdb.set_que_waiting('get_viewkey',jsonstr=json.dumps(ddict)) ]
-				idb=localdb.DB(self.db)
-				idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
+				table['queue_waiting']=[self.db_main.set_que_waiting('get_viewkey',jsonstr=json.dumps(ddict)) ]
+				# idb=localdb.DB(self.db)
+				self.db_main.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 			else:
 				# print('must be synced to set channel')
 				gui.showinfo('Cannot create Channel','Must be synced to set up a channel!')
@@ -1738,13 +1740,13 @@ class WalDispSet(gui.QObject):
 				tmpvar.parent().parent().parent().close()
 				return
 				
-			idb=localdb.DB(self.db)
+			# idb=localdb.DB(self.db)
 			
 			table={}
 			
 			date_str=app_fun.now_to_str(False)
 			table['address_category']=[{'address':addr, 'category':tmp, 'last_update_date_time':date_str}]
-			idb.upsert(table,['address','category','last_update_date_time'],{'address':['=',"'"+addr+"'"]})
+			self.db_main.upsert(table,['address','category','last_update_date_time'],{'address':['=',"'"+addr+"'"]})
 			
 			## wallet_details.update_frame(self.prepare_summary_frame()) # update categories
 			# wallet_details=btn.parent().parent()
