@@ -4,18 +4,20 @@ import os,sys
 import datetime
 import json
 import time
-import modules.localdb as localdb
+# import modules.localdb as localdb
 import modules.app_fun as app_fun
 
 import modules.gui as gui
+
+global global_db
 
 class TasksHistory:
 
 	def update_filter_cmd(self,from_update_list=[]):
 		tmpcommands=self.distinct_task_commands.copy()
 		if len(self.distinct_task_commands)==0:
-			idb=localdb.DB(self.db)
-			task_done=idb.select('queue_done', ['command'],distinct=True)
+			# idb=localdb.DB(self.db)
+			task_done=global_db.select('queue_done', ['command'],distinct=True)
 			tmpcommands=[cc[0] for cc in task_done]
 			
 		colnames=['Category','Command','Last','Result']
@@ -86,7 +88,7 @@ class TasksHistory:
 	
 	def update_list(self):
 	
-		idb=localdb.DB(self.db)
+		# idb=localdb.DB(self.db)
 		
 		wwhere={}
 		llast=self.filter_table.cellWidget(0,2).currentText() #.get_value('last')
@@ -99,7 +101,7 @@ class TasksHistory:
 		elif llast=='12 months':  
 			wwhere['datetime(created_time)']=['>=',"datetime('"+app_fun.date2str(datetime.datetime.now()-datetime.timedelta(days=365) )+"')"]
 		
-		task_done=idb.select('queue_done', ['type','command','json','created_time','end_time','result','wait_seconds','id'],where=wwhere,orderby=[{'end_time':'desc'},{'created_time':'desc'}])
+		task_done=global_db.select('queue_done', ['type','command','json','created_time','end_time','result','wait_seconds','id'],where=wwhere,orderby=[{'end_time':'desc'},{'created_time':'desc'}])
 		
 		ccat=self.filter_table.cellWidget(0,0).currentText() #get_value('category')
 		rres=self.filter_table.cellWidget(0,3).currentText() #.get_value('result')
