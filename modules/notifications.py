@@ -3,10 +3,11 @@ import os
 # import datetime
 import json
 import time
-import modules.localdb as localdb
+# import modules.localdb as localdb
 import modules.app_fun as app_fun
 import modules.gui as gui
 
+global global_db
 
 
 class Notifications:
@@ -28,10 +29,10 @@ class Notifications:
 			
 	def close_all_notif(self,*eventargs):
 		
-		idb=localdb.DB(self.db)
+		# idb=localdb.DB(self.db)
 		table={}
 		table['notifications']=[{'closed':'True'}]
-		idb.update(table,['closed'],{} )
+		global_db.update(table,['closed'],{} )
 		time.sleep(0.3)
 		reset_values=False
 		if len(eventargs)>0:
@@ -91,12 +92,12 @@ class Notifications:
 	def set_actions(self):	
 	
 		def ok_close(struid,*evargs):
-			idb=localdb.DB(self.db)
+			# idb=localdb.DB(self.db)
 			table={}
 			table['notifications']=[{'closed':'True'}]
 			try:
 			
-				idb.update(table,['closed'],where={'uid':['=',int(struid)]})
+				global_db.update(table,['closed'],where={'uid':['=',int(struid)]})
 				self.update_notif_frame()
 			except:
 				print('notifications set_actions')
@@ -113,7 +114,7 @@ class Notifications:
 			
 			grid1=[]
 			grid1.append( {'request':[{'T':'LabelC', 'L':todisp, 'width':96}, {'T':'LabelE' } ]} )
-			tmpfromaddr=localdb.get_last_addr_from( "'last_book_from_addr'")
+			tmpfromaddr=global_db.get_last_addr_from( "'last_book_from_addr'")
 			grid1.append( {'label':[   {'T':'LabelC', 'L':'Send from:' } , {'T':'LabelE' } ]} )
 			grid1.append( {'selectaddr':[ {'T':'Button', 'L':tmpfromaddr,  'uid':'seladdr', 'width':96} , {'T':'LabelE' } ]} )
 			grid1.append( {'decide':[{'T':'Button', 'L':'Approve and Send',  'uid':'approve', 'width':32},  {'T':'Button', 'L':'Reject',  'uid':'reject'} ]} )
@@ -123,14 +124,14 @@ class Notifications:
 			
 			def close_request( decis,*evargs):
 				# print('decis',decis)
-				idb=localdb.DB(self.db)
+				# idb=localdb.DB(self.db)
 				table={}
 				table['notifications']=[ {'opname':'PaymentRequest '+decis,'closed':'True' }]
 				# print(rev_id)
 				try:
 					id=int(rev_id )
 					# print('id',id)
-					idb.update(table,['opname','closed'],{'uid':['=',id]} )
+					global_db.update(table,['opname','closed'],{'uid':['=',id]} )
 				except:
 					print('bad id?? 141 notif')
 					pass
@@ -142,7 +143,7 @@ class Notifications:
 				tmpdict=json.loads(strjson)
 				# print('approved ',tmpdict)
 				
-				tmpsignature=localdb.get_addr_to_hash(tmpdict['toaddress'])
+				tmpsignature=global_db.get_addr_to_hash(tmpdict['toaddress'])
 				tmpfromaddr=g1_table.cellWidget(2,0).text() #get_value('seladdr') #localdb.get_last_addr_from( "'last_book_from_addr'")
 				memotxt='Payment for '+tmpdict['title']
 				if len(tmpdict['docuri'].strip())>1:
@@ -151,9 +152,9 @@ class Notifications:
 
 				ddict={'fromaddr':tmpfromaddr, 'to':[{'z':tmpdict['toaddress'],'a':tmpdict['amount'],'m':memotxt }]	} 
 				table={}
-				table['queue_waiting']=[localdb.set_que_waiting('send',jsonstr=json.dumps(ddict) ) ]
-				idb=localdb.DB(self.db)
-				idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
+				table['queue_waiting']=[global_db.set_que_waiting('send',jsonstr=json.dumps(ddict) ) ]
+				# idb=localdb.DB(self.db)
+				global_db.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 				
 				# 1. send tx
 				# 2. update notifications closed and opname
@@ -195,7 +196,7 @@ class Notifications:
 	def update_list(self):
 	
 		self.grid_notif=[]
-		idb=localdb.DB(self.db)
+		# idb=localdb.DB(self.db)
 		
 		ff=self.filter_table.cellWidget(0,1).currentText() # get_value('category')
 		wwhere={}
@@ -204,7 +205,7 @@ class Notifications:
 		else:
 			wwhere ={'closed':['=',"'True'"]}
 		
-		task_done=idb.select('notifications', ['uid','datetime' ,'opname' ,'details' ,'status' ,'closed','orig_json'],where=wwhere,orderby=[{'uid':'desc'}])
+		task_done=global_db.select('notifications', ['uid','datetime' ,'opname' ,'details' ,'status' ,'closed','orig_json'],where=wwhere,orderby=[{'uid':'desc'}])
 		# print('task done',task_done)
 		for ij,rr in enumerate(task_done):
 		
