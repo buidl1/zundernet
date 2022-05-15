@@ -5,12 +5,13 @@ import os
 # import datetime
 import json
 import time
-import modules.localdb as localdb
+# import modules.localdb as localdb
 import modules.app_fun as app_fun
 
 import modules.aes as aes
 import traceback
 import modules.gui as gui
+global global_db
 
 class Msg(gui.QObject):
 	refreshChannels= gui.Signal()
@@ -34,7 +35,7 @@ class Msg(gui.QObject):
 			# print('len(fsign)==0')
 			return -1,''
 		
-		idb=localdb.DB(self.db)
+		# idb=localdb.DB(self.db)
 		cry=aes.Crypto(224)
 		
 		sign1=cry.utf8_1b2hash(fsign['sign1'])
@@ -46,7 +47,7 @@ class Msg(gui.QObject):
 			sign2_n=fsign['sign2_n']
 			
 		# print('\n\nentering sign',sign1_n,sign1)
-		ss=idb.select('in_signatures', ['hex_sign','n','uid','addr_from_book'],{'n':['>', sign1_n] },orderby=[{'n':'asc'}]) #
+		ss=global_db.select('in_signatures', ['hex_sign','n','uid','addr_from_book'],{'n':['>', sign1_n] },orderby=[{'n':'asc'}]) #
 		# print('searching sign in ',ss)
 		
 		n_init=sign1_n
@@ -81,7 +82,7 @@ class Msg(gui.QObject):
 				break
 			tmphash=''
 			
-		tuid=idb.select('in_signatures',['uid' ], {'hex_sign':['=',"'"+sign1+"'"],'n':['=',sign1_n]}   ) #
+		tuid=global_db.select('in_signatures',['uid' ], {'hex_sign':['=',"'"+sign1+"'"],'n':['=',sign1_n]}   ) #
 		# print('#match_sign found addr_from_book',addr_from_book)
 		
 		if len(tuid)>0: # this should be new hash - should be no other before like this one - if other detected - return 
@@ -104,9 +105,9 @@ class Msg(gui.QObject):
 				# print('new sender addr_from_book',addr_from_book)
 				table['in_signatures'][0]['addr_from_book']=addr_from_book
 				
-			idb.insert(table,insert_arr)
+			global_db.insert(table,insert_arr)
 			# print('#match_sign new sender addr_from_book',addr_from_book)
-			tuid=idb.select('in_signatures',['uid','addr_from_book'], {'hex_sign':['=',"'"+sign1+"'"],'n':['=',sign1_n]}   ) #getting the new uid 
+			tuid=global_db.select('in_signatures',['uid','addr_from_book'], {'hex_sign':['=',"'"+sign1+"'"],'n':['=',sign1_n]}   ) #getting the new uid 
 			new_uid=tuid[0][0]
 			# print('new uid',new_uid)
 			# if tuid[0][1]!=None:
@@ -120,25 +121,25 @@ class Msg(gui.QObject):
 			# print('#match_sign update addr_from_book',addr_from_book)
 				
 			table['in_signatures']=[{'hex_sign':sign1,'n':sign1_n, 'addr_from_book':addr_from_book }]
-			idb.update(table,['hex_sign','n','addr_from_book'   ],{'hex_sign':['=',"'"+tmphash+"'"],'n':['=',n_init]})
+			global_db.update(table,['hex_sign','n','addr_from_book'   ],{'hex_sign':['=',"'"+tmphash+"'"],'n':['=',n_init]})
 			
 		# print('#match_sign in_signatures',idb.select('in_signatures',[ ]  ),'sign2_n',sign2_n)	
 		
 		if sign2_n>-1: # if exchanging signature to new one 
 			# print('in if sign2_n>-1')
-			cursign=idb.select('in_signatures', ['uid','addr_from_book' ],{'hex_sign':['=', "'"+sign1+"'"], 'n':['=', sign1_n] } ) #
+			cursign=global_db.select('in_signatures', ['uid','addr_from_book' ],{'hex_sign':['=', "'"+sign1+"'"], 'n':['=', sign1_n] } ) #
 			tmpaddr=cursign[0][1]
 			tmpuid=cursign[0][0]
 			
 			table={}
 			table['in_signatures']=[{'hex_sign':sign2,'n':sign2_n}]
 			# print('in inserting')
-			idb.insert(table,['hex_sign','n'])
+			global_db.insert(table,['hex_sign','n'])
 			
 			table={} 
 			table['in_signatures']=[{'uid':tmpuid,'addr_from_book':tmpaddr }]
 			# print('updating')
-			idb.update(table,['uid','addr_from_book' ],{'hex_sign':['=',"'"+sign2+"'"],'n':['=',sign2_n] })
+			global_db.update(table,['uid','addr_from_book' ],{'hex_sign':['=',"'"+sign2+"'"],'n':['=',sign2_n] })
 			
 			# addr_from_book=tmpaddr # not needed - already done in the loop
 		# print('retugning return new_uid,addr_from_book ',new_uid,addr_from_book )
@@ -225,7 +226,7 @@ class Msg(gui.QObject):
 			return got_bad_char, []
 			
 		msg_parts=self.get_msg_parts(mm)
-		tmpsignature=localdb.get_addr_to_hash(addr)
+		tmpsignature=global_db.get_addr_to_hash(addr)
 		
 		if msg_parts[-1][1]+len(tmpsignature)<513:
 			msg_parts[-1]=[msg_parts[-1][0]+tmpsignature , msg_parts[-1][1]+len(tmpsignature) ]
@@ -259,7 +260,7 @@ class Msg(gui.QObject):
 	
 	def proc_inout(self): # goal - set addr_ext and in_sign_uid for incoming msg removed ,'addr_to'
 	
-		debug_msg=False
+		debug_msg= False
 	
 		if self.update_in_progress:
 			# print('already processing msgs - check next time')
@@ -267,9 +268,9 @@ class Msg(gui.QObject):
 			
 		self.update_in_progress=True
 	
-		idb=localdb.DB(self.db)
+		# idb=localdb.DB(self.db)
 		
-		mio=idb.select('msgs_inout',['type','addr_ext','date_time','msg', 'in_sign_uid','uid','tx_status','txid','is_channel','addr_to'],{'proc_json':['=',"'False'"]},orderby=[{'date_time':'asc'}]) #
+		mio=global_db.select('msgs_inout',['type','addr_ext','date_time','msg', 'in_sign_uid','uid','tx_status','txid','is_channel','addr_to'],{'proc_json':['=',"'False'"]},orderby=[{'date_time':'asc'}]) #
 		if debug_msg:
 			print('all msgs to processing msg \n\n',mio,'\n\n')	
 		
@@ -280,12 +281,12 @@ class Msg(gui.QObject):
 			
 			
 		queue_table={}
-		queue_table['queue_waiting']=[localdb.set_que_waiting(command='process msgs' )] #,jsonstr=json.dumps({'left':'0 of N'})
+		queue_table['queue_waiting']=[global_db.set_que_waiting(command='process msgs' )] #,jsonstr=json.dumps({'left':'0 of N'})
 		queue_table['queue_waiting'][0]['status']='processing\n'+str(mm_count)+' msgs'
 		queue_table['queue_waiting'][0]["type"]='auto'
 		queue_id=queue_table['queue_waiting'][0]['id']
 		
-		idb.insert(queue_table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
+		global_db.insert(queue_table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 		self.sending_signal.emit(['cmd_queue'])	
 		# print('queue_table',queue_table)
 		# time.sleep(0.3)
@@ -306,7 +307,7 @@ class Msg(gui.QObject):
 			if (iind+1)%max([20,int(mm_count/100) ])==0:
 				working_on_tx='msgs done: '+str((iind+1))+'/' +str(mm_count) 
 				# print('working_on_msg',working_on_tx)
-				idb.update( {'queue_waiting':[{'status':'processing\n'+working_on_tx }]} ,['status'],{'id':[ '=',queue_id ]})
+				global_db.update( {'queue_waiting':[{'status':'processing\n'+working_on_tx }]} ,['status'],{'id':[ '=',queue_id ]})
 				self.sending_signal.emit(['cmd_queue'])
 				# time.sleep(0.1)
 		
@@ -330,7 +331,7 @@ class Msg(gui.QObject):
 						
 							# ensure there is channel to update or it is init insert?
 							# and it is not related to current but historical entry!
-							init_ch_id=idb.select_min_val( 'msgs_inout','uid',where={'is_channel':['=',"'True'"] , 'addr_to': ['=',"'"+mm[9]+"'"],  'type': ['=',"'in'"]  } )  														
+							init_ch_id=global_db.select_min_val( 'msgs_inout','uid',where={'is_channel':['=',"'True'"] , 'addr_to': ['=',"'"+mm[9]+"'"],  'type': ['=',"'in'"]  } )  														
 							
 							if len(init_ch_id)>0 and init_ch_id[0][0]!=mm[5]:# and it is not related to current but historical entry!																								 
 								tmp_channel_update=True
@@ -361,7 +362,7 @@ class Msg(gui.QObject):
 			else:
 				if debug_msg: print('NOT CHANNEL ' )
 				# print('check if msg is reg msg to channel to not write into regular msgs ?')
-				test_addr=idb.select('channels',['address'], {'address':['=',"'"+mm[9]+"'"]}  ) #
+				test_addr=global_db.select('channels',['address'], {'address':['=',"'"+mm[9]+"'"]}  ) #
 				
 				if len(test_addr)>0:
 					if test_addr[0][0]==mm[9]:
@@ -379,7 +380,7 @@ class Msg(gui.QObject):
 			if mm[0]=='out': 
 				if debug_msg: print('outgoing msg\n',mm) 
 				table={'msgs_inout':[{'proc_json':'True','msg': tmpmsg}]} 
-				idb.update(table,['proc_json','msg' ],{'uid':['=',mm[5]]})
+				global_db.update(table,['proc_json','msg' ],{'uid':['=',mm[5]]})
 				
 			elif mm[0]=='in' :
 				if debug_msg:  print('incoming msg\n',mm)
@@ -401,7 +402,7 @@ class Msg(gui.QObject):
 					# init_ch_id=idb.select_min_val( 'msgs_inout','uid',where={'is_channel':['=',"'True'"] , 'addr_to': ['=',"'"+mm[9]+"'"],  'type': ['=',"'in'"]  } ) # find first id for the channel
 					
 					if True: #tmp_channel_update: #len(init_ch_id)>0:
-						in_sign_uid=idb.select('msgs_inout',[ 'in_sign_uid' ],{'uid':['=',init_ch_id[0][0] ]} ) #
+						in_sign_uid=global_db.select('msgs_inout',[ 'in_sign_uid' ],{'uid':['=',init_ch_id[0][0] ]} ) #
 						
 						# BUG? when channel recognized first time uid =-2 before updated ... 
 						# additional condition? first msg in channel ?
@@ -410,13 +411,13 @@ class Msg(gui.QObject):
 							tmp_str['channel_name']=tmp_str['channel_name']+'-'+mm[9][3:6]
 							table={'channels':[{ 'creator':tmp_str['channel_owner'], 'channel_name':tmp_str['channel_name'], 'channel_intro':tmp_str['channel_intro'] , 'channel_type':tmp_str['channel_type']  }]}	
 							# print('updating channel  ',table) 
-							idb.update(table,[ 'creator','channel_name','channel_intro' , 'channel_type' ],{'address':['=',"'"+mm[9]+"'"]})  
+							global_db.update(table,[ 'creator','channel_name','channel_intro' , 'channel_type' ],{'address':['=',"'"+mm[9]+"'"]})  
 							# print('updated?',idb.select('channels',[  ], {'address':['=',"'"+mm[9]+"'"]} ) )
 							
 							table={}
 							table['addr_book']=[{'Category':'Channel: '+tmp_str['channel_type'],'Alias': tmp_str['channel_name'] }]  
 							# print(' addr book',table) 
-							idb.update(table,[ 'Category','Alias'  ],{'Address':['=',"'"+mm[9]+"'"]})
+							global_db.update(table,[ 'Category','Alias'  ],{'Address':['=',"'"+mm[9]+"'"]})
 							
 							# refresh   addr book view
 							self.refreshAddrBook.emit()	
@@ -449,7 +450,7 @@ class Msg(gui.QObject):
 						if debug_msg:   print("addr_from_book!=''")
 						addr_ext=addr_from_book
 						
-						tmpalias=idb.select('addr_book',['Alias'] , {'Address':['=',"'"+addr_from_book+"'"] } )
+						tmpalias=global_db.select('addr_book',['Alias'] , {'Address':['=',"'"+addr_from_book+"'"] } )
 						
 						if tmp_sender!='': 
 							tmpalias=tmp_sender
@@ -470,27 +471,27 @@ class Msg(gui.QObject):
 					# one more condition - addr to/from ... 
 					# if addr t ois self do not change
 					# print('update(table_h')
-					idb.update(table_h,['from_str' ], {'txid':['=',"'"+mm[7]+"'"],'Type':[' not in ',"('in/change','out')"]} )
+					global_db.update(table_h,['from_str' ], {'txid':['=',"'"+mm[7]+"'"],'Type':[' not in ',"('in/change','out')"]} )
 					refrsh_hist+=1
 					# print('update history ok')
 					
 					
 					# print("select('notifications'")
-					orig_json=idb.select('notifications',['orig_json'],{'details':['=',"'"+mm[7]+"'"]})
+					orig_json=global_db.select('notifications',['orig_json'],{'details':['=',"'"+mm[7]+"'"]})
 					# print(orig_json)
 					if len(orig_json)>0:
 						table_n={}
 						uidtmp='From '+tmpalias+';uid='+str(uid)+': '+orig_json[0][0]
 						table_n['notifications']=[{'orig_json':uidtmp }]
 						# print("update(table_n")
-						idb.update(table_n,['orig_json' ],{'details':['=',"'"+mm[7]+"'"]})
+						global_db.update(table_n,['orig_json' ],{'details':['=',"'"+mm[7]+"'"]})
 						refrsh_notif+=1
 					
 					if tmpmsg=='' :
 						if len(orig_json)>0: 
 							tmpmsg='Received '+orig_json[0][0]
 						else : 
-							tmp_amount=idb.select('tx_history',['amount' ],{'txid':['=',"'"+mm[7]+"'"], 'Type':[' like ',"'in%'"] } ) 
+							tmp_amount=global_db.select('tx_history',['amount' ],{'txid':['=',"'"+mm[7]+"'"], 'Type':[' like ',"'in%'"] } ) 
 							if len(tmp_amount)>0:
 								tmpmsg='Received '+str(tmp_amount[0][0])
 						
@@ -505,12 +506,14 @@ class Msg(gui.QObject):
 			
 					
 				table={'msgs_inout':[{'type':tmptype,'proc_json':'True', 'in_sign_uid':uid, 'addr_ext':addr_ext,'msg':tmpmsg,'is_channel':mm[8]}]} #,'is_channel':"False"
+				
+				# print('final msg update\n\t',uid,addr_ext,'\n\t',tmpmsg)
 				# if is_channel:
 					# table['msgs_inout'][0]['is_channel']='True'
 				
 				# correcting channel type optional
 				if debug_msg:    print("\n\nupdating processed mm\n",table)
-				idb.update(table,['type','proc_json', 'in_sign_uid','addr_ext','msg','is_channel' ],{'uid':['=',mm[5]]})
+				global_db.update(table,['type','proc_json', 'in_sign_uid','addr_ext','msg','is_channel' ],{'uid':['=',mm[5]]})
 			# self.refresh_msgs_signal.emit()	
 		if refrsh_chnl>0:
 			self.refreshChannels.emit()	
@@ -519,7 +522,7 @@ class Msg(gui.QObject):
 		if refrsh_notif>0: 
 			self.refreshNotifications.emit()	
 			
-		idb.update( {'queue_waiting':[{'status':'processing\nmsgs done'}]} ,['status'],{'id':[ '=',queue_id ]})
+		global_db.update( {'queue_waiting':[{'status':'processing\nmsgs done'}]} ,['status'],{'id':[ '=',queue_id ]})
 		self.sending_signal.emit(['cmd_queue'])
 		
 		self.update_in_progress=False
@@ -552,13 +555,13 @@ class Msg(gui.QObject):
 		
 		# check signature exist for the addr - if not create
 		mysignature=''
-		idb=localdb.DB(self.db)
+		# idb=localdb.DB(self.db)
 		 
 		# db_sign=idb.select( 'channel_signatures', [ 'signature' ], {'addr':['=',  "'"+tmpaddr+"'" ] } )
-		db_sign=idb.select_last_val('channel_signatures','signature')
+		db_sign=global_db.select_last_val('channel_signatures','signature')
 		if db_sign==None:
 			# db_sign
-			tmp=idb.select_max_val( 'channel_signatures','signature')
+			tmp=global_db.select_max_val( 'channel_signatures','signature')
 			if len(tmp)>0:
 				if tmp[0][0]!=None:
 					db_sign=tmp[0][0]
@@ -588,7 +591,7 @@ class Msg(gui.QObject):
 		msg_table=gui.Table(None,{'dim':[len(msg_grid),3], 'toContent':1})
 		msg_table.updateTable(msg_grid)
 		
-		last_addr=localdb.get_last_addr_from("'last_msg_from_addr'")
+		last_addr=global_db.get_last_addr_from("'last_msg_from_addr'")
 
 		if last_addr not in ['','...']:
 			msg_table.cellWidget(0,1).setToolTip(last_addr) #.set_textvariable( 'ownaddr',last_addr)
@@ -610,7 +613,7 @@ class Msg(gui.QObject):
 			if froma=='':
 				return
 			
-			idb=localdb.DB(self.db)
+			# idb=localdb.DB(self.db)
 			
 			tmpsender=''
 			if msg_table.cellWidget(3,1)!=None: 
@@ -619,7 +622,7 @@ class Msg(gui.QObject):
 				tmpsender=msg_table.item(3,1).text() 
 			
 			table={'channel_signatures':[{ 'signature':tmpsender}]} 
-			idb.upsert( table, [ 'signature' ] )
+			global_db.upsert( table, [ 'signature' ] )
 			msg+='\nFrom:'+tmpsender
 			
 			got_bad_char, msg_arr=self.prep_msg(msg,to)
@@ -632,14 +635,14 @@ class Msg(gui.QObject):
 				ddict['to'].append({'z':to,'a':0.0001,'m':mm})
 				
 			table={}
-			table['queue_waiting']=[localdb.set_que_waiting('send',jsonstr=json.dumps(ddict) ) ]
+			table['queue_waiting']=[global_db.set_que_waiting('send',jsonstr=json.dumps(ddict) ) ]
 			table['queue_waiting'][0]['type']='message'
-			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
+			global_db.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 			
 			
 			
 			# self.set_last_addr_from( froma)
-			localdb.set_last_addr_from( froma,"'last_msg_from_addr'")
+			global_db.set_last_addr_from( froma,"'last_msg_from_addr'")
 			msg_table.parent().close()
 			
 		msg_table.cellWidget(3,2).set_fun(True,send) #set_cmd('send',[ ], send)
@@ -753,16 +756,16 @@ class Msg(gui.QObject):
 			return
 		
 		 
-		idb=localdb.DB(self.db)
-		if len(idb.select('msgs_inout',['uid','in_sign_uid','addr_ext'],{'addr_ext':['=', "'"+uid+"'"],'type':['=',"'in'"] }))==0:
+		# idb=localdb.DB(self.db)
+		if len(global_db.select('msgs_inout',['uid','in_sign_uid','addr_ext'],{'addr_ext':['=', "'"+uid+"'"],'type':['=',"'in'"] }))==0:
 			self.warning_info('Nothing to drop!','There is no incoming messages to unassign from this thread.')
 			return
 			
 		in_sign_upd={'in_signatures':[{'addr_from_book':''}]}
-		idb.update(in_sign_upd,['addr_from_book'],{'addr_from_book':['=',  "'"+uid+"'" ] })
+		global_db.update(in_sign_upd,['addr_from_book'],{'addr_from_book':['=',  "'"+uid+"'" ] })
 		
 		msg_upd={'msgs_inout':[{'addr_ext':''}]}
-		idb.update(msg_upd,['addr_ext'],where={'addr_ext':['=',"'"+uid+"'"],'type':['=',"'in'"]} )
+		global_db.update(msg_upd,['addr_ext'],where={'addr_ext':['=',"'"+uid+"'"],'type':['=',"'in'"]} )
 				
 		self.proc_inout()
 		self.update_tread_frame()
@@ -914,7 +917,7 @@ class Msg(gui.QObject):
 		# print('\n\n\n\n update_threads msg')
 		
 		
-		idb=localdb.DB(self.db)
+		# idb=localdb.DB(self.db)
 		
 		
 		# mio=idb.select('msgs_inout',['type','addr_ext','date_time','msg', 'in_sign_uid','uid','tx_status','txid','is_channel'],{'date_time':['>=',"'"+app_fun.today_add_days(-30)+"'"],'proc_json':['=',"'True'"]},orderby=[{'date_time':'asc'}]) #
@@ -940,7 +943,7 @@ class Msg(gui.QObject):
 		# when receiving from unknown? should stay unknown until connected ?
 		# in this approach  is ok - sending to , it's me so it is outgoing!
 			
-		adr_date=idb.select_max_val( 'msgs_inout',['in_sign_uid','date_time' ],where=wwhere,groupby=['addr_ext'])
+		adr_date=global_db.select_max_val( 'msgs_inout',['in_sign_uid','date_time' ],where=wwhere,groupby=['addr_ext'])
 		if hasattr(self,"adr_date") and self.adr_date==adr_date:
 			return 0
 			
@@ -961,7 +964,7 @@ class Msg(gui.QObject):
 			tmpuid= str(ad[0])
 			if ad[0]!=None and ad[0]!='': # all out + some in
 				# print('ad note empty',ad[0])
-				alias_from_book=idb.select('addr_book', [ 'Alias'],{'Address':['=',  "'"+ad[0]+"'" ] } ) #
+				alias_from_book=global_db.select('addr_book', [ 'Alias'],{'Address':['=',  "'"+ad[0]+"'" ] } ) #
 				# print('alias_from_book',alias_from_book)
 				if len(alias_from_book)>0: 
 					if alias_from_book[0][0]!=None and alias_from_book[0][0]!='': 
@@ -1024,7 +1027,7 @@ class Msg(gui.QObject):
 	
 
 	def update_list(self ):
-		idb=localdb.DB(self.db)
+		# idb=localdb.DB(self.db)
 		msg_filter=self.filter_table.cellWidget(0,3).currentText() #get_value('msg')
 		llimit=9999
 		
@@ -1053,7 +1056,7 @@ class Msg(gui.QObject):
 				wwhere={'proc_json':['=',"'True'"],'addr_ext':['=',"'"+threads_aa[k][0]+"'"], 'in_sign_uid':['>',-2],'is_channel':[['=',"'False'"],[' is ',"null"]] }
 				
 			# print('wwhere',wwhere)
-			tmp_msg=idb.select('msgs_inout', ['type','msg','date_time','uid','in_sign_uid','is_channel' ],where=wwhere, orderby=[ {'date_time':'desc'}], limit=llimit)
+			tmp_msg=global_db.select('msgs_inout', ['type','msg','date_time','uid','in_sign_uid','is_channel' ],where=wwhere, orderby=[ {'date_time':'desc'}], limit=llimit)
 			# print('tmp_msg',tmp_msg)
 			msg_flow=[]
 			
@@ -1078,31 +1081,31 @@ class Msg(gui.QObject):
 	def selecting_addr_from_book_set_and_destroy(self,addr,uid,*evargs ): # here also get signature!,frame_to_destroy
 		
 		if addr!='':
-			idb=localdb.DB(self.db)
+			# idb=localdb.DB(self.db)
 
 			if 'unknown' in uid:
 				uid=uid.replace('edit_unknown_','')
 				msg_upd={'msgs_inout':[{'addr_ext':addr}]}
 
-				idb.update(msg_upd,['addr_ext'],where={'uid':['=', uid ]} )
+				global_db.update(msg_upd,['addr_ext'],where={'uid':['=', uid ]} )
 			
 			elif 'uid_' in uid: # first assignments of addr 
 				uid=uid.replace('uid_','')
 				in_sign_upd={'in_signatures':[{'addr_from_book':addr}]}
-				idb.update(in_sign_upd,['addr_from_book'],{'uid':['=',  uid ] })
+				global_db.update(in_sign_upd,['addr_from_book'],{'uid':['=',  uid ] })
 				
 				msg_upd={'msgs_inout':[{'addr_ext':addr}]}
 
-				idb.update(msg_upd,['addr_ext'],where={'in_sign_uid':['=', uid ]} )
+				global_db.update(msg_upd,['addr_ext'],where={'in_sign_uid':['=', uid ]} )
 				
 			elif addr!=uid:
 				
 				in_sign_upd={'in_signatures':[{'addr_from_book':addr}]}
-				idb.update(in_sign_upd,['addr_from_book'],{'addr_from_book':['=', "'"+uid+"'"] })
+				global_db.update(in_sign_upd,['addr_from_book'],{'addr_from_book':['=', "'"+uid+"'"] })
 				
 				msg_upd={'msgs_inout':[{'addr_ext':addr}]}
 
-				idb.update(msg_upd,['addr_ext'],where={'addr_ext':['=',"'"+uid+"'"],'type':['=',"'in'"]} )
+				global_db.update(msg_upd,['addr_ext'],where={'addr_ext':['=',"'"+uid+"'"],'type':['=',"'in'"]} )
 				
 			self.proc_inout()
 			self.update_tread_frame()
