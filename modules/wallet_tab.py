@@ -6,16 +6,20 @@ import time
 import json
 
 import modules.deamon as deamon
-import modules.localdb as localdb
+# import modules.localdb as localdb
+import modules.tasks_history as tasks_history
+import modules.tx_history as tx_history
+import modules.notifications as notifications
 
-from modules.tasks_history import TasksHistory
-from modules.tx_history import TransactionsHistory
+# from modules.tasks_history import TasksHistory
+# from modules.tx_history import TransactionsHistory
 # from modules.frame_settings import Settings
-from modules.notifications import Notifications
+# from modules.notifications import Notifications
 import modules.addr_book as addr_book
 
 import modules.gui as gui
 import traceback
+global global_db
 
 class Worker(gui.QObject):
 	finished = gui.Signal()
@@ -59,7 +63,11 @@ class Worker(gui.QObject):
 						elif cmd['cmd']=='start_deamon':
 							# print('why start?',cmd)
 							# self.dmn.start_stop_enable.emit(False)
+							# print('start_deamon')
+							self.block_closing=True
 							self.dmn.start_deamon(cmd['addrescan'] )
+							self.block_closing=False
+							# print(' deamon started')
 				except : #Queue.Empty:
 					print('Queue exception bug?')
 					traceback.print_exc()
@@ -69,27 +77,31 @@ class Worker(gui.QObject):
 			vemit=[]
 			if self.dmn.started:
 				# print('worker update status')
+				
+				# actually should only block when encryption or wallet command running / waiting if finish
+				self.block_closing=True
 				vemit=self.dmn.update_status(xx)
 				# print('after worker update status')
 				vemit.append('worker_loop')
 				vemit.append(xx)
 				# print(63,vemit)
 				if 'CONNECTED' not in vemit:
-					self.block_closing=True
+					
 					print('connection problem?? vemit',vemit)
-				else:
-					self.block_closing=False
+				# else:
+				self.block_closing=False
 					# if xx<5: self.dmn.start_stop_enable.emit(True)
 			else:
 				vemit=['cmd_queue','worker_loop',xx]
 				self.block_closing=False
 				
 			
-			# print('before vemit',vemit)
 			self.refreshed.emit(vemit)
 			time.sleep(0.3) # change to 0.3
 			xx+=1
 			
+		print('worker finished' )
+		self.block_closing=False
 		self.finished.emit()
 
 
@@ -265,7 +277,7 @@ class WalletTab:
 		# update_addr_cat_map(self)
 		
 	
-	def __init__(self,is_deamon_started,queue_start_stop,wds  ): #autostart
+	def __init__(self,is_deamon_started,queue_start_stop,wds, new_root, top_title  ): #autostart
 	
 		self.locked=False
 		self.update_status_locked=False
@@ -285,7 +297,7 @@ class WalletTab:
 		pTabCornerWidget.setLayout(pHLayout)
 		self.tab_corner_widget=gui.Label(pTabCornerWidget,'Loops [0/0]',transparent=False)
 		# self.tab_corner_widget.setMinimumHeight(32)
-		self.tab_corner_widget.setStyleSheet("QLabel {font-size:9px;color:#aaa}")#;margin-top:-50px;padding-top:-50px;
+		self.tab_corner_widget.setStyleSheet("QLabel {font-size:"+gui.FONT_SIZE_STR+"px;color:#aaa}")#;margin-top:-50px;padding-top:-50px;
 		pHLayout.addWidget(self.tab_corner_widget)
 		self.tabs1.setCornerWidget(pTabCornerWidget, gui.Qt.TopRightCorner)
 		
@@ -314,7 +326,7 @@ class WalletTab:
 		if is_deamon_started :
 			self.bstartstop.setText('Stop blockchain')
 			self.bstartstop.setEnabled(False) #configure(state='disabled')
-			# print('is_deamon_started',is_deamon_started)
+			# print('is_deamon_started bstartstop.setEnabled(False)' )
 		else:
 			self.bstartstop.setText('Start blockchain')
 
@@ -330,15 +342,17 @@ class WalletTab:
 				queue_start_stop.put({'cmd':'stop_deamon'})
 				# print('after que put')				
 			else:
-				elem.setText('Stop blockchain')	
-				elem.setEnabled(False)			 
+					 
 				def restart(addrescan):
 					# print(308,addrescan)
+					elem.setText('Stop blockchain')	
+					elem.setEnabled(False)		
 					if addrescan=='No':
 						addrescan=False
 					else:
 						addrescan=True
 					
+					new_root.setWindowTitle("zUndernet | Wallet file: "+top_title)
 					queue_start_stop.put({'cmd':'start_deamon','addrescan':addrescan})
 					
 				gui.CmdYesNoDialog(elem,"Rescan wallet?",['No','Yes'],restart)
@@ -415,10 +429,10 @@ class WalletTab:
 			 
 			vv=btn.currentText()
 			if len(evnt)==0 or evnt[-1]!='init':
-				idb=localdb.DB(self.wds.db)
+				# idb=localdb.DB(self.wds.db)
 				table={}
 				table['wallet_display']=[{'option':opt, 'value':vv  }]
-				idb.upsert(table,['option','value'],{'option':['=',"'"+opt+"'"]})
+				global_db.upsert(table,['option','value'],{'option':['=',"'"+opt+"'"]})
 				
 				self.summary_options[opt]=vv
 			while self.wds.is_locked():
@@ -470,17 +484,23 @@ class WalletTab:
 	
 	
 	def init_additional_tabs(self,addr_book,init_app):
+	
+		tasks_history.global_db=init_app.db_main 
+		tx_history.global_db=init_app.db_main 
+		notifications.global_db=init_app.db_main 
 		
-		self.notif=Notifications(addr_book)
+		
+		
+		self.notif=notifications.Notifications(addr_book)
 		init_app.notif_grid=self.notif.grid_notif # pointer to object for next init ?
 		
 		self.tabs1.insertTab(tab_dict={'Notifications': self.notif.parent_frame}  )
 		
-		self.txhi=TransactionsHistory(self.wds.db)
+		self.txhi=tx_history.TransactionsHistory(self.wds.db)
 		init_app.tx_grid=self.txhi.grid_settings # pointer to object for next init ?
 		self.tabs1.insertTab(tab_dict={'TX History': self.txhi.parent_frame}  )
 		
-		self.tahi=TasksHistory(self.wds.db)
+		self.tahi=tasks_history.TasksHistory(self.wds.db)
 		init_app.task_grid=self.tahi.grid_settings # pointer to object for next init ?
 		init_app.distinct_task_commands=self.tahi.distinct_task_commands # pointer to object for next init ?
 		self.tabs1.insertTab(tab_dict={'Tasks History': self.tahi.parent_frame}  )
