@@ -10,13 +10,14 @@ import subprocess
 import json
 import modules.app_fun as app_fun
 import modules.wallet_api as wallet_api
-import modules.localdb as localdb
+# import modules.localdb as localdb
 import modules.aes as aes
 
 import modules.gui as gui
 import traceback
 	
-
+global global_db
+global global_db_init
 	
 	
 class DeamonInit(gui.QObject):
@@ -33,7 +34,7 @@ class DeamonInit(gui.QObject):
 	def update_wallet(self,*args): # syntetic args passed auto by elem
 		
 		if self.started:
-			idb=localdb.DB(self.db)
+			# idb=localdb.DB(self.db)
 			# print('refreshing wallet')
 			utxo_change=self.the_wallet.refresh_wallet()
 			self.update_chain_status()
@@ -48,7 +49,7 @@ class DeamonInit(gui.QObject):
 			# print('update_wallet',47)
 			table={}
 			table['jsons']=[{'json_name':"display_wallet", 'json_content':json.dumps(disp_dict), 'last_update_date_time':date_str}]
-			idb.upsert(table,['json_name','json_content','last_update_date_time'],{'json_name':['=',"'display_wallet'"]})
+			global_db.upsert(table,['json_name','json_content','last_update_date_time'],{'json_name':['=',"'display_wallet'"]})
 			
 			if utxo_change>0 or 'channels' in self.the_wallet.to_refresh:
 				self.sending_signal.emit(['notif_update','tx_history_update' ]) #self.sending_signal.emit(['wallet'])
@@ -56,8 +57,8 @@ class DeamonInit(gui.QObject):
 				
 				
 	def init_clear_queue(self):	
-		idb=localdb.DB(self.db)
-		waiting=idb.select('queue_waiting', ["type","wait_seconds","created_time","command","json","id","status"],{'command':['<>',"'automerge'"]}) # , 'command':['<>',"'process tx'"]
+		# idb=localdb.DB(self.db)
+		waiting=global_db.select('queue_waiting', ["type","wait_seconds","created_time","command","json","id","status"],{'command':['<>',"'automerge'"]}) # , 'command':['<>',"'process tx'"]
 		
 		for ii,rr in enumerate(waiting):
 
@@ -66,18 +67,19 @@ class DeamonInit(gui.QObject):
 				if rr[3]!='process tx':
 					table={}
 					table['queue_done']=[{"type":rr[0],"wait_seconds":rr[1],"created_time":rr[2],"command":rr[3],"json":rr[4],"id":rr[5],"result":'old - forced failed on app init','end_time':app_fun.now_to_str(False)}]
-					idb.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
+					global_db.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
 				
 				
-				idb.delete_where('queue_waiting',{'id':['=',rr[5] ]})
+				global_db.delete_where('queue_waiting',{'id':['=',rr[5] ]})
 
 				
 	@gui.Slot()
 	def process_queue(self):
 	
 		# when starting process - lock stop blockchain button return
-		 
-		idb=localdb.DB(self.db)
+		
+		
+		# idb=localdb.DB(self.db)
 		 
 		if not hasattr(self,'counter_15m'):
 			self.counter_15m=datetime.datetime.now()
@@ -85,15 +87,15 @@ class DeamonInit(gui.QObject):
 			table={}
 			table['queue_waiting']=[{"created_time":app_fun.now_to_str(False)}]
 			 
-			idb.update( table,["created_time"],{'command':[ '=','"automerge"' ]})
+			global_db.update( table,["created_time"],{'command':[ '=','"automerge"' ]})
 		 
 		history_notif_count=self.update_notarization()
 		 
-		waiting=idb.select('queue_waiting', ["type","wait_seconds","created_time","command","json","id","status"])
+		waiting=global_db.select('queue_waiting', ["type","wait_seconds","created_time","command","json","id","status"])
 		# print('waiting\n',waiting)
 		
 		if len(waiting)>0:
-			self.start_stop_enable.emit(False)
+			# self.start_stop_enable.emit(False)
 			time.sleep(1)
 		else:
 			self.process_queue_iter+=1 
@@ -114,17 +116,17 @@ class DeamonInit(gui.QObject):
 			
 			if rr[6] =='done':
 				
-				task_done=idb.select('queue_done', ['end_time','result'],{'id':['=',rr[5]]})
+				task_done=global_db.select('queue_done', ['end_time','result'],{'id':['=',rr[5]]})
 				
 				if len(task_done)>0:
 					time_since_end=(datetime.datetime.now()-app_fun.datetime_from_str(task_done[0][0]) ).total_seconds()
 					
 					if rr[1]>=900 and time_since_end>=600 or rr[1]<900 and time_since_end>=3*60:
-						idb.delete_where('queue_waiting',{'id':['=',rr[5] ] })
+						global_db.delete_where('queue_waiting',{'id':['=',rr[5] ] })
 				else:
 					table={}
 					table['queue_done']=[{"type":rr[0],"wait_seconds":rr[1],"created_time":rr[2],"command":rr[3],"json":rr[4],"id":rr[5],"result":'unknown','end_time':app_fun.now_to_str(False)}]
-					idb.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
+					global_db.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
 				
 				continue
 			
@@ -138,7 +140,7 @@ class DeamonInit(gui.QObject):
 			if rr[6]=='waiting' and rr[3]!='automerge':
 				table={}
 				table['queue_waiting']=[{'status':'processing'}]
-				idb.update( table,['status'],{'id':[ '=',rr[5] ]})
+				global_db.update( table,['status'],{'id':[ '=',rr[5] ]})
 			
 				self.sending_signal.emit(['cmd_queue'])
 				time.sleep(0.3)
@@ -161,7 +163,7 @@ class DeamonInit(gui.QObject):
 				table={}
 				table['queue_done']=[{"type":rr[0],"wait_seconds":rr[1],"created_time":rr[2],"command":rr[3],"json":rr[4],"id":rr[5],"result":json.dumps(tmpresult),'end_time':app_fun.now_to_str(False)}]
 				# print('inserting')
-				idb.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
+				global_db.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
 				
 				table={}
 				if 'type' in tmpresult :
@@ -169,12 +171,12 @@ class DeamonInit(gui.QObject):
 						table['addr_book']=[{ 'viewkey_verif':1 }]
 						
 						table_vk={'view_keys':[{'address':clean_addr, 'vk':clean_vk }]}
-						idb.upsert(table_vk,['address','vk']) # separate viewkey table - was insert
+						global_db.upsert(table_vk,['address','vk']) # separate viewkey table - was insert
 				else:
 					table['addr_book']=[{ 'viewkey_verif':-1 }]
 					
 				if table!={}:
-					idb.update(table,[  'viewkey_verif'],{'Address':['=',"'"+clean_addr+"'"]}) # update addr book table 
+					global_db.update(table,[  'viewkey_verif'],{'Address':['=',"'"+clean_addr+"'"]}) # update addr book table 
 					self.update_addr_book.emit()
 					count_task_done+=1 
 					self.sending_signal.emit(['task_done','cmd_queue'])
@@ -192,7 +194,7 @@ class DeamonInit(gui.QObject):
 					# print(ii,kk)
 					table={}
 					table['queue_waiting']=[{'status':'processing '+str(ii+1)+'/'+str(ll)}]
-					idb.update( table,['status'],{'id':[ '=',rr[5] ]})
+					global_db.update( table,['status'],{'id':[ '=',rr[5] ]})
 					self.sending_signal.emit(['cmd_queue'])
 					# print(199,tmpresult['address'])
 					tmpresult=self.the_wallet.imp_prv_key( kk )
@@ -201,7 +203,7 @@ class DeamonInit(gui.QObject):
 				table={}
 				table['queue_done']=[{"type":rr[0],"wait_seconds":rr[1],"created_time":rr[2],"command":rr[3],"json":rr[4],"id":rr[5],"result":'new addresses: '+str(added_addr),'end_time':app_fun.now_to_str(False)}]
 				
-				idb.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
+				global_db.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
 				 
 				count_task_done+=1
 				self.sending_signal.emit(['task_done','cmd_queue'])
@@ -214,7 +216,7 @@ class DeamonInit(gui.QObject):
 				table={}
 				table['queue_done']=[{"type":rr[0],"wait_seconds":rr[1],"created_time":rr[2],"command":rr[3],"json":rr[4],"id":rr[5],"result":tmpresult,'end_time':app_fun.now_to_str(False)}]
 				
-				idb.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
+				global_db.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
 				count_task_done+=1
 				
 				table={}
@@ -223,7 +225,7 @@ class DeamonInit(gui.QObject):
 					table['addr_book']=[{ 'addr_verif':-1 }]  #,'viewkey_verif' 
 				else:
 					table['addr_book']=[{ 'addr_verif':1 }]  #,'viewkey_verif' 
-				idb.update(table,[  'addr_verif'],{'Address':['=',"'"+adrvk['addr']+"'"]})
+				global_db.update(table,[  'addr_verif'],{'Address':['=',"'"+adrvk['addr']+"'"]})
 				self.update_addr_book.emit()
 				self.sending_signal.emit(['task_done','cmd_queue'])
 			
@@ -252,12 +254,12 @@ class DeamonInit(gui.QObject):
 						
 						table={'address_category':[{'address':tmpresult, 'category':tmp_cat, 'last_update_date_time':date_str}]}			
 						# print(table)
-						idb.insert(table,['address','category','last_update_date_time']) #,{'address':['=',"'"+tmpresult+"'"]})
+						global_db.insert(table,['address','category','last_update_date_time']) #,{'address':['=',"'"+tmpresult+"'"]})
 					
 					# update msg
 					table={}
 					table['queue_waiting']=[{'status':'processing '+str(nal+1)+'/'+str(addr_count)}]
-					idb.update( table,['status'],{'id':[ '=',rr[5] ]})
+					global_db.update( table,['status'],{'id':[ '=',rr[5] ]})
 					self.sending_signal.emit(['cmd_queue'])
 					# time.sleep(0.01)
 					
@@ -268,7 +270,7 @@ class DeamonInit(gui.QObject):
 				table={}
 				table['queue_done']=[{"type":rr[0],"wait_seconds":rr[1],"created_time":rr[2],"command":rr[3],"json":rr[4],"id":rr[5],"result":tmpresult,'end_time':app_fun.now_to_str(False)}]
 				
-				idb.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
+				global_db.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
 				count_task_done+=1
 				
 				self.msg_signal.emit('New address(es) created','New address(es):\n\n'+'\n'.join(new_addr_list),'')
@@ -291,9 +293,9 @@ class DeamonInit(gui.QObject):
 				elif tmppassword=='random':				
 					# tmppass=cc.rand_password(32)
 					tmppassword=cc.rand_password(32)
-					cc.aes_encrypt_file( json.dumps(tmpresult),path2 ,tmppassword)				
+					cc.aes_encrypt_file( json.dumps(tmpresult) , path2 , tmppassword )				
 				else:
-					cc.write_file(path2 ,json.dumps(tmpresult))
+					cc.write_file( path2 , json.dumps(tmpresult) , gui_copy_progr=gui.copy_progress )
 					tmppassword=''
 				
 				tmptitle='Private keys exported. Private keys exported to\n'+path2
@@ -306,12 +308,12 @@ class DeamonInit(gui.QObject):
 				table={}
 				table['queue_done']=[{"type":rr[0],"wait_seconds":rr[1],"created_time":rr[2],"command":rr[3],"json":rr[4],"id":rr[5],"result":'exported to '+path2,'end_time':app_fun.now_to_str(False)}]
 				
-				idb.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
+				global_db.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
 				count_task_done+=1
 				
 				table={}
 				table['queue_waiting']=[{'status':'done'}]
-				idb.update( table,['status'],{'id':[ '=',rr[5] ]})
+				global_db.update( table,['status'],{'id':[ '=',rr[5] ]})
 				self.sending_signal.emit(['cmd_queue'])
 				if tmppassword=='current':
 				
@@ -353,7 +355,7 @@ class DeamonInit(gui.QObject):
 				table={}
 				table['queue_done']=[{"type":rr[0],"wait_seconds":rr[1],"created_time":rr[2],"command":rr[3],"json":rr[4],"id":rr[5],"result":'exported to '+pto,'end_time':app_fun.now_to_str(False)}]
 				
-				idb.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
+				global_db.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
 				count_task_done+=1
 				time.sleep(1)
 				self.sending_signal.emit(['task_done','cmd_queue'])
@@ -389,7 +391,7 @@ class DeamonInit(gui.QObject):
 						table={}
 						table['queue_done']=[{"type":rr[0],"wait_seconds":rr[1],"created_time":rr[2],"command":rr[3],"json":rr[4],"id":rr[5],"result":tmpresult2,'end_time':app_fun.now_to_str(False)}]
 						
-						idb.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
+						global_db.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
 					
 					
 				total_s=(datetime.datetime.now() - self.counter_15m).total_seconds()
@@ -416,7 +418,7 @@ class DeamonInit(gui.QObject):
 						
 						table={}
 						table['queue_waiting']=[{'status':'waiting 15min\ntill next check',"created_time":app_fun.now_to_str(False)}]
-						idb.update( table,['status',"created_time"],{'id':[ '=',rr[5] ]})
+						global_db.update( table,['status',"created_time"],{'id':[ '=',rr[5] ]})
 					
 						self.sending_signal.emit(['cmd_queue'])
 						
@@ -429,7 +431,7 @@ class DeamonInit(gui.QObject):
 						else:
 							table['queue_waiting']=[{'status':'waiting 15min\ntill next check'} ]
 						
-						idb.update( table,['status'],{'id':[ '=',rr[5] ]})	
+						global_db.update( table,['status'],{'id':[ '=',rr[5] ]})	
 						self.sending_signal.emit(['cmd_queue'])
 					
 			elif rr[3]=='send': # 
@@ -438,13 +440,13 @@ class DeamonInit(gui.QObject):
 					if type(tmpjson)==type({}):
 						tmpjson=json.dumps(tmpjson)
 				
-					idb=localdb.DB(self.db)
+					# idb=localdb.DB(self.db)
 					table={}
 					dt,ts=app_fun.now_to_str(False,ret_timestamp=True)
 					# print('notif details',details,'dt',dt,'json',tmpjson)
 					table['notifications']=[{'opname':'send','datetime':dt,'status':'Failed','details':details,'closed':'False','orig_json':tmpjson,'uid':'auto'}]
 					
-					idb.insert(table,['opname','datetime','status','details', 'closed','orig_json' ,'uid'])
+					global_db.insert(table,['opname','datetime','status','details', 'closed','orig_json' ,'uid'])
 					new_notif_count+=1
 				
 			
@@ -473,7 +475,7 @@ class DeamonInit(gui.QObject):
 					
 					table={}
 					table['queue_waiting']=[{'status':'awaiting_balance'}]
-					idb.update( table,['status'],{'id':[ '=',rr[5] ]}) # 
+					global_db.update( table,['status'],{'id':[ '=',rr[5] ]}) # 
 					self.sending_signal.emit(['cmd_queue'])
 					# time.sleep(1)
 				
@@ -481,7 +483,7 @@ class DeamonInit(gui.QObject):
 				
 					table={}
 					table['queue_waiting']=[{'status':'processing'}]
-					idb.update( table,['status'],{'id':[ '=',rr[5] ]})
+					global_db.update( table,['status'],{'id':[ '=',rr[5] ]})
 					self.sending_signal.emit(['cmd_queue'])
 					# time.sleep(1)
 				
@@ -676,7 +678,7 @@ class DeamonInit(gui.QObject):
 												, 'uid':'auto'
 												 }]
 							
-							idb.insert(table,['Category','Type','status','txid','block','timestamp', 'date_time','from_str','to_str','amount','uid'])
+							global_db.insert(table,['Category','Type','status','txid','block','timestamp', 'date_time','from_str','to_str','amount','uid'])
 							new_tx_history_count+=1
 							# self.tx_history.update_history_frame()
 							
@@ -691,7 +693,7 @@ class DeamonInit(gui.QObject):
 									# if table=={}:
 										# continue
 																	 
-									idb.insert(table,['proc_json','type','addr_ext','txid','tx_status','date_time', 'msg', 'uid','in_sign_uid','addr_to'])
+									global_db.insert(table,['proc_json','type','addr_ext','txid','tx_status','date_time', 'msg', 'uid','in_sign_uid','addr_to'])
 							else: #'message': msg_chnl
 								# print('msg or channe')
 								mmm=['',0,memo_orig[0][2]]
@@ -714,7 +716,7 @@ class DeamonInit(gui.QObject):
 										
 									if table!={}:
 										# print('prep msg deamon 742\n',table)
-										idb.insert(table,['proc_json','type','addr_ext','txid','tx_status','date_time', 'msg', 'uid','in_sign_uid','addr_to','is_channel'])
+										global_db.insert(table,['proc_json','type','addr_ext','txid','tx_status','date_time', 'msg', 'uid','in_sign_uid','addr_to','is_channel'])
 									
 									
 						# todo: see where pre msg is used and ext_addr
@@ -725,17 +727,17 @@ class DeamonInit(gui.QObject):
 							
 						table={}
 						table['queue_done']=[{"type":rr[0],"wait_seconds":rr[1],"created_time":rr[2],"command":rr[3],"json":rr[4],"id":rr[5],"result":tmpres,'end_time':app_fun.now_to_str(False)}]
-						idb.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
+						global_db.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
 
 						for ss in merged_queue_done:
 							table={}
 							table['queue_done']=[{"type":ss[0],"wait_seconds":ss[1],"created_time":ss[2],"command":ss[3],"json":ss[4],"id":ss[5],"result":tmpres,'end_time':app_fun.now_to_str(False)}]
 						
-							idb.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
+							global_db.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
 							
 							table={}
 							table['queue_waiting']=[{'status':'done'}]
-							idb.update( table,['status'],{'id':[ '=',ss[5] ]})
+							global_db.update( table,['status'],{'id':[ '=',ss[5] ]})
 							time.sleep(0.3)
 							self.sending_signal.emit(['cmd_queue'])
 							time.sleep(0.3)
@@ -749,7 +751,7 @@ class DeamonInit(gui.QObject):
 						tmpres=json.dumps(tmpres)# some exceptions:
 						table={}
 						table['queue_done']=[{"type":rr[0],"wait_seconds":rr[1],"created_time":rr[2],"command":rr[3],"json":rr[4],"id":rr[5],"result":tmpres,'end_time':app_fun.now_to_str(False)}]
-						idb.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
+						global_db.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
 					
 				else:
 					tmpres="Wrong [from] address!"
@@ -757,21 +759,22 @@ class DeamonInit(gui.QObject):
 					table={}
 					table['queue_done']=[{"type":rr[0],"wait_seconds":rr[1],"created_time":rr[2],"command":rr[3],"json":rr[4],"id":rr[5],"result":tmpres,'end_time':app_fun.now_to_str(False)}]
 						
-					idb.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
+					global_db.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
 				
 				count_task_done+=1
 			
 			if rr[3]!='automerge':
 				table={}
 				table['queue_waiting']=[{'status':'done'}]
-				idb.update( table,['status'],{'id':[ '=',rr[5] ], 'status':[ '=',"'processing'" ],"command":['<>',"'automerge'"]})
+				global_db.update( table,['status'],{'id':[ '=',rr[5] ], 'status':[ '=',"'processing'" ],"command":['<>',"'automerge'"]})
 				self.sending_signal.emit(['cmd_queue'])
 				time.sleep(1)
 				
-		self.start_stop_enable.emit(True)
+		# print('process_queue self.start_stop_enable.emit(True)')
+		# self.start_stop_enable.emit(True)
 		
-		idb.delete_where('queue_waiting',{ 'status':[' not in ',"('awaiting_balance','waiting')"]  }  )  #, "command":[' not in ',"('send','automerge')"]  
-		idb.delete_where('queue_waiting',{ "command":[' not in ',"('send','automerge')"]  }  )  #, "command":[' not in ',"('send','automerge')"]  
+		global_db.delete_where('queue_waiting',{ 'status':[' not in ',"('awaiting_balance','waiting')"]  }  )  #, "command":[' not in ',"('send','automerge')"]  
+		global_db.delete_where('queue_waiting',{ "command":[' not in ',"('send','automerge')"]  }  )  #, "command":[' not in ',"('send','automerge')"]  
 		# table['queue_done']
 		# idb.delete_where('queue_waiting',{ 'status':['<>',"'awaiting_balance'"], 'status':['<>',"'waiting'"], "command":['<>',"'send'"], "command":['<>',"'automerge'"]  }) 
 		# do not delete if awaiting balance or waiting or command is send (delete in another thread time based) or command is autom merge - cancelled manually
@@ -818,10 +821,10 @@ class DeamonInit(gui.QObject):
 			print(814,'demon update tx exception')
 			return 0
 			
-		idb=localdb.DB(self.db)	 
+		# idb=localdb.DB(self.db)	 
 		count_updates=0 
 		tmpwhere={'status':[' not in',"('reorged','notarized')"], 'block':['<=',notar] }
-		toupdate=idb.select('tx_history', ["txid" ],tmpwhere,distinct=True)
+		toupdate=global_db.select('tx_history', ["txid" ],tmpwhere,distinct=True)
 
 		if len(toupdate)>0:
 		
@@ -832,15 +835,15 @@ class DeamonInit(gui.QObject):
 				
 					table={}
 					table['tx_history']=[{'status':'notarized'}]
-					idb.update( table,['status'], { 'txid':['=',"'"+tt[0]+"'"] } )
+					global_db.update( table,['status'], { 'txid':['=',"'"+tt[0]+"'"] } )
 					
 					table={} # update notification 
 					table['notifications']=[{'status':'notarized' }]
-					idb.update( table,['status'], {'details':['=','"'+tt[0]+'"'] } )
+					global_db.update( table,['status'], {'details':['=','"'+tt[0]+'"'] } )
 					
 					table={} # update msg table: 
 					table['msgs_inout']=[{'tx_status':'notarized' }]
-					idb.update( table,['tx_status'  ], {'txid':['=', '"'+tt[0]+'"' ] })
+					global_db.update( table,['tx_status'  ], {'txid':['=', '"'+tt[0]+'"' ] })
 				 
 				count_updates+=1
 	
@@ -891,8 +894,10 @@ class DeamonInit(gui.QObject):
 				if time.time()-self.insert_block_time>50: # check every 50 seconds
 					self.insert_block_time=time.time()
 					table={'block_time_logs':[{'uid':'auto', 'ttime':time.time(), 'block':gi["blocks"] }] }
-					idbinit=localdb.DB('init.db')
-					idbinit.upsert(table,['uid', 'ttime','block'],{'block':['=',gi["blocks"]]})
+					# idbinit=localdb.DB('init.db')
+					
+					# here bug hanging !!! 
+					global_db_init.upsert(table,['uid', 'ttime','block'],{'block':['=',gi["blocks"]]})
 				
 				# print('\nupdate_status 709' )
 				if xx%3==2:
@@ -917,7 +922,9 @@ class DeamonInit(gui.QObject):
 					
 				if xx%3==2: # and self.started: # every second
 					# print('process queue')
+					self.is_processing=True
 					self.process_queue()
+					self.is_processing=False
 					# print('process queue done')
 					ret_val.append('cmd_queue')
 					
@@ -940,6 +947,9 @@ class DeamonInit(gui.QObject):
 		self.the_wallet=None
 		self.deamon_started_ok=False
 		self.process_queue_iter=0
+		
+		self.is_processing=False
+		
 		
 		if deamon_cfg==None:
 			return
@@ -979,8 +989,11 @@ class DeamonInit(gui.QObject):
 	
 	
 	def stop_deamon(self):
-	
-		self.started=False
+		
+		self.started=False # tell process queue to stop
+		while self.is_processing:
+			time.sleep(1)
+			print('waiting to stop deamon')
 		# print('stopping deamon b4 outpost')
 		self.output('Stopping deamon\n')
 		# print('after outpost')
@@ -994,11 +1007,11 @@ class DeamonInit(gui.QObject):
 		# print('new start deamon???')
 		self.started=True
 		
-		tmpcond,tmppid=app_fun.check_deamon_running() # ''.join(self.deamon_par)
+		tmpcond=app_fun.check_deamon_running() # ''.join(self.deamon_par) ,tmppid
 		# print(tmpcond,tmppid)
-		if tmpcond: # if already running
+		if tmpcond[0]: # if already running
 		
-			self.start_stop_enable.emit(True)
+			# self.start_stop_enable.emit(True)
 			
 			gitmp=app_fun.run_process(self.cli_cmd,'getinfo')
 			# print('gitmp',gitmp)
@@ -1055,11 +1068,11 @@ class DeamonInit(gui.QObject):
 	
 	def get_last_load(self):
 
-		idb=localdb.DB(self.db )
+		# idb=localdb.DB(self.db )
 		last_load=0 # was -1 
-		if idb.check_table_exist( 'deamon_start_logs'):
+		if global_db.check_table_exist( 'deamon_start_logs'):
 			
-			tt00=idb.select_max_val('deamon_start_logs','loaded_block',where={'ttime':['<',time.time()-3600*24]} )
+			tt00=global_db.select_max_val('deamon_start_logs','loaded_block',where={'ttime':['<',time.time()-3600*24]} )
 			
 			if len(tt00)>0 :
 				if tt00[0][0]!=None:
@@ -1246,11 +1259,11 @@ class DeamonInit(gui.QObject):
 				loaded_block=y["blocks"]
 				
 				# save loading time
-				idb=localdb.DB(self.db)
+				# idb=localdb.DB(self.db)
 				table={}
 				
 				table['deamon_start_logs']=[{'uid':'auto', 'time_sec':tdiff, 'ttime':tend, 'loaded_block':loaded_block }]
-				idb.insert(table,['uid','time_sec','ttime','loaded_block'])
+				global_db.insert(table,['uid','time_sec','ttime','loaded_block'])
 			
 			
 			self.start_stop_enable.emit(True)
@@ -1261,12 +1274,12 @@ class DeamonInit(gui.QObject):
 		
 			self.started=False
 			
-			tmpcond,tmppid=app_fun.check_deamon_running() # additiona lcheck needed for full stop
-			while tmpcond:
+			tmpcond =app_fun.check_deamon_running() # additiona lcheck needed for full stop
+			while tmpcond[0]:
 				self.wallet_status_update.emit(['append','.']) #
 				# self.walletTab.stat_lab.setText(self.walletTab.stat_lab.text()+'.') #.set_textvariable(None,self.statustable.get()+' .')
 				time.sleep(2)
-				tmpcond,tmppid=app_fun.check_deamon_running()
+				tmpcond =app_fun.check_deamon_running()
 			
 			self.the_wallet=None
 			self.start_stop_enable.emit(True)
@@ -1278,8 +1291,8 @@ class DeamonInit(gui.QObject):
 	def check_wallet_hash(self,dat_file,insert_on_exception=False):
 		cc=aes.Crypto()
 		# print('self.db',self.db)
-		db=localdb.DB(self.db)
-		last_wallet_hash=db.select('jsons', ['json_content'],{'json_name':['=',"'wallet_hash'"]})
+		# db=localdb.DB(self.db)
+		last_wallet_hash=global_db.select('jsons', ['json_content'],{'json_name':['=',"'wallet_hash'"]})
 		
 		cur_dat_hash= cc.hash2utf8_1b( cc.read_bin_file( dat_file),1)
 		
@@ -1288,8 +1301,8 @@ class DeamonInit(gui.QObject):
 			tmparr.append(cur_dat_hash)
 			table={}
 			table['jsons']=[{'json_name':"wallet_hash", 'json_content':json.dumps(tmparr), 'last_update_date_time': app_fun.now_to_str(False)}]
-			db=localdb.DB(self.db)
-			db.upsert(table,['json_name','json_content','last_update_date_time'],{'json_name':['=',"'wallet_hash'"]})
+			# db=localdb.DB(self.db)
+			global_db.upsert(table,['json_name','json_content','last_update_date_time'],{'json_name':['=',"'wallet_hash'"]})
 			# print('after upser',db.select('jsons', ['json_content'],{'json_name':['=',"'wallet_hash'"]}))
 		
 		if len(last_wallet_hash)>0:
@@ -1309,8 +1322,8 @@ class DeamonInit(gui.QObject):
 		
 	def decrypt_wallet(self):
 		
-		idb=localdb.DB('init.db')
-		ppath=idb.select('init_settings',['datadir'] )
+		# idb=localdb.DB('init.db')
+		ppath=global_db_init.select('init_settings',['datadir'] )
 		
 		dat_file=os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.dat')
 		encr_file=os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.encr')
@@ -1353,8 +1366,8 @@ class DeamonInit(gui.QObject):
 		if self.wallet_display_set.password==None:
 			return
 			
-		idb=localdb.DB('init.db')
-		ppath=idb.select('init_settings',['datadir'] )
+		# idb=localdb.DB('init.db')
+		ppath=global_db_init.select('init_settings',['datadir'] )
 		
 		cc=aes.Crypto()
 		path2encr=os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.dat')
