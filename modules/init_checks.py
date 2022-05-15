@@ -1,3 +1,12 @@
+# todo:
+# activating channel not working ! 
+# use in all places:
+# self.db_main
+# self.db_init
+# off: self.db_main.init_tables( self.app_db_version)
+
+# first write db to diff fname then if no errors - delete old and rename new 
+
 
 import os
 import sys
@@ -5,6 +14,7 @@ import datetime
 import time
 import json
 import shutil
+import sqlite3 #as sql
 import modules.app_fun as app_fun
 import modules.gui as gui
 import modules.localdb as localdb
@@ -16,7 +26,43 @@ import getpass
 
 import traceback
 
+
 class InitApp:
+
+	# load_init_db(self): unload_init_db(self) unload_main_db(self,pswd) load_main_db(self,pswd ) self.db_init_conn self.db_main_conn
+	# loading init db to mem
+	def load_init_db(self): 
+		con = sqlite3.connect('init.db')
+		self.db_init_conn = sqlite3.connect( 'file:initdb?mode=memory&cache=shared', uri=True, check_same_thread=False)
+		with self.db_init_conn:
+			con.backup(self.db_init_conn)
+			
+		con.close() 
+		
+		
+		
+	
+	def unload_init_db(self): # backup to  file
+		# print('unloading init.db' )
+		
+		# add checks to block other tasks and wait current task is done 
+		self.init_db.connected=False # block new operations 
+		
+		while self.init_db.processing!={'sql':'','fname':''}:
+			print('waiting to finish',self.init_db.processing)
+			time.sleep(1)
+			
+		os.remove('init.db') 
+		con = sqlite3.connect('init.db')
+		with con:
+			self.db_init_conn.backup(con)
+		con.close() 
+		self.db_init_conn.close()
+		
+	
+		
+	 
+		
 
 	def correctWin(self,p1,p2):
 		if sys.platform=='win32':
@@ -56,6 +102,7 @@ class InitApp:
 				verus=True
 				if not os.path.exists(dpath):
 					print('Wrong path, file does not exist: ',dpath)
+					self.unload_init_db()
 					exit()
 			else:
 				pirated=True
@@ -117,34 +164,57 @@ class InitApp:
 
 		app_fun.check_already_running(os.path.basename(__file__)) # check app not runnin - else exit !
 
-		localdb.init_init() # init local DB initial settings - if not exist 
+		
+		# db_init=None
+		# db_main=None
+		# load_init_db(self): unload_init_db(self) unload_main_db(self,pswd) load_main_db(self,pswd )  self.db_main_conn
+		# PREAPRE CONNECTIONS
+		self.load_init_db() # self.db_init_conn ready 
+		# print('loaded_connection')
+		self.init_db=localdb.DB('init.db', -1, _connection=self.db_init_conn)
+		# print('created_db init obj') 
+		# localdb.init_init() # init local DB initial settings - if not exist 
 		self.cc=aes.Crypto()
 
 		
 		is_deamon_working=app_fun.check_deamon_running()
-		idb=localdb.DB('init.db')
+		# print('is_deamon_working',is_deamon_working)
+		# idb=localdb.DB('init.db')
 		# db=localdb.DB( )
 
-		tt= idb.select('init_settings',columns=["komodo","datadir","data_files"]) 
+		# tt= self.init_db.select('init_settings',columns=["komodo","datadir",'data_files']) #,"password_on" "start_chain",
+		tt= self.init_db.select('init_settings',columns=["komodo","datadir","data_files"]) 
+		# print('after select tt',tt)
 		
 		if is_deamon_working[0]:
 			if len(tt)==0:
 				gui.messagebox_showinfo("init.db file missing while running - exit", "init.db file missing while running - exit")
+				self.unload_init_db()
 				exit()
 			# print(tt)	
-			tmp=json.loads(tt[0][2])
+			tmp={}
+			if tt[0][2]==None: # replace None with current file wallet in use 
+				# '-wallet=wallet_Fukibu.dat'
+				tmptt=is_deamon_working[3][1].replace('-wallet=wallet_','').replace('.dat','')
+				tmp={ 'wallet':'wallet_'+tmptt ,'db':'local_storage_'+tmptt }
+				# print('recreated',tmp)
+			else:
+				tmp=json.loads(tt[0][2])
+				
 			self.data_files={ 'wallet':tmp['wallet'],'db':tmp['db'] }
 
 		else: # deamon starting - ask paths 
 			self.paths_confirmed=False
-			self.ask_paths() 
+			self.ask_paths(tt) 
 			if not self.paths_confirmed:
 				gui.messagebox_showinfo("Exiting app...", "Exiting app...")
+				self.unload_init_db()
 				exit()
 			
-			tt= idb.select('init_settings',columns=["komodo","datadir", "data_files"])  
+			tt= self.init_db.select('init_settings',columns=["komodo","datadir", "data_files"])  
 			if len(tt)==0 :
 				gui.messagebox_showinfo("init.db file missing while running - exit", "init.db file missing while running - exit")
+				self.unload_init_db()
 				exit()
 				
 			# idb.upsert(dict_set,["lock"],{})
@@ -155,33 +225,75 @@ class InitApp:
 		self.is_started=is_deamon_working[0]
 			# self.autostart='yes'	
 			
-		dict_set={}
-		dict_set['lock_db_threads']=[{'lock':'no'}]
-		if idb.check_table_exist('lock_db_threads'):
-			idb.upsert(dict_set,["lock"],{})
+		# dict_set={}
+		# dict_set['lock_db_threads']=[{'lock':'no'}]
+		# if self.init_db.check_table_exist('lock_db_threads'):
+			# self.init_db.upsert(dict_set,["lock"],{})
+		
+		
+		
+		
 		
 		self.first_run=False
+		# if encr file not exist and .db not exist as well - assume first run ? ever ?
+		# on furst run self.db_main.init_tables( self.app_db_version)
+		# updateHashedPass
 		
 		ppath=os.getcwd()	
 		init_db_file=os.path.join(ppath , self.data_files['db']+'.encr')
-		if os.path.exists(init_db_file)==False and os.path.exists(os.path.join(ppath ,self.data_files['db']+'.db'))==False:
-			newdbfname= self.data_files['db']+'.db' 
-			gui.messagebox_showinfo("Creating new database","Creating new database file:\n"+newdbfname)
-			localdb.init_tables(newdbfname,self.app_db_version)
+		# newdbfname=os.path.join(ppath ,self.data_files['db']+'.db')
+		if os.path.exists(init_db_file)==False: # now no .db fie decrypted! and os.path.exists(newdbfname)==False:
+			# newdbfname= self.data_files['db']+'.db' 
+			# gui.messagebox_showinfo("Creating new database","Creating new database file:\n"+self.data_files['db'] )
+			# self.db_main.init_tables( self.app_db_version)
 			self.first_run=True
 
 		if not os.path.exists('backups'):
 			os.mkdir('backups')	
 			
+			
+		# is lockal backup needed ? if files same - not compare file hashes 	
+		# is new dir needed ?
+		need_new_local_backup=False
+		
+		
+					
+		encr_wal=os.path.join(tt[0][1],self.data_files['wallet']+'.encr')
 		self.cur_sess=''
+		sess_dir=''
 		if not self.is_started:
-			tmpdt=str(datetime.datetime.now()).replace('-','').replace(':','').replace(' ','_')
-			tmpdt=tmpdt.split('.')
-			self.cur_sess=tmpdt[0]
-			idb.insert({'current_session':[{'datetime':self.cur_sess,'uid':'auto'}]},["datetime",'uid'] )
-			sess_dir=os.path.join('backups',self.cur_sess)
-			print('new session started! encr files backed up to ', sess_dir)
-			os.mkdir( sess_dir )
+		
+			## checking if new backup neede at all 
+			last_saved_sess=self.init_db.select_last_val( 'current_session', 'datetime'  )
+			# print('last_saved_sess',last_saved_sess)
+			if last_saved_sess==None:
+				need_new_local_backup=True
+			else: #compare file hashes  
+				last_sess_dir=os.path.join('backups',last_saved_sess)
+				last_local_wal_back=os.path.join(last_sess_dir,self.data_files['wallet']+'.encr') 
+				if os.path.exists(last_local_wal_back):
+					last_local_wal_back_hash= self.cc.hash2utf8_1b( self.cc.read_bin_file( last_local_wal_back),1)
+					encr_wal=os.path.join(tt[0][1],self.data_files['wallet']+'.encr') 
+					if os.path.exists(encr_wal):
+						cur_wal_hash= self.cc.hash2utf8_1b( self.cc.read_bin_file( encr_wal),1) 
+						
+						if last_local_wal_back_hash!=cur_wal_hash: 
+							need_new_local_backup=True
+				else:
+					need_new_local_backup=True
+		
+			if need_new_local_backup:
+				tmpdt=str(datetime.datetime.now()).replace('-','').replace(':','').replace(' ','_')
+				tmpdt=tmpdt.split('.')
+				self.cur_sess=tmpdt[0]
+				worked=self.init_db.insert({'current_session':[{'datetime':self.cur_sess,'uid':'auto'}]},["datetime",'uid'] )
+				# print('insert worked?',worked)
+				# print('select\n',self.init_db.select('current_session' ) )
+				sess_dir=os.path.join('backups',self.cur_sess)
+				print('new backup of encr files; backed up to ', sess_dir)
+				os.mkdir( sess_dir )
+			
+			
 			
 		self.app_password=None
 		while self.app_password==None:
@@ -201,6 +313,7 @@ class InitApp:
 				if self.cur_sess!='':
 					shutil.rmtree( sess_dir )
 					print('new session cancelled!',tmpdt[0])
+				self.unload_init_db()
 				exit()
 			
 			# print('checking pass is valid self.first_run', self.first_run)
@@ -212,19 +325,15 @@ class InitApp:
 				self.app_password=tmpv[0]
 				# insert new session start if deamon not running:
 				# table['current_session']={'uid':'int', 'ttime':'real' }
-				
-				
-			# if self.isvalid(tmpv[0]) and not self.first_run : # checks if decryption is correct 
-				# self.app_password=tmpv[0]
+				 
 				
 			else:
 				gui.messagebox_showinfo("Wrong password", "Password was not correct - try again.")
 			
 		###################### INIT DB AND DEAMON	
 		t0=time.time()
-		if not self.first_run:
-			# print('if not first run update localdb.init_tables',self.first_run)
-			localdb.init_tables(self.data_files['db']+'.db',self.app_db_version)
+		# if not self.first_run: # print('if not first run update localdb.init_tables',self.first_run)
+			# self.db_main.init_tables( self.app_db_version)
 			
 		self.check_if_new_wallet_backup_needed()
 		
@@ -233,6 +342,8 @@ class InitApp:
 		
 		deamon_cfg=self.deamon_setup(tt)
 		# print(155,deamon_cfg)
+		deamon.global_db_init=self.init_db
+		deamon.global_db =self.db_main 
 		self.dmn=deamon.DeamonInit(deamon_cfg,self.db)
 		# print(' DeamonInit dt',time.time()-t0)
 		# t0=time.time()
@@ -240,17 +351,19 @@ class InitApp:
 		
 		# backup wallet.encr local
 		# print(idb.select( 'current_session'  ) )
-		encr_wal=os.path.join(tt[0][1],self.data_files['wallet']+'.encr')
-		if os.path.exists(encr_wal) and not self.is_started:
-			# print('encr_wal',encr_wal)
-			self.cur_sess=idb.select_last_val( 'current_session', 'datetime'  )
-			# print(self.cur_sess)
-			sess_dir=os.path.join('backups',self.cur_sess)
-			encr_wal_dest=os.path.join(sess_dir,self.data_files['wallet']+'.encr')
-			if not os.path.exists(encr_wal_dest) : #self.cur_sess!='' : # to be used before wallet decryption
-				
-				# print('wallet off backup',encr_wal)
-				shutil.copy2(encr_wal, sess_dir )
+		if need_new_local_backup:
+			# print('pre local backup needed',os.path.exists(encr_wal), not self.is_started, encr_wal) # OK
+			if True: # these already checked above os.path.exists(encr_wal) and not self.is_started:
+				# print('encr_wal',encr_wal)
+				# self.cur_sess=self.init_db.select_last_val( 'current_session', 'datetime'  )
+				# print(self.cur_sess)
+				# sess_dir=os.path.join('backups',self.cur_sess)
+				encr_wal_dest=os.path.join(sess_dir,self.data_files['wallet']+'.encr')
+				# print('local backup needed',os.path.exists(encr_wal_dest), encr_wal_dest)
+				if not os.path.exists(encr_wal_dest) : #self.cur_sess!='' : # to be used before wallet decryption
+					
+					# print('wallet off backup',encr_wal,'to',sess_dir)
+					shutil.copy2(encr_wal, sess_dir )
 		  
 	
 	def get_last_wallet_backup_data(self ):
@@ -262,9 +375,9 @@ class InitApp:
 		cc=aes.Crypto()
 		cur_dat_hash= cc.hash2utf8_1b( cc.read_bin_file( self.test_ppath),1)
 		
-		db=localdb.DB(self.data_files['db']+'.db')
+		# db=localdb.DB(self.data_files['db']+'.db')
 		# print('from db',self.data_files['db']+'.db')
-		last_wallet_hash=db.select('jsons', ['json_content'],{'json_name':['=',"'backup_wallet_hash'"]})
+		last_wallet_hash=self.db_main.select('jsons', ['json_content'],{'json_name':['=',"'backup_wallet_hash'"]})
 		# print('last_wallet_hash',last_wallet_hash)
 		# print('all',db.select('jsons', [] )) #'json_content'
 		if len(last_wallet_hash)==0:
@@ -280,10 +393,12 @@ class InitApp:
 	
 		if not hasattr(self,'data_files'):
 			print('no attribute data_files exit ')
+			self.unload_init_db()
 			exit()
 		gui.messagebox_showinfo('Wallet backup required',init_msg_info)
 									
 		if not app_fun.wallet_copy_progress( src_dir=data_src, add_msg=['Please insert USB/pendrive',msg2], wallet_name=self.data_files['wallet'], gui=gui, parent_widget=parent ):
+			self.unload_init_db()
 			exit()
 		
 		
@@ -293,8 +408,8 @@ class InitApp:
 		# print('Inserting backup_wallet_hash at decrypted wallet found!',new_wallet_hash_arr[-1]) 
 		table={}
 		table['jsons']=[{'json_name':"backup_wallet_hash", 'json_content':json.dumps(new_wallet_hash_arr), 'last_update_date_time': app_fun.now_to_str(False)}]
-		db=localdb.DB(self.data_files['db']+'.db')
-		db.upsert(table,['json_name','json_content','last_update_date_time'],{'json_name':['=',"'backup_wallet_hash'"]})
+		# db=localdb.DB(self.data_files['db']+'.db')
+		self.db_main.upsert(table,['json_name','json_content','last_update_date_time'],{'json_name':['=',"'backup_wallet_hash'"]})
 	
 		
 	# run in 2 cases:
@@ -325,8 +440,8 @@ class InitApp:
 		last_wallet_hash_arr, cur_dat_hash = self.get_last_wallet_backup_data() #get_last_wallet_backup_data(self,test_ppath)
 		# print(' last_wallet_hash_arr, cur_dat_hash',last_wallet_hash_arr, cur_dat_hash)
 		
-		idb=localdb.DB('init.db') 
-		data_src00=idb.select('init_settings', ['datadir'])
+		# idb=localdb.DB('init.db') 
+		data_src00=self.init_db.select('init_settings', ['datadir'])
 		data_src=data_src00[0][0]
 		
 		tmpmsg1='New wallet created - backup required'
@@ -360,10 +475,11 @@ class InitApp:
 			
 			
 			
+	# if new wallet - only update file name after blockchain started!!! 
 	
-	def update_paths(self,deamon,data, parent,new_wallet):
+	def update_paths(self,deamon,data, parent ): # self.creating_new_wallet
 	
-		idb=localdb.DB('init.db')
+		# idb=localdb.DB('init.db')
 		komodod_ok=False
 		allowed_deamons=['komodod.exe','komodod','pirated','pirated.exe','verusd','verusd.exe']
 		for ad in allowed_deamons:
@@ -396,31 +512,41 @@ class InitApp:
 			blockchain_data_ok=True
 		 
 		
-		if komodod_ok and komodo_cli_ok  and (blockchain_data_ok or new_wallet):  
+		if komodod_ok and komodo_cli_ok  and (blockchain_data_ok or self.creating_new_wallet):  
 
-			# wallet name = wallet_ABECUP.dat local_storage_ABECUP.dat
+			# if self.creating_new_wallet and app_fun.fileExist(data,cond={'start':self.data_files['wallet'] }) : 
+			# dict_set={'init_settings':[{"data_files":json.dumps(self.data_files)}]}
+			# self.init_db.delete_where('init_settings')
+			# self.init_db.insert(dict_set,["data_files" ]) #,"data_files"
 		
-			# data_files=json.dumps()
-		
-			dict_set={}
+			ord_arr=["komodo","datadir" ]
+			dict_set={ }
 			dict_set['init_settings']=[]
 			dict_set['init_settings'].append({
 												"komodo":  deamon ,
-												"datadir": data  ,
-												"data_files":json.dumps(self.data_files)
+												"datadir": data  #,
+												# "data_files":json.dumps(self.data_files)
 											})
+											
+			if not self.creating_new_wallet:
+				dict_set['init_settings'][0]["data_files"]=json.dumps(self.data_files)
+				ord_arr.append("data_files")
+				# print('added exception',dict_set,ord_arr)
 			
-			idb.delete_where('init_settings')
-			idb.insert(dict_set,["komodo","datadir","data_files" ]) #,"password_on"
+			self.init_db.delete_where('init_settings')
+			self.init_db.insert(dict_set,ord_arr) #,"data_files"
 			
 		elif not komodod_ok:
 			gui.messagebox_showinfo('Path for pirate deamon is wrong', deamon +'\n - no pirated file !')
+			self.unload_init_db()
 			exit()
 		elif  not komodo_cli_ok:
 			gui.messagebox_showinfo('Path for pirate-cli is wrong', data +'\n - no pirate-cli file !')
+			self.unload_init_db()
 			exit()
-		elif not new_wallet:
+		elif not self.creating_new_wallet:
 			gui.messagebox_showinfo('Path for blockchain data is wrong', data +'\n - no wallet file !')
+			self.unload_init_db()
 			exit()
 			
 	
@@ -431,15 +557,15 @@ class InitApp:
 	
 
 	# qt dialog komodod, data dir 	
-	def ask_paths(self): # read from db if possible
+	def ask_paths(self,tt): # read from db if possible
 	
 		# self.data_files['wallet'], self.data_files['db']
 		tmpwallet=['Create new','Select file']
 
-		idb=localdb.DB('init.db')
+		# idb=localdb.DB('init.db')
 		
 		preset=[]
-		tt= idb.select('init_settings',columns=["komodo","datadir",'data_files']) #,"password_on" "start_chain",
+		# tt= self.init_db.select('init_settings',columns=["komodo","datadir",'data_files']) #,"password_on" "start_chain",
 		if len(tt)>0:  
 
 			for t in tt[0]: # single row only
@@ -554,7 +680,7 @@ class InitApp:
 				
 			self.paths_confirmed=True
 			self.creating_new_wallet=newwallet # need to create backup after new wallet is synced
-			self.update_paths(deamon_path,  data_path,   tmptw,newwallet)
+			self.update_paths(deamon_path,  data_path,   tmptw) #, newwallet)
 			tmptw.parent().close()
 
 		tw.cellWidget(4,0).set_fun(True, getv,tw)
@@ -565,15 +691,115 @@ class InitApp:
 	
 
 	def updateHashedPass(self,pas):
-		db=localdb.DB(self.data_files['db']+'.db')
+		# db=localdb.DB(self.data_files['db']+'.db')
+		self.load_main_db(pas) #if not exist will crate in mem conn
+		self.db_main=localdb.DB(self.data_files['db']+'.db', self.app_db_version, _connection=self.db_main_conn    )
+		
 		table={}  
 		salttmp=self.cc.init_hash_seed() 
 		passhashtmp=self.cc.hash(pas+salttmp)
 		# print('hashed at',passhashtmp)
 		disp_dict={'salt':salttmp,'passhash':passhashtmp} # 
 		table['jsons']=[{'json_name':"password_hash", 'json_content':json.dumps(disp_dict), 'last_update_date_time': app_fun.now_to_str(False)}]
-		db.upsert(table,['json_name','json_content','last_update_date_time'],{'json_name':['=',"'password_hash'"]})
+		self.db_main.upsert(table,['json_name','json_content','last_update_date_time'],{'json_name':['=',"'password_hash'"]})
 
+		
+		
+		
+	def unload_main_db(self,pswd):
+	
+		self.db_main.connected=False # block new operations 
+		
+		# wait till no sql on the queue and last one is done 
+		while self.db_main.processing!={'sql':'','fname':''} or len(self.db_main.processing_list)>0:
+			print('waiting to finish',self.db_main.processing)
+			if len(self.db_main.processing_list)>1:
+				print('sql # in the queue',len(self.db_main.processing_list) )
+			time.sleep(1)
+			
+		encr_fname=self.data_files['db']+'.encr'
+		
+		larr=''
+		for line in self.db_main_conn.iterdump(): 
+			larr+=line+'\n' 
+			
+		self.cc.write_file(encr_fname,  self.cc.aes_encrypt( larr,kkey=pswd,encode=True) )
+		self.db_main_conn.close()
+		
+		gui.messagebox_showinfo("Created new database","Created new database file:\n"+self.data_files['db']+'.encr' )
+		
+		
+	
+		
+	def load_main_db(self,pswd ):
+		encr_fname=self.data_files['db']+'.encr'
+		rand_name=self.cc.rand_abc(16)
+		# print('decrypting with',pswd)
+		
+		if not os.path.exists(encr_fname): # create connection and return
+			self.db_main_conn = sqlite3.connect( 'file:'+rand_name+'?mode=memory&cache=shared', uri=True, check_same_thread=False)
+			return True
+		# dbdecr=self.cc.aes_decrypt_file( path1=encr_fname, path2=None,password=pswd)
+		# print(dbdecr)
+		try:
+		# if True:
+			dbdecr=self.cc.aes_decrypt_file( path1=encr_fname, path2=None,password=pswd) # may be false!
+			# print(dbdecr[:512])
+			if type(dbdecr)==type(b''):
+				dest_path=encr_fname.replace('.encr','.db')
+				# print('dest_path',dest_path)
+				print('attempting migration and re-encryption with encoding'  )
+				dbdecr=self.cc.aes_decrypt_file( path1=encr_fname, path2=dest_path,password=pswd)
+				# print('dbdecr',dbdecr)
+				# if len(dbdecr)<512: print(dbdecr)
+				# else: print(dbdecr[:512])
+				
+				if dbdecr: 
+					def progress(status, remaining, total):
+						print(f'Copied {total-remaining} of {total} pages...')
+
+					con = sqlite3.connect(dest_path)
+					self.db_main_conn = sqlite3.connect( 'file:'+rand_name+'?mode=memory&cache=shared', uri=True, check_same_thread=False)
+					with self.db_main_conn:
+						con.backup(self.db_main_conn, pages=10000, progress=progress)
+						
+					con.close()
+					
+					larr=''
+					for line in self.db_main_conn.iterdump(): 
+						larr+=line+'\n' 
+						
+					os.rename(encr_fname,'old_'+encr_fname) # to keep old file 
+					self.cc.write_file(encr_fname,  self.cc.aes_encrypt( larr,kkey=pswd,encode=True) )
+					# print('saved',encr_fname)
+					# bck.close()
+					# print('remove ',dest_path)
+					os.remove(dest_path) 
+					return True
+
+				else:
+					print('failed to decrypt to file - corrupted db?!')
+					self.db_main_conn =None
+					return False
+					# exit()
+			elif dbdecr!=False:
+				print('ok')
+				# test if can load directly to memory:
+				self.db_main_conn = sqlite3.connect( 'file:'+rand_name+'?mode=memory&cache=shared', uri=True, check_same_thread=False)
+				cur2=self.db_main_conn.cursor() 
+				cur2.executescript( dbdecr ) 
+				self.db_main_conn.commit()	
+				cur2.close() 
+				return True
+				# conn2.close()	
+			else:
+				print('could not decrypt')
+				return False
+		except:
+		# else:
+			print('init dbdecr failed')
+			return False
+		
 	# self.data_files['db']
 	# checking password is valid based on :
 	# 1. possibility to decrypt db
@@ -584,19 +810,24 @@ class InitApp:
 		# print('isvalid pass main path getcwd',ppath)
 		
 		
+		# load_init_db(self): unload_init_db(self) unload_main_db(self,pswd) load_main_db(self,pswd )  self.db_main_conn
+		# PREAPRE CONNECTIONS
+		# self.load_init_db() # self.db_init_conn ready 
+		# self.init_db=localdb.DB('init.db', -1, _connection=)
+		# self.init_db.init_init()
 		
 		if os.path.exists(os.path.join(ppath , self.data_files['db']+'.encr')):
 			# print('encr db exist ...',self.data_files['db']+'.encr')
 			# print('decr path',os.path.join(ppath , 'local_storage.encr'), os.path.join(ppath,'local_storage.db'))
-			if self.cc.aes_decrypt_file( os.path.join(ppath , self.data_files['db']+'.encr'), os.path.join(ppath,self.data_files['db']+'.db') , pas):
+			if self.load_main_db(pas): #self.cc.aes_decrypt_file( os.path.join(ppath , self.data_files['db']+'.encr'), os.path.join(ppath,self.data_files['db']+'.db') , pas):
 				try:
-					db=localdb.DB(self.data_files['db']+'.db')
-					at=db.all_tables()
+					self.db_main=localdb.DB(self.data_files['db']+'.db', self.app_db_version, _connection=self.db_main_conn    )
+					at=self.db_main.all_tables()
 					# print('decrypted\n',at)
 					
 					# if decrypted correctly save pass hasing with different salt
 					if len(at)>0:
-						app_fun.secure_delete(os.path.join(ppath , self.data_files['db']+'.encr'))
+						# app_fun.secure_delete(os.path.join(ppath , self.data_files['db']+'.encr'))
 						 
 						return True
 				except AttributeError:
@@ -611,97 +842,69 @@ class InitApp:
 			else:
 				return False
 			
-				
-		elif os.path.exists(os.path.join(ppath , self.data_files['db']+'.db')):
-			# print('Provided pass: ',pas,' Write it down if it was not correct.')
-			print('decrypted db exist',self.data_files['db']+'.db')
-			# if first run: password just created, no hashes, should backup wallet dat after wallet created and after sync!
-			# if consecutive run: check hash!
+		# not possible after moving to mem 	
+		# elif os.path.exists(os.path.join(ppath , self.data_files['db']+'.db')): 
+			# print('decrypted db exist',self.data_files['db']+'.db') 
 			
-			db=localdb.DB(self.data_files['db']+'.db')
-			last_hashed_pass=db.select('jsons', ['json_name','json_content','last_update_date_time'],{'json_name':['=',"'password_hash'"]})
-			# print('last_hashed_pass',last_hashed_pass)
-			if len(last_hashed_pass)>0:
-				try:
-					last_hashed_pass=last_hashed_pass[0][1]
-					# print('last_hashed_pass',last_hashed_pass)
-					pass_dict=json.loads(last_hashed_pass)
-					# print('testing',pas,pass_dict['salt'])
-					newpasshashtmp=self.cc.hash(pas+pass_dict['salt'])
-					# print('testing',newpasshashtmp,pass_dict['passhash'])
-					if newpasshashtmp==pass_dict['passhash']:
-						# print('hashed pass ok ')
-						return True
-					else:
+			# db=localdb.DB(self.data_files['db']+'.db')
+			# last_hashed_pass=db.select('jsons', ['json_name','json_content','last_update_date_time'],{'json_name':['=',"'password_hash'"]}) 
+			# if len(last_hashed_pass)>0:
+				# try:
+					# last_hashed_pass=last_hashed_pass[0][1] 
+					# pass_dict=json.loads(last_hashed_pass) 
+					# newpasshashtmp=self.cc.hash(pas+pass_dict['salt']) 
+					# if newpasshashtmp==pass_dict['passhash']: 
+						# return True
+					# else:
 					
-						print('Password hash checked - not matching previous password hash. Try again. Pass hash must be matched for consistency.')
-						return False
-				except:
-					traceback.print_exc()
-					return False
-			else:
-				print('	# save hash since not hash found - could not verify ? new db file ? ')
-				self.updateHashedPass(pas)
-				return True
-			# instead verify is password matched hashed:
+						# print('Password hash checked - not matching previous password hash. Try again. Pass hash must be matched for consistency.')
+						# return False
+				# except:
+					# traceback.print_exc()
+					# return False
+			# else:
+				# print('	# save hash since not hash found - could not verify ? new db file ? ')
+				# self.updateHashedPass(pas)
+				# return True 
 			
-			return False #True
+			# return False #True
 			
 		return False
 
 	
 	
 	
+	# not needed ?
+	# def encr_db(self,parent):
 		
-	def encr_db(self,parent):
-		
-		if self.was_derypted_warning and self.dmn.deamon_started_ok==False: #encrypt if started with unencrypted
-			print('exceptional encryption')
-			self.dmn.encrypt_wallet_and_data()
+		# if self.was_derypted_warning and self.dmn.deamon_started_ok==False: #encrypt if started with unencrypted
+			# print('exceptional encryption')
+			# self.dmn.encrypt_wallet_and_data()
 			
-		dict_set={}
-		dict_set['lock_db_threads']=[{'lock':'yes'}]
-		# print('locking db')
-		idb=localdb.DB('init.db')
-		if idb.check_table_exist('lock_db_threads'):
-			# print('locking db -> upsert')
-			idb.upsert(dict_set,["lock"],{})
-			
-		self.dmn.started=False # ???
-		ppath =os.getcwd()
-		
-		if localdb.is_busy():
-			time.sleep(1)
-		
-		tryii=2
-		while localdb.is_busy():
-
-			time.sleep(1)
-			tryii=tryii-1
-			if tryii<0:
-				print('exit anyway ...')
-				break
+		# dict_set={}
+		# dict_set['lock_db_threads']=[{'lock':'yes'}]
+		 
+		# self.dmn.started=False # ???
+		# ppath =os.getcwd()
+		 
 				
-			localdb.del_busy_too_long()
+		# tryii=3
+		# while tryii>0:
+			# tryii=tryii-1
+			# try: # if True:
+				# self.cc.aes_encrypt_file( os.path.join(ppath ,self.data_files['db']+'.db'), os.path.join(ppath ,self.data_files['db']+'.encr') , self.app_password)
 				
-		tryii=3
-		while tryii>0:
-			tryii=tryii-1
-			try:
-			# if True:
-				self.cc.aes_encrypt_file( os.path.join(ppath ,self.data_files['db']+'.db'), os.path.join(ppath ,self.data_files['db']+'.encr') , self.app_password)
-				
-				if os.path.exists(os.path.join(ppath ,self.data_files['db']+'.encr')):
+				# if os.path.exists(os.path.join(ppath ,self.data_files['db']+'.encr')):
 					
-					app_fun.secure_delete(os.path.join(ppath ,self.data_files['db']+'.db'))
+					# app_fun.secure_delete(os.path.join(ppath ,self.data_files['db']+'.db'))
 				
-					gui.messagebox_showinfo("Database encrypted", "DB secure: "+self.data_files['db']+".db -> "+self.data_files['db']+".encr ",parent)
+					# gui.messagebox_showinfo("Database encrypted", "DB secure: "+self.data_files['db']+".db -> "+self.data_files['db']+".encr ",parent)
 			
-					break
-			except:
-				print('Exception in delete '+self.data_files['db']+'.db', tryii)
+					# break
+			# except:
+				# print('Exception in delete '+self.data_files['db']+'.db', tryii)
 			
-			time.sleep(1)
+			# time.sleep(1)
 			
 			
 			
@@ -710,20 +913,47 @@ class InitApp:
 	
 	def on_closing(self,parent):
 		# self.close_thread=True
-		db=localdb.DB(self.data_files['db']+'.db' )
-		db.vacuum()
+		# db=localdb.DB(self.data_files['db']+'.db' )
+		
+		# on new wallet creation add new entry on exit:
+		_unload_main_db=True
+		if self.creating_new_wallet:
+			tt= self.init_db.select('init_settings',columns=[ "datadir" ]) 
+			data=tt[0][0]
+			if len(data)>0 and self.creating_new_wallet and app_fun.fileExist(data,cond={'start':self.data_files['wallet'] }) : 
+				dict_set={'init_settings':[{"data_files":json.dumps(self.data_files)}]} 
+				self.init_db.update( dict_set, ["data_files"], {} )
+				print('saved new init_settings data dir',self.init_db.select('init_settings',columns=[ ])  )
+			else:
+				print('# wallet file not found - not save local storage db!:')
+				_unload_main_db=False
+				# if os.path.exists()
+		
+		self.db_main.vacuum()
 		is_deamon_working=app_fun.check_deamon_running()
+		
+		self.unload_init_db()
+		
+		def unload_main():
+			if _unload_main_db:
+				print('_unload_main_db',_unload_main_db)
+				# print('encrypting with',self.app_password)
+				self.unload_main_db(self.app_password)
+		
+		
 		if is_deamon_working[0]:
-
+			
 			if gui.askokcancel("Quit", "Are you sure you want to quit? Blockchain deamon is still running. If you plan to shut down your computer it is better to STOP blockchain and quit afterwards.",parent):
 			
-				self.encr_db(parent)
-				
+				# self.encr_db(parent)
+				unload_main()
+						
 				return True
 			else:
 				return False
 		else:
 			# save last views for init load 
 		
-			self.encr_db(parent)	
+			# self.encr_db(parent)	
+			unload_main()
 			return True
