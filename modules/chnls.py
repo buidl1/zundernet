@@ -7,11 +7,12 @@ import os
 # import datetime
 import json
 import time
-import modules.localdb as localdb
+# import modules.localdb as localdb
 import modules.app_fun as app_fun
 
 import modules.aes as aes
 import modules.gui as gui
+global global_db
 
 class DefChannels:
 
@@ -68,10 +69,10 @@ class Chnls(gui.QObject):
 		
 		# check signature exist for the addr - if not create
 		mysignature=''
-		idb=localdb.DB(self.db)
+		# idb=localdb.DB(self.db)
 		 
 		# db_sign=idb.select( 'channel_signatures', [ 'signature' ], {'addr':['=',  "'"+tmpaddr+"'" ] } )
-		db_sign=idb.select_last_val('channel_signatures','signature')
+		db_sign=global_db.select_last_val('channel_signatures','signature')
 		sign_dict={}
 		if db_sign!=None: #len(db_sign)==1:
 			mysignature=db_sign #[0][0]
@@ -91,7 +92,7 @@ class Chnls(gui.QObject):
 		msg_table=gui.Table(None,{'dim':[len(msg_grid),3], 'toContent':1})
 		msg_table.updateTable(msg_grid)
 		
-		last_addr=localdb.get_last_addr_from("'last_msg_from_addr'")
+		last_addr=global_db.get_last_addr_from("'last_msg_from_addr'")
 
 		if last_addr not in ['','...']:
 			msg_table.cellWidget(0,1).setToolTip(last_addr) #.set_textvariable( 'ownaddr',last_addr)
@@ -115,7 +116,7 @@ class Chnls(gui.QObject):
 			if froma=='':
 				return
 			
-			idb=localdb.DB(self.db)
+			# idb=localdb.DB(self.db)
 			# prepare msg inner json ... 
 			send_dict={'txt':msg}
 			
@@ -130,7 +131,7 @@ class Chnls(gui.QObject):
 			
 			send_dict['sender']=tmpsender# only add sender first time later not needdidb=localdb.DB(self.db) 
 			table={'channel_signatures':[{ 'signature':tmpsender}]} 
-			idb.upsert( table, [ 'signature' ] )
+			global_db.upsert( table, [ 'signature' ] )
 			
 			json_msg=json.dumps(send_dict)
 			# print('json ready',json_msg)
@@ -152,13 +153,13 @@ class Chnls(gui.QObject):
 			# return
 				
 			table={}
-			table['queue_waiting']=[localdb.set_que_waiting('send',jsonstr=json.dumps(ddict) ) ]
+			table['queue_waiting']=[global_db.set_que_waiting('send',jsonstr=json.dumps(ddict) ) ]
 			table['queue_waiting'][0]['type']='channel'
 			
-			idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
+			global_db.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 			
 			# self.set_last_addr_from( froma)
-			localdb.set_last_addr_from( froma,"'last_msg_from_addr'")
+			global_db.set_last_addr_from( froma,"'last_msg_from_addr'")
 			msg_table.parent().close()
 			
 			
@@ -180,14 +181,14 @@ class Chnls(gui.QObject):
 	
 	def is_channels_active(self):
 	
-		idb=localdb.DB(self.db)
+		# idb=localdb.DB(self.db)
 		
 		# table={'channel_signatures':[{'addr':to,'signature':tmpsender}]} 
 		# print('channel_signatures\n', idb.select('channel_signatures'  ) )
 		
 		
 		# table['addr_book']={'Category':'text', 'Alias':'text', 'Address':'text','ViewKey':'text','usage':'int','addr_verif':'int','viewkey_verif':'int' }
-		xx=idb.select('addr_book', [ 'Address', 'viewkey_verif'] ,{'Address':['=',  "'"+self.defchnls.activation_channel_addr+"'" ] } )
+		xx=global_db.select('addr_book', [ 'Address', 'viewkey_verif'] ,{'Address':['=',  "'"+self.defchnls.activation_channel_addr+"'" ] } )
 		
 		if len(xx)==0:
 			print('no def channel - need to activate channels')
@@ -237,17 +238,17 @@ class Chnls(gui.QObject):
 						 
 			self.filter_table.updateTable([tmpdict])  
 			def activateChannels(*evargs):  
-				idb=localdb.DB(self.db)
+				# idb=localdb.DB(self.db)
 				
 				tmpaddr=self.defchnls.activation_channel_addr
 				tmpvk=self.defchnls.channels[tmpaddr]
 				table={'addr_book':[{'Category':'Channel','Alias':'Tavern','Address':tmpaddr,'ViewKey':tmpvk,'usage':0,'addr_verif':1,'viewkey_verif':-2}]   }
-				idb.upsert(table,[ 'Category','Alias','Address','ViewKey','usage','addr_verif','viewkey_verif'], {'Address':['=',  "'"+tmpaddr+"'" ] } )
+				global_db.upsert(table,[ 'Category','Alias','Address','ViewKey','usage','addr_verif','viewkey_verif'], {'Address':['=',  "'"+tmpaddr+"'" ] } )
 				
 				self.refreshAddrBook.emit() 
 				tmpjson=json.dumps({'addr':tmpaddr,'viewkey':tmpvk})
-				table={'queue_waiting':[localdb.set_que_waiting(command='import_view_key',jsonstr=tmpjson, wait_seconds=0)]}
-				idb.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
+				table={'queue_waiting':[global_db.set_que_waiting(command='import_view_key',jsonstr=tmpjson, wait_seconds=0)]}
+				global_db.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 				gui.messagebox_showinfo('Channels activated','Initial public channel (Tavern) added to wallet! Syncing will take few minutes.',None) 
 				self.filter_table.cellWidget(0,1).setEnabled(False) # when imported update filters !
 			# print('tmp_active_active 2',tmp_active_active)	
@@ -262,8 +263,8 @@ class Chnls(gui.QObject):
 							, {'T':'LabelC', 'L':'Messages:','align':'center'}
 							, {'T':'Combox', 'uid':'msg', 'V':['Last 10','Last 100', 'All'] }
 							# , {'T':'Button', 'L':'Import', 'tooltip':'new channel' }
-							, {'T':'Button', 'L':'Export','tooltip':'current channel'  }
-							, {'T':'Button', 'L':'Reply','tooltip':'to current channel'  }
+							, {'T':'Button', 'L':'Export','tooltip':'Export this channel (current)'  }
+							, {'T':'Button', 'L':'Reply','tooltip':'Reply to current channel'  }
 						] 
 			self.filter_table.updateTable([tmpdict]) 
 			
@@ -552,7 +553,7 @@ class Chnls(gui.QObject):
 		
 		if debug_threads: print('\nchannel_threads')
 	
-		idb=localdb.DB(self.db)
+		# idb=localdb.DB(self.db)
 		 
 		thr_filter=self.filter_table.cellWidget(0,1).currentText() #get_value('thr')
 		wwhere={'in_sign_uid':['>',-2],'is_channel':['=',"'True'"]} #'Last 7 days','Last 30 days','All'
@@ -562,11 +563,11 @@ class Chnls(gui.QObject):
 			wwhere={'date_time':['>=',"'"+app_fun.today_add_days(-30)+"'"], 'in_sign_uid':['>',-2],'is_channel':['=',"'True'"]}
 			
 		# need channel name 
-		adr_date=idb.select_max_val( 'msgs_inout',['in_sign_uid','date_time'],where=wwhere,groupby=['addr_to'])
+		adr_date=global_db.select_max_val( 'msgs_inout',['in_sign_uid','date_time'],where=wwhere,groupby=['addr_to'])
 		
 		
 		if debug_threads: 
-			print('Channel threads available\n',idb.select_max_val( 'msgs_inout',['in_sign_uid','date_time'],where={ 'is_channel':['=',"'True'"]},groupby=['addr_to']))
+			print('Channel threads available\n',global_db.select_max_val( 'msgs_inout',['in_sign_uid','date_time'],where={ 'is_channel':['=',"'True'"]},groupby=['addr_to']))
 			print('Displayed\n',adr_date)
 		
 		# print('msgs',idb.select('msgs_inout'))
@@ -596,7 +597,7 @@ class Chnls(gui.QObject):
 				# chnl name :
 				
 				# alias_from_book
-			chnl_info=idb.select('channels', [ 'vk' , 'creator' , 'channel_name' , 'channel_intro'],{'address':['=',  "'"+ad[0]+"'" ] } ) # idb.select('addr_book', [ 'Alias'],{'Address':['=',  "'"+ad[0]+"'" ] } ) ##
+			chnl_info=global_db.select('channels', [ 'vk' , 'creator' , 'channel_name' , 'channel_intro'],{'address':['=',  "'"+ad[0]+"'" ] } ) # idb.select('addr_book', [ 'Alias'],{'Address':['=',  "'"+ad[0]+"'" ] } ) ##
 			# print('chnl_info',chnl_info)
 			if len(chnl_info)==0:
 				continue
@@ -639,7 +640,7 @@ class Chnls(gui.QObject):
 	def update_list(self ):
 		debug_msgs= False
 		
-		idb=localdb.DB(self.db)
+		# idb=localdb.DB(self.db)
 		msg_filter=self.filter_table.cellWidget(0,3).currentText() #get_value('msg')
 		llimit=9999
 		
@@ -666,7 +667,7 @@ class Chnls(gui.QObject):
 			# wwhere={'proc_json':['=',"'True'"],'addr_to':['=',"'"+threads_aa[k][0]+"'"], 'in_sign_uid':['>',-2],'is_channel':['=',"'True'"], 'type':[' like ',"'in%'"] } ## ' like ',"'in%'"
 				
 			# addr ext here is name of sender 
-			tmp_msg=idb.select('msgs_inout', ['type','msg','date_time','uid','in_sign_uid','addr_ext' ],where=wwhere, orderby=[ {'date_time':'desc'}], limit=llimit)
+			tmp_msg=global_db.select('msgs_inout', ['type','msg','date_time','uid','in_sign_uid','addr_ext' ],where=wwhere, orderby=[ {'date_time':'desc'}], limit=llimit)
 			
 			if debug_msgs:  print('tmpuid tmp_msg\n',tmpuid,tmp_msg) 
 			 
