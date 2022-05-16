@@ -290,7 +290,7 @@ class InitApp:
 				# print('insert worked?',worked)
 				# print('select\n',self.init_db.select('current_session' ) )
 				sess_dir=os.path.join('backups',self.cur_sess)
-				print('new backup of encr files; backed up to ', sess_dir)
+				print('new _local_ backup of encr files; backed up to ', sess_dir)
 				os.mkdir( sess_dir )
 			
 			
