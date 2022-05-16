@@ -338,7 +338,7 @@ class Crypto:
 			#          copy_progress(path,deftxt               ,src ,dest,fromfile=True)
 			return gui.copy_progress(path,'Encrypting to '+path,wstr,path, False)
 		else:
-			print('[Encrypting]\n Gui copy progress not passed!') #'[Encrypting] Not writing file to',path,
+			# print('[Encrypting]\n Gui copy progress not passed!') #'[Encrypting] Not writing file to',path,
 			with open(path, 'w', encoding="utf-8") as fo:
 				fo.write(wstr)
 			return 'wstr'
@@ -356,7 +356,7 @@ class Crypto:
 			#          copy_progress(path,deftxt               ,src ,dest,fromfile=True)
 			return gui.copy_progress(path,'Decrypting to '+path,bstr,path, False)
 		else:
-			print('[Decrypting]\n Gui copy progress not passed!') #'[Decrypting] Not writing file to',path,
+			# print('[Decrypting]\n Gui copy progress not passed!') #'[Decrypting] Not writing file to',path,
 			with open(path, 'wb') as fo:
 				fo.write(bstr)
 			return 'bstr'
