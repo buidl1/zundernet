@@ -3,6 +3,17 @@
 # and do not write to init - set default create new option / delete last file value 
 
 
+# Traceback (most recent call last):
+  # File "D:\zunqt\zundernet.py", line 279, in upload_settings
+    # wata_settings=Settings( wds, init_app )
+  # File "D:\zunqt\modules\frame_settings.py", line 147, in __init__
+    # grid_db, colnames=update_db_info()
+  # File "D:\zunqt\modules\frame_settings.py", line 102, in update_db_info
+    # tmpsize_multi=self.db_main.table_size(['jsons','tx_history','notifications','queue_done'])
+  # File "D:\zunqt\modules\localdb.py", line 293, in table_size
+    # curs=self.connection.cursor()
+# sqlite3.ProgrammingError: Cannot operate on a closed database.
+
 # import sqlite3 as sql
 import modules.app_fun as app_fun
 import modules.aes as aes
@@ -562,7 +573,7 @@ class DB:
 	def sql_init_check(self,tmpsql,tname):
 	
 		if not self.connected:	
-			print('disconnected, rejecting sql', tmpsql)
+			# print('disconnected, rejecting sql', tmpsql)
 			return False
 			
 		if not self.check_table_exist(tname):#tname not in self.db_table_columns:
@@ -1032,7 +1043,7 @@ class DB:
 		
 		
 		
-	def select_max_val(self,table_name,column,where={},groupby=[]):
+	def select_max_val(self,table_name,column,where={},groupby=[],_limit=0, _ord_by=[]): # _ord_by - ii of col from max val 
 		fname='select_max_val'
 				
 		sqlstr=''
@@ -1050,13 +1061,32 @@ class DB:
 			sqlstr=sqlstr.replace('select ','select '+tmpcol+', ') + ' group by '+tmpcol
 			
 			if type(column)==type([]):
-				sqlstr='select * from ('+sqlstr+') as xx order by '+','.join([' mmax'+str(jj)+' desc' for jj,cc in enumerate(column)] )
-			else:
-				sqlstr='select * from ('+sqlstr+') as xx order by mmax desc'
+				ord_arr=[' mmax'+str(jj)+' desc' for jj,cc in enumerate(column)]
 				
+				if len(_ord_by)>0:
+					
+					try:
+						ord_arr=[]
+						for jj in _ord_by:
+							if jj<len(column):
+								ord_arr.append(' mmax'+str(jj)+' desc')
+						# ord_arr=[' mmax'+str(jj)+' desc' for jj in _ord_by )]
+						# ord_arr=[' mmax'+str(jj)+' desc' for jj,cc in enumerate([column[_ord_by])]
+					except:
+						print('error order by ',_ord_by,column)
+						return []
+						
+				
+				sqlstr='select * from ('+sqlstr+') as xx order by '+','.join(ord_arr ) #[' mmax'+str(jj)+' desc' for jj,cc in enumerate(column)] 
+			else:
+				sqlstr='select * from ('+sqlstr+') as xx order by mmax desc' # case when str passed not aray - single value 
+				
+		if _limit>0:
+			sqlstr+=' limit '+str(_limit)
 				
 				
 		tmpsql=sqlstr
+		# print(tmpsql)
 		
 		if not self.sql_init_check( tmpsql,table_name): #self.connected:	 
 			return	[]
