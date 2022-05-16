@@ -676,7 +676,7 @@ class Msg(gui.QObject):
 		tmpdict={}
 		tmpdict['rowk']='filters'
 		tmpdict['rowv']=[ {'T':'LabelC', 'L':'Threads: '}
-							, {'T':'Combox', 'uid':'thr', 'V':['Last 7 days','Last 30 days','All'] }
+							, {'T':'Combox', 'uid':'thr', 'V':['Last 10','Last 100', 'All'] } #['Last 7 days','Last 30 days','All']
 							, {'T':'LabelC', 'L':'Messages: '}
 							, {'T':'Combox', 'uid':'msg', 'V':['Last 10','Last 100', 'All'] }
 							# , {'T':'Button', 'L':'Reply', 'uid':'reply'}
@@ -925,10 +925,15 @@ class Msg(gui.QObject):
 			
 		thr_filter=self.filter_table.cellWidget(0,1).currentText() #get_value('thr')
 		wwhere={'in_sign_uid':['>',-2],'is_channel':[['=',"'False'"],[' is ',"null"]]} #'Last 7 days','Last 30 days','All'
-		if thr_filter=='Last 7 days':
-			wwhere={'date_time':['>=',"'"+app_fun.today_add_days(-7)+"'"], 'in_sign_uid':['>',-2],'is_channel':[['=',"'False'"],[' is ',"null"]]} #
-		elif thr_filter=='Last 30 days':
-			wwhere={'date_time':['>=',"'"+app_fun.today_add_days(-30)+"'"], 'in_sign_uid':['>',-2],'is_channel':[['=',"'False'"],[' is ',"null"]]}
+		llimit=0
+		if thr_filter=='Last 10': 
+			llimit=10
+		elif thr_filter=='Last 100': 
+			llimit=100
+		# if thr_filter=='Last 7 days':
+			# wwhere={'date_time':['>=',"'"+app_fun.today_add_days(-7)+"'"], 'in_sign_uid':['>',-2],'is_channel':[['=',"'False'"],[' is ',"null"]]} #
+		# elif thr_filter=='Last 30 days':
+			# wwhere={'date_time':['>=',"'"+app_fun.today_add_days(-30)+"'"], 'in_sign_uid':['>',-2],'is_channel':[['=',"'False'"],[' is ',"null"]]}
 			
 		# aliases known:
 		# can send to using addr book / defined situation or tx to any / undefined ...
@@ -943,7 +948,7 @@ class Msg(gui.QObject):
 		# when receiving from unknown? should stay unknown until connected ?
 		# in this approach  is ok - sending to , it's me so it is outgoing!
 			
-		adr_date=global_db.select_max_val( 'msgs_inout',['in_sign_uid','date_time' ],where=wwhere,groupby=['addr_ext'])
+		adr_date=global_db.select_max_val( 'msgs_inout',['in_sign_uid','date_time' ],where=wwhere,groupby=['addr_ext'],_limit=llimit, _ord_by=[1])
 		if hasattr(self,"adr_date") and self.adr_date==adr_date:
 			return 0
 			
