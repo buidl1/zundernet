@@ -259,7 +259,7 @@ class Chnls(gui.QObject):
 			
 			tmpdict['rowk']='filters'
 			tmpdict['rowv']=[ {'T':'LabelC', 'L':'Channels:','align':'center'}
-							, {'T':'Combox', 'uid':'thr', 'V':['Last 7 days','Last 30 days','All'] }
+							, {'T':'Combox', 'uid':'thr', 'V':['Last 10','Last 100', 'All']  } # change to ['Last 10','Last 100', 'All'] } ['Last 7 days','Last 30 days','All']
 							, {'T':'LabelC', 'L':'Messages:','align':'center'}
 							, {'T':'Combox', 'uid':'msg', 'V':['Last 10','Last 100', 'All'] }
 							# , {'T':'Button', 'L':'Import', 'tooltip':'new channel' }
@@ -276,6 +276,7 @@ class Chnls(gui.QObject):
 			
 			if self.cur_uid in self.valid_uid_to_name:
 				tmpalias=self.valid_uid_to_name[self.cur_uid] #'CHANNEL NAME!!!' #self.grid_threads_msg[curid][0]['rowv'][1]['uid'] #TO CHANGE CHANNEL
+				
 				 
 				self.filter_table.cellWidget(0,4).updateButton(name='Export '+ tmpalias['name'], actionFun=self.export_channel,args=( self.cur_uid, tmpalias['vk'] ) )
 				self.filter_table.cellWidget(0,5).updateButton(name='Reply to '+ tmpalias['name'], actionFun=self.send_reply,args=('r',tmpalias['name'] ) )
@@ -342,7 +343,7 @@ class Chnls(gui.QObject):
 		self.msg_thrd_frame=gui.ContainerWidget(None,layout=gui.QHBoxLayout() )
 		self.parent_frame.insertWidget(self.msg_thrd_frame)
 				
-		self.frame1= gui.FramedWidgets(None,'Threads') #ttk.LabelFrame(parent_frame,text='Threads')  
+		self.frame1= gui.FramedWidgets(None,'Channels') #ttk.LabelFrame(parent_frame,text='Threads')  
 		self.frame1.setMaximumWidth(196)
 		self.frame1.setMinimumWidth(128)
 		self.msg_thrd_frame.insertWidget(self.frame1)
@@ -355,7 +356,7 @@ class Chnls(gui.QObject):
 		self.frame1.insertWidget(self.thr_table)
 		# self.set_actions()
 		
-		self.frame2= gui.FramedWidgets(None,'Selected thread',layout=gui.QVBoxLayout())
+		self.frame2= gui.FramedWidgets(None,'Selected channel',layout=gui.QVBoxLayout())
 		self.action_buttons=gui.ContainerWidget(None,layout=gui.QHBoxLayout() )
 		self.frame2.insertWidget(self.action_buttons)	
 		
@@ -430,7 +431,13 @@ class Chnls(gui.QObject):
 		
 		
 		# self.cur_addr=curid # self.cur_uid
+		# print('self.cur_uid',self.cur_uid,'self.valid_uid_to_name',self.valid_uid_to_name)
+		if self.cur_uid==-1 or len(self.valid_uid_to_name)==0: return
+		
 		tmpalias=self.valid_uid_to_name[self.cur_uid] #'CHANNEL NAME!!!' #self.grid_threads_msg[curid][0]['rowv'][1]['uid'] #TO CHANGE CHANNEL
+		
+		# print('setting title?',tmpalias['name'])
+		self.frame2.setTitle('Selected channel '+tmpalias['name'])
 		 
 		# self.filter_table.cellWidget(0,4).setEnabled(True) 
 		# self.filter_table.cellWidget(0,5).setEnabled(True) 
@@ -557,13 +564,18 @@ class Chnls(gui.QObject):
 		 
 		thr_filter=self.filter_table.cellWidget(0,1).currentText() #get_value('thr')
 		wwhere={'in_sign_uid':['>',-2],'is_channel':['=',"'True'"]} #'Last 7 days','Last 30 days','All'
-		if thr_filter=='Last 7 days':
-			wwhere={'date_time':['>=',"'"+app_fun.today_add_days(-7)+"'"], 'in_sign_uid':['>',-2],'is_channel':['=',"'True'"]} #
-		elif thr_filter=='Last 30 days':
-			wwhere={'date_time':['>=',"'"+app_fun.today_add_days(-30)+"'"], 'in_sign_uid':['>',-2],'is_channel':['=',"'True'"]}
+		# change to ['Last 10','Last 100', 'All'] }
+		llimit=0
+		if thr_filter=='Last 10': #'Last 7 days':
+			# wwhere={'date_time':['>=',"'"+app_fun.today_add_days(-7)+"'"], 'in_sign_uid':['>',-2],'is_channel':['=',"'True'"]} #
+			llimit=10
+		elif thr_filter=='Last 100': #'Last 30 days':
+			# wwhere={'date_time':['>=',"'"+app_fun.today_add_days(-30)+"'"], 'in_sign_uid':['>',-2],'is_channel':['=',"'True'"]}
+			llimit=100
 			
 		# need channel name 
-		adr_date=global_db.select_max_val( 'msgs_inout',['in_sign_uid','date_time'],where=wwhere,groupby=['addr_to'])
+		# order by date, limit N 
+		adr_date=global_db.select_max_val( 'msgs_inout',['date_time'],where=wwhere,groupby=['addr_to'],_limit=llimit) #'in_sign_uid',
 		
 		
 		if debug_threads: 
@@ -605,13 +617,13 @@ class Chnls(gui.QObject):
 			tmpalias=alias_from_book
 				 
 					
-			if ad[2] not in threads_aa:
-				same_date_count[ad[2]]=1
+			if ad[-1] not in threads_aa:
+				same_date_count[ad[-1]]=1
 				
 			else:
-				same_date_count[ad[2]]=same_date_count[ad[2]]+1
+				same_date_count[ad[-1]]=same_date_count[ad[-1]]+1
 				
-			threads_aa[ad[2]+'__'+str(same_date_count[ad[2]])] = [tmpaddr,{'vk':chnl_info[0][0],'creator':chnl_info[0][1],'channel_name':chnl_info[0][2],'channel_intro': chnl_info[0][3] }  ] 
+			threads_aa[ad[-1]+'__'+str(same_date_count[ad[-1]])] = [tmpaddr,{'vk':chnl_info[0][0],'creator':chnl_info[0][1],'channel_name':chnl_info[0][2],'channel_intro': chnl_info[0][3] }  ] 
 			# threads_aa[ad[2]+'__'+str(same_date_count[ad[2]])] = [tmpaddr,tmpalias,tmpuid ] 
 		# print('threads',threads_aa)
 		self.threads_aa=threads_aa
