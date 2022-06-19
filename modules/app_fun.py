@@ -230,6 +230,7 @@ def run_process( CLI_STR,cmd):
 		cmd=[cmdii for cmdii in cmdtmp]
 		
 	# print('final cmd',CLI_STR+cmd)
+	# final cmd ['D:/zunqt/newPIRATE/bin3\\pirate-cli.exe', '-datadir=D:/zunqt/newPIRATE/PIRATE', 'getinfo']
 	zxc=subprocess.run(CLI_STR+cmd,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
 	# print('init result',zxc,'\n',zxc.stdout)
 	
@@ -266,7 +267,6 @@ def json_to_str(dd,tt=''):
 	
 	
 
-# https://stackoverflow.com/questions/17455300/python-securely-remove-file
 
 
 def secure_delete(path, passes=5): #app_fun.secure_delete(self.tmp_err)
@@ -275,7 +275,7 @@ def secure_delete(path, passes=5): #app_fun.secure_delete(self.tmp_err)
 	
 	# special windows handling
 	if usb_tmp.os=='windows':
-		import pythoncom
+		import pythoncom #pywin32
 		pythoncom.CoInitialize()
 		# print('pythoncom.CoInitialize()')
 	
