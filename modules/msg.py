@@ -82,7 +82,7 @@ class Msg(gui.QObject):
 				break
 			tmphash=''
 			
-		tuid=global_db.select('in_signatures',['uid' ], {'hex_sign':['=',"'"+sign1+"'"],'n':['=',sign1_n]}   ) #
+		tuid=global_db.select('in_signatures',['uid' ], {'hex_sign':['=',global_db.qstr(sign1)   ],'n':['=',sign1_n]}   ) #
 		# print('#match_sign found addr_from_book',addr_from_book)
 		
 		if len(tuid)>0: # this should be new hash - should be no other before like this one - if other detected - return 
@@ -107,7 +107,7 @@ class Msg(gui.QObject):
 				
 			global_db.insert(table,insert_arr)
 			# print('#match_sign new sender addr_from_book',addr_from_book)
-			tuid=global_db.select('in_signatures',['uid','addr_from_book'], {'hex_sign':['=',"'"+sign1+"'"],'n':['=',sign1_n]}   ) #getting the new uid 
+			tuid=global_db.select('in_signatures',['uid','addr_from_book'], {'hex_sign':['=',global_db.qstr(sign1)  ],'n':['=',sign1_n]}   ) #getting the new uid 
 			new_uid=tuid[0][0]
 			# print('new uid',new_uid)
 			# if tuid[0][1]!=None:
@@ -121,13 +121,13 @@ class Msg(gui.QObject):
 			# print('#match_sign update addr_from_book',addr_from_book)
 				
 			table['in_signatures']=[{'hex_sign':sign1,'n':sign1_n, 'addr_from_book':addr_from_book }]
-			global_db.update(table,['hex_sign','n','addr_from_book'   ],{'hex_sign':['=',"'"+tmphash+"'"],'n':['=',n_init]})
+			global_db.update(table,['hex_sign','n','addr_from_book'   ],{'hex_sign':['=',global_db.qstr(tmphash) ],'n':['=',n_init]})
 			
 		# print('#match_sign in_signatures',idb.select('in_signatures',[ ]  ),'sign2_n',sign2_n)	
 		
 		if sign2_n>-1: # if exchanging signature to new one 
 			# print('in if sign2_n>-1')
-			cursign=global_db.select('in_signatures', ['uid','addr_from_book' ],{'hex_sign':['=', "'"+sign1+"'"], 'n':['=', sign1_n] } ) #
+			cursign=global_db.select('in_signatures', ['uid','addr_from_book' ],{'hex_sign':['=', global_db.qstr(sign1)  ], 'n':['=', sign1_n] } ) #
 			tmpaddr=cursign[0][1]
 			tmpuid=cursign[0][0]
 			
@@ -139,7 +139,7 @@ class Msg(gui.QObject):
 			table={} 
 			table['in_signatures']=[{'uid':tmpuid,'addr_from_book':tmpaddr }]
 			# print('updating')
-			global_db.update(table,['uid','addr_from_book' ],{'hex_sign':['=',"'"+sign2+"'"],'n':['=',sign2_n] })
+			global_db.update(table,['uid','addr_from_book' ],{'hex_sign':['=',global_db.qstr(sign2)  ],'n':['=',sign2_n] })
 			
 			# addr_from_book=tmpaddr # not needed - already done in the loop
 		# print('retugning return new_uid,addr_from_book ',new_uid,addr_from_book )
@@ -331,7 +331,7 @@ class Msg(gui.QObject):
 						
 							# ensure there is channel to update or it is init insert?
 							# and it is not related to current but historical entry!
-							init_ch_id=global_db.select_min_val( 'msgs_inout','uid',where={'is_channel':['=',"'True'"] , 'addr_to': ['=',"'"+mm[9]+"'"],  'type': ['=',"'in'"]  } )  														
+							init_ch_id=global_db.select_min_val( 'msgs_inout','uid',where={'is_channel':['=',"'True'"] , 'addr_to': ['=',global_db.qstr(mm[9])  ],  'type': ['=',"'in'"]  } )  														
 							
 							if len(init_ch_id)>0 and init_ch_id[0][0]!=mm[5]:# and it is not related to current but historical entry!																								 
 								tmp_channel_update=True
@@ -685,7 +685,7 @@ class Msg(gui.QObject):
 		grid_filter=[]
 		grid_filter.append(tmpdict )
 		
-		self.filter_table=gui.Table(None,params={'dim':[1,5],'updatable':1} )  #, 'toContent':1
+		self.filter_table=gui.Table(None,params={'dim':[1,5],'updatable':1, 'toContent':1} )  #, 'toContent':1
 		self.filter_table.updateTable(grid_filter)
 		frame0.insertWidget(self.filter_table)
 		frame0.setMaximumHeight(self.filter_table.height())
@@ -809,6 +809,7 @@ class Msg(gui.QObject):
 			self.action_buttons.insertWidget(gui.Button(None,'Drop alias',actionFun=self.drop_alias, args=(curid,),tooltip=str(tmpalias)))
 		
 		
+		self.frame2.setTitle('Selected thread '+tmpalias) #['name']
 		
 		
 		
@@ -1068,16 +1069,23 @@ class Msg(gui.QObject):
 						
 			for tm in tmp_msg:
 				
-				sstyle1=" background-color:#fff;color:#333; padding:5px "
-				sstyle2=" background-color:#fff;color:#333; min-width:768px;max-width:768px;padding:5px "
+				# sstyle1=" background-color:#fff;color:#333; padding:5px "
+				# sstyle2=" background-color:#fff;color:#333; min-width:768px;max-width:768px;padding:5px "
+				sstyle1=" color:green; padding:2px; min-height:40px;"
+				sstyle2=" color:green; min-width:668px;max-width:768px;padding:2px "
 				# tmppadx=0
 				writer='['+threads_aa[k][1]+']: '
 				if tm[0]=='out':
 					writer='[me]: '
-					sstyle1=" background-color:#ddd;color:black; padding:5px "
-					sstyle2="background-color:#ddd;color:black; min-width:768px;max-width:768px;padding:5px  "
-					# tmpdict={'rowk':tm[2], 'rowv':[{'T':'QLabel', 'L':tm[2] ,  'style':sstyle1,'ttype':gui.QDateTime  }, {'T':'TextEdit', 'L': tmptoinsert, 'uid':str(threads_aa[k][0]),  'style':sstyle2, 'readonly':1,'width': (self.maxMsgColWidth-80)  }] } 
-				tmpdict={'rowk':tm[2], 'rowv':[{'T':'QLabel', 'L':tm[2] ,  'style':sstyle1,'ttype':gui.QDateTime  }, {'T':'TextEdit', 'L': writer+tm[1], 'uid':str(threads_aa[k][1]),  'style':sstyle2, 'readonly':1,'width': (self.maxMsgColWidth-100)  }] } #, 'pads':[tmppadx,0] 
+					# sstyle1=" background-color:#ddd;color:black; padding:5px "
+					# sstyle2="background-color:#ddd;color:black; min-width:768px;max-width:768px;padding:5px  "
+					sstyle1=" color:blue; padding:2px ; min-height:40px;"
+					sstyle2=" color:blue; min-width:668px;max-width:768px;padding:2px  "
+					
+					
+				# tmpdict={'rowk':tm[2], 'rowv':[{'T':'QLabel', 'L':tm[2] ,  'style':sstyle1,'ttype':gui.QDateTime  }, {'T':'TextEdit', 'L': writer+tm[1], 'uid':str(threads_aa[k][1]),  'style':sstyle2, 'readonly':1,'width': (self.maxMsgColWidth-100)  }] } #, 'pads':[tmppadx,0] 
+				tmpdict={'rowk':tm[2], 'rowv':[{'T':'QLabel', 'L':tm[2] ,  'style':sstyle1,'ttype':gui.QDateTime , 'align':['AlignTop'] }, {'T':'LabelV', 'L': writer+tm[1], 'uid':str(threads_aa[k][1]) ,  'style':sstyle2  }] } #, 'pads':[tmppadx,0] 
+				
 				msg_flow.append(tmpdict)
 				
 			self.grid_threads_msg[tmpuid]=msg_flow 
