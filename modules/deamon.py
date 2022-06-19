@@ -154,51 +154,94 @@ class DeamonInit(gui.QObject):
 				
 				
 				
-			if rr[3]=='import_view_key': #json.dumps({'addr':tmpaddr,'viewkey':tmpvk})
+			if rr[3]=='import_view_key': #this in addr book # {'addr':tmpaddr,'viewkey':tmpvk, 'usage_first_block':tmp_start_block}
+				
 				adrvk=json.loads(rr[4])
 				clean_vk=adrvk['viewkey'].strip() 
 				clean_addr=adrvk['addr'].strip() 
-				tmpresult=self.the_wallet.imp_view_key( clean_addr,clean_vk)
-				# print('202tmpresult',tmpresult)
+				# if nothing passed take current for speed loading / not blocking app
+				start_block=self.the_wallet.getinfo()["blocks"]   #tmpblocks=self.getinfo()["blocks"]
+				insert_start_block=False
+				if 'usage_first_block' in adrvk:
+					try: 
+						start_block=int(adrvk['usage_first_block']) 
+						insert_start_block=True
+					except: pass
+					
+				# check is not already in priv keys ?
 				table={}
+				if clean_addr in self.the_wallet.addr_list:
+					# print('view key is already aprt of the wallet priv key! - cancell')
+					table['queue_done']=[{"type":rr[0],"wait_seconds":rr[1],"created_time":rr[2],"command":rr[3],"json":rr[4],"id":rr[5],"result":'cancelled - was already in prv keys','end_time':app_fun.now_to_str(False)}]
+					global_db.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
+					continue
+					
+				if clean_vk in self.the_wallet.view_key_addr_dict:
+					# print('view key is already in! - cancell')
+					table['queue_done']=[{"type":rr[0],"wait_seconds":rr[1],"created_time":rr[2],"command":rr[3],"json":rr[4],"id":rr[5],"result":'cancelled - was already in view keys','end_time':app_fun.now_to_str(False)}]
+					global_db.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
+					continue
+				
+				tmpresult=self.the_wallet.imp_view_key( clean_addr,clean_vk,startHeight=start_block)
+				
 				table['queue_done']=[{"type":rr[0],"wait_seconds":rr[1],"created_time":rr[2],"command":rr[3],"json":rr[4],"id":rr[5],"result":json.dumps(tmpresult),'end_time':app_fun.now_to_str(False)}]
 				# print('inserting')
 				global_db.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
+				table_vk={'view_keys':[{'address':zaddr, 'vk':vkey}]}
 				
-				table={}
-				if 'type' in tmpresult :
-					if tmpresult['type'].lower() in ['sapling','z-sapling','zsapling']:
-						table['addr_book']=[{ 'viewkey_verif':1 }]
-						
-						table_vk={'view_keys':[{'address':clean_addr, 'vk':clean_vk }]}
-						global_db.upsert(table_vk,['address','vk']) # separate viewkey table - was insert
-				else:
-					table['addr_book']=[{ 'viewkey_verif':-1 }]
+				if insert_start_block:
+				# vkey update cancell - only update start block on usage / actual value passed 
+					table_vk['view_keys'][0]['usage_first_block']=start_block
 					
-				if table!={}:
-					global_db.update(table,[  'viewkey_verif'],{'Address':['=',"'"+clean_addr+"'"]}) # update addr book table 
-					self.update_addr_book.emit()
-					count_task_done+=1 
-					self.sending_signal.emit(['task_done','cmd_queue'])
-					# print('process_queue import_view_key update_wallet')
-					self.update_wallet()
-					# print('wallet refreshed ')
+				global_db.upsert(table_vk,list(kk in table_vk),where={'vk':['=',"'"+clean_vk+"'"],'address':['=',"'"+clean_addr+"'"]})
+				# arrtmp=['address','vk']
+				# if startHeight>1790000: # insert usage_first_block only if realistic value from init usage - not to propagate from import to import if was not yet used 
+					# table_vk['view_keys'][0]['usage_first_block']= startHeight
+					# arrtmp.append( 'usage_first_block')
+					
+				# global_db.upsert(table_vk,arrtmp,where={'vk':['=',"'"+vkey+"'"],'address':['=',"'"+zaddr+"'"]}) # separate viewkey table - was insert
+		
+				
+				# table={}
+				# if 'type' in tmpresult :
+					# if tmpresult['type'].lower() in ['sapling','z-sapling','zsapling']:
+						# table['addr_book']=[{ 'viewkey_verif':1 }]
+						
+						# table_vk={'view_keys':[{'address':clean_addr, 'vk':clean_vk,'usage_first_block': start_block}]}
+						# global_db.upsert(table_vk,['address','vk'],where={'vk':['=','"'+clean_vk+"'"]}) # separate viewkey table - was insert
+				# else:
+					# table['addr_book']=[{ 'viewkey_verif':-1 }]
+					
+				# if table!={}:
+					# global_db.update(table,[  'viewkey_verif'],{'Address':['=',"'"+clean_addr+"'"]}) # update addr book table 
+					# self.update_addr_book.emit()
+					# count_task_done+=1 
+					# self.sending_signal.emit(['task_done','cmd_queue']) # print('process_queue import_view_key update_wallet')
+					# self.update_wallet() # print('wallet refreshed ')
+				self.update_addr_book.emit()
+				count_task_done+=1 
+				self.sending_signal.emit(['task_done','cmd_queue']) # print('process_queue import_view_key update_wallet')
+				self.update_wallet() # print('wallet refreshed ')
 				
 			elif rr[3]=='import_priv_keys': #json.dumps({'addr':tmpaddr,'viewkey':tmpvk})
 			
-				tmpjs=json.loads(rr[4])
-				ll=len(tmpjs['keys'])
+				tmpjs=json.loads(rr[4]) # ddict[addr]={pk, usage_first_block}
+				ll=len(tmpjs )
+				# ll=len(tmpjs['keys'])
 				added_addr=[]
 				
-				for ii,kk in enumerate(tmpjs['keys']):
-					# print(ii,kk)
-					table={}
-					table['queue_waiting']=[{'status':'processing '+str(ii+1)+'/'+str(ll)}]
+				for aa in tmpjs:#ii,kk in enumerate(tmpjs['keys']): 
+					table={'queue_waiting':[{'status':'processing '+str(ii+1)+'/'+str(ll)}]}
+					# table['queue_waiting']=[{'status':'processing '+str(ii+1)+'/'+str(ll)}]
 					global_db.update( table,['status'],{'id':[ '=',rr[5] ]})
 					self.sending_signal.emit(['cmd_queue'])
-					# print(199,tmpresult['address'])
-					tmpresult=self.the_wallet.imp_prv_key( kk )
-					added_addr.append(tmpresult['address'])
+					tmpresult=''
+					if 'usage_first_block' in tmpjs[aa]:
+						tmpresult=self.the_wallet.imp_prv_key( tmpjs[aa]['pk'],startHeight=tmpjs[aa]['usage_first_block'] ) # now optimal 
+					else:
+					
+						tmpresult=self.the_wallet.imp_prv_key( tmpjs[aa]['pk'],startHeight=self.the_wallet.getinfo()["blocks"]    ) #1700000
+					added_addr.append(aa) #tmpresult['address'])
 					
 				table={}
 				table['queue_done']=[{"type":rr[0],"wait_seconds":rr[1],"created_time":rr[2],"command":rr[3],"json":rr[4],"id":rr[5],"result":'new addresses: '+str(added_addr),'end_time':app_fun.now_to_str(False)}]
@@ -208,6 +251,11 @@ class DeamonInit(gui.QObject):
 				count_task_done+=1
 				self.sending_signal.emit(['task_done','cmd_queue'])
 				
+				self.update_priv_keys_table(tmpjs )
+				
+				# add for update ? need also start block 
+				# for ii,kk in enumerate(tmpjs['keys']):
+					# self.the_wallet.add_pk_for_start_block(added_addr[ii],kk)
 				
 			elif rr[3]=='validate_addr':
 			
@@ -225,12 +273,13 @@ class DeamonInit(gui.QObject):
 					table['addr_book']=[{ 'addr_verif':-1 }]  #,'viewkey_verif' 
 				else:
 					table['addr_book']=[{ 'addr_verif':1 }]  #,'viewkey_verif' 
-				global_db.update(table,[  'addr_verif'],{'Address':['=',"'"+adrvk['addr']+"'"]})
+				global_db.update(table,[  'addr_verif'],{'Address':['=',global_db.qstr(adrvk['addr']) ]})
 				self.update_addr_book.emit()
 				self.sending_signal.emit(['task_done','cmd_queue'])
 			
 			elif rr[3]=='new_addr':
 			
+				# print('new addr',rr)
 				addr_opt=json.loads(rr[4])
 				addr_count= addr_opt['addr_count'] 
 				addr_cat=addr_opt['addr_cat']
@@ -240,12 +289,41 @@ class DeamonInit(gui.QObject):
 				# 2 create results / wallet api
 				new_addr_list=[]
 				date_str=app_fun.now_to_str(False)
+				
+				# for priv keys update
+				next_id=1
+				table_pk={'priv_keys':[]} #table_pk['priv_keys']=[] #{'id':next_id, 'address':aa, 'pk':pk }]
+				pk=''
+				if new_seed=='New':
+					max_id=global_db.select_max_val('priv_keys','id' )
+					if len(max_id)>0:
+						if max_id[0]!=None:
+							next_id=max_id[0][0]+1 
+				else:
+					# next_id= new_seed # str self.db_main
+					_pk= global_db.select('priv_keys',['pk' ],where={'id':['=',new_seed]})
+					if len(_pk)>0: pk=_pk[0][0]
+					else:
+						print('some error - no pk in db??',new_seed,_pk)
+						return
+					
+				# print('pk,new_seed,next_id',pk,new_seed,next_id)	
+			
+			
 				for nal in range(addr_count):
 					# print(nal,addr_count)
 					tmpresult=self.the_wallet.new_zaddr(new_seed)
 					# print(tmpresult)
 					new_addr_list.append(tmpresult)
-					
+					if new_seed=='New':
+						pk=self.the_wallet.exp_prv_key(tmpresult)
+						table_pk['priv_keys'].append({'id':next_id, 'address':tmpresult, 'pk':pk })
+						next_id+=1
+					else:
+						# print('# get pk and id from db',new_seed,int(new_seed),pk)
+						# pk=self.the_wallet.exp_prv_key(tmpresult).replace('\r','').replace('\\n','').replace('\\r','')
+						table_pk['priv_keys'].append({'id':int(new_seed), 'address':tmpresult, 'pk':pk }) # pk set from _pk
+					# print('after ifelse')
 					# add category
 					if addr_cat!='':
 						tmp_cat=addr_cat
@@ -256,15 +334,25 @@ class DeamonInit(gui.QObject):
 						# print(table)
 						global_db.insert(table,['address','category','last_update_date_time']) #,{'address':['=',"'"+tmpresult+"'"]})
 					
-					# update msg
+					# print('# update msg')
 					table={}
 					table['queue_waiting']=[{'status':'processing '+str(nal+1)+'/'+str(addr_count)}]
 					global_db.update( table,['status'],{'id':[ '=',rr[5] ]})
 					self.sending_signal.emit(['cmd_queue'])
 					# time.sleep(0.01)
 					
-				# addr_cat_test=idb.select('address_category',['address','category'] )	
-				# print('test\n\n',addr_cat_test)
+				# print('# if new_seed: ')
+				global_db.insert(table_pk,['id','address','pk'])	
+				# print('inserted',table_pk)
+				# also for current seed ? as long as addr was not used ? = as long as already there ?
+				
+				for tpk in table_pk['priv_keys']: # tpk = {'id':int(new_seed), 'address':tmpresult, 'pk':pk }
+					# add aa/pk to update stat block if new seed or if current pk already there-  then trigger for new addr too 
+					# print('ckeck if ',tpk,new_seed,self.the_wallet.addr_privkey_start.values())
+					if new_seed=='New' or tpk['pk'] in self.the_wallet.addr_privkey_start.values(): 
+						self.the_wallet.add_pk_for_start_block(tpk['address'],tpk['pk'])
+				
+				
 				
 				# 3 insert result to queue done
 				table={}
@@ -277,42 +365,39 @@ class DeamonInit(gui.QObject):
 				self.sending_signal.emit(['task_done','cmd_queue'])
 				# idb.select('queue_done', [ "id" ])
 				
+			# moved to wa disp set - dat taken from db
 			elif rr[3]=='export_wallet':
-						
-				# print('exp wal',self.wallet_display_set.password)
-				tmpresult=self.the_wallet.export_wallet()
+						 
+				tmpresult=self.the_wallet.export_wallet() 
 				# print('tmpresult',tmpresult)
 				path2=json.loads(rr[4])
+				# print('rr',rr)
 				tmppassword=path2['password']
-				path2=os.path.join(path2['path'],'addrkeys_'+app_fun.now_to_str(True)+'.txt')
-				# print(path2)
-				
+				path2=os.path.join(path2['path'],'addrkeys_'+app_fun.now_to_str(True)+'.txt') 
+				# print('path2',path2)
 				if tmppassword=='current':
-					cc.aes_encrypt_file( json.dumps(tmpresult),path2 ,self.wallet_display_set.password)			
-					# tmppassword='Your current password' #self.wallet_display_set.password
-				elif tmppassword=='random':				
-					# tmppass=cc.rand_password(32)
+					cc.aes_encrypt_file( json.dumps(tmpresult),path2 ,self.wallet_display_set.password)		 
+				elif tmppassword=='random':			 
 					tmppassword=cc.rand_password(32)
 					cc.aes_encrypt_file( json.dumps(tmpresult) , path2 , tmppassword )				
 				else:
+					# print('write')
 					cc.write_file( path2 , json.dumps(tmpresult) , gui_copy_progr=gui.copy_progress )
 					tmppassword=''
 				
-				tmptitle='Private keys exported. Private keys exported to\n'+path2
-				# tmpcont='\n'+path2
+				tmptitle='Private keys exported. Private keys exported to\n'+path2 
 				
 				if tmppassword!='':
-					tmptitle+='. File was encrypted with password:\n'
-				 
-				# print('write queue done')
+					tmptitle+='. File was encrypted with password:\n' 
 				table={}
 				table['queue_done']=[{"type":rr[0],"wait_seconds":rr[1],"created_time":rr[2],"command":rr[3],"json":rr[4],"id":rr[5],"result":'exported to '+path2,'end_time':app_fun.now_to_str(False)}]
-				
+				# print('insert')
 				global_db.insert(table,["type","wait_seconds","created_time","command","json","id","result",'end_time'])
 				count_task_done+=1
 				
 				table={}
 				table['queue_waiting']=[{'status':'done'}]
+				# print('update')
 				global_db.update( table,['status'],{'id':[ '=',rr[5] ]})
 				self.sending_signal.emit(['cmd_queue'])
 				if tmppassword=='current':
@@ -322,10 +407,10 @@ class DeamonInit(gui.QObject):
 				else:
 					self.msg_signal.emit(tmptitle,'',tmppassword)
 					
-				time.sleep(3)
+				# time.sleep(3)
 				self.sending_signal.emit(['task_done','cmd_queue'])
 				
-			elif rr[3]=='get_viewkey':
+			elif rr[3]=='get_viewkey': # for set channel
 			
 				ddict=json.loads(rr[4])
 				tmpresult=self.the_wallet.exp_view_key(ddict['addr'])
@@ -333,25 +418,48 @@ class DeamonInit(gui.QObject):
 				self.send_viewkey.emit(ddict['addr'],tmpresult)
 				self.sending_signal.emit(['task_done','cmd_queue'])
 			
-			elif rr[3]=='export_viewkey':
+			elif rr[3]=='export_viewkey': # make sure export view key start block as minimum from pk start block 
 				ddict=json.loads(rr[4])
 				tmpresult=self.the_wallet.exp_view_key(ddict['addr'])
 				tmptitle='View key display'
+				# print(tmpresult)
+				vk_start_block=None #1700000
+				# vk_start_block00= global_db.select('priv_keys',[ 'usage_first_block'],where={'address':['=','"'+ddict['addr']+'"') # 'usage_first_block'
+				pk00= global_db.select('priv_keys',[ 'pk'],where={'address':['=', global_db.qstr(ddict['addr'])  ]}) # 'usage_first_block'
+				# for this pk check min start block 
+				# print('pk00',pk00 )
+				
+				if len(pk00)>0:
+				# select_min_val(self,table_name,column,where={},groupby=[])
+					# print('pk00[0][0]', global_db.qstr(pk00[0][0]))
+					vk_start_block00= global_db.select_min_val('priv_keys', 'usage_first_block' ,where={'pk':['=',global_db.qstr(pk00[0][0]) ]}) # 'usage_first_block'
+					# print('vk_start_block00 1',vk_start_block00)
+					if len(vk_start_block00)>0: 
+						# if vk_start_block00[0][0]!=None:
+						vk_start_block=vk_start_block00[0][0]
+					# print('vk_start_block00 2',vk_start_block)
+				
+				# if len(vk_start_block00)>0: vk_start_block00=vk_start_block00[0][0]
+				# else: vk_start_block00=1700000
 				
 				pto='screen'
 				if ddict['password']=='':
+					# print(tmptitle,ddict)
 					# gui.output_copy_input(None,'View key display' ,('Address  '+ddict['addr']+'\n\nView key '+tmpresult,))
-					self.msg_signal.emit(tmptitle,'','Address\n\n'+ddict['addr']+'\n\nView key:\n\n'+tmpresult)
+					self.msg_signal.emit(tmptitle,'','Address\n\n'+ddict['addr']+'\n\nView key:\n\n'+tmpresult+'\n\nStart block: '+str(vk_start_block))
 					
 				else:
 					tmppass=cc.rand_password(32)
-					tmpresult=json.dumps({'addr':ddict['addr'], 'viewkey':tmpresult})
+					tmpdict={'addr':ddict['addr'], 'viewkey':tmpresult }
+					if vk_start_block!=None: tmpdict['usage_first_block']=vk_start_block
+					tmpresult=json.dumps(tmpdict)
 					pto=ddict['path']+'/viewkey_'+app_fun.now_to_str()+'.txt'
 					cc.aes_encrypt_file( tmpresult, pto  , tmppass) 
-					tmptitle='View key export. Password for file exported to:\n\n'+pto+'\n\n' #+tmppass
+					tmptitle='View key exported to:\n\n'+pto+'\n\nPassword:' #+tmppass
 					self.msg_signal.emit(tmptitle,'',tmppass)
 					# gui.output_copy_input(None,'Password for file exported to '+pto,(tmppass,))
-									
+					
+				# print('ok?')
 				table={}
 				table['queue_done']=[{"type":rr[0],"wait_seconds":rr[1],"created_time":rr[2],"command":rr[3],"json":rr[4],"id":rr[5],"result":'exported to '+pto,'end_time':app_fun.now_to_str(False)}]
 				
@@ -835,15 +943,15 @@ class DeamonInit(gui.QObject):
 				
 					table={}
 					table['tx_history']=[{'status':'notarized'}]
-					global_db.update( table,['status'], { 'txid':['=',"'"+tt[0]+"'"] } )
+					global_db.update( table,['status'], { 'txid':['=',global_db.qstr(tt[0]) ] } )
 					
 					table={} # update notification 
 					table['notifications']=[{'status':'notarized' }]
-					global_db.update( table,['status'], {'details':['=','"'+tt[0]+'"'] } )
+					global_db.update( table,['status'], {'details':['=',global_db.qstr(tt[0]) ] } )
 					
 					table={} # update msg table: 
 					table['msgs_inout']=[{'tx_status':'notarized' }]
-					global_db.update( table,['tx_status'  ], {'txid':['=', '"'+tt[0]+'"' ] })
+					global_db.update( table,['tx_status'  ], {'txid':['=',global_db.qstr(tt[0])  ] })
 				 
 				count_updates+=1
 	
@@ -1008,7 +1116,7 @@ class DeamonInit(gui.QObject):
 		self.started=True
 		
 		tmpcond=app_fun.check_deamon_running() # ''.join(self.deamon_par) ,tmppid
-		# print(tmpcond,tmppid)
+		# print('tmpcond',tmpcond)
 		if tmpcond[0]: # if already running
 		
 			# self.start_stop_enable.emit(True)
@@ -1028,7 +1136,9 @@ class DeamonInit(gui.QObject):
 				
 				gitmp=app_fun.run_process(self.cli_cmd,'getinfo')
 				
+			# print('self.the_wallet',self.the_wallet)
 			if self.the_wallet==None: #hasattr(self,'the_wallet')==False or :
+				# print('self.get_last_load()',self.get_last_load())
 				self.the_wallet=wallet_api.Wallet(self.cli_cmd,self.get_last_load(),self.db)
 				# print('connetcing wal api signal 1013')
 				self.the_wallet.sending_signal.connect(self.obj_updateWalletDisplay) 
@@ -1039,7 +1149,9 @@ class DeamonInit(gui.QObject):
 				if y["synced"]==True:
 				# self.walletTab.bstartstop.setEnabled(True) #self.bstartstop.configure(state='normal')
 					self.start_stop_enable.emit(True)
+					# print('self.update_chain_status()')
 					self.update_chain_status()
+					# print('self.the_wallet.refresh_wallet()')
 					self.the_wallet.refresh_wallet()
 			elif y['longestchain']==y['blocks']:
 				self.start_stop_enable.emit(True)
@@ -1065,6 +1177,114 @@ class DeamonInit(gui.QObject):
 			
 			# return
 			
+		self.update_priv_keys_table( )
+
+	# for pk there may be many addr - this is checking them all 
+	def update_priv_keys_table(self,with_usage_blocks=None):
+		# here check if priv key table is ready ? or ?	
+		# also do insert after creating new priv addr ?
+		# global_db.delete_where('priv_keys' )
+		all_pk= global_db.select('priv_keys',['address','id','pk']) 
+		# print(all_pk,len(all_pk), len(self.the_wallet.addr_list))
+		if len(all_pk)<len(self.the_wallet.addr_list):
+			# self.output('Updating priv key table '+str(len(all_pk))+'<>'+str(len(self.the_wallet.addr_list)) )
+			ddict=global_db.set_que_waiting('Update priv\nkey table' )
+			ddict["type"]='auto'
+			ddict["status"]="in progress" #table['queue_waiting']=[ddict]
+			# print('ddict',ddict)
+			update_id=ddict['id']
+			global_db.insert({'queue_waiting':[ddict]},['type','wait_seconds','created_time','command' ,'json','id','status' ])
+			# print(update_id,ddict)
+			# global_db.insert( table,['status'],{'id':[ '=',rr[5] ]}) # 
+			self.sending_signal.emit(['cmd_queue'])
+			time.sleep(0.1)
+					
+			pk_not_in=[]
+			for aa in self.the_wallet.addr_list:
+				if aa not in all_pk:
+					pk_not_in.append(aa)
+					
+			pkids={}
+			for rr in all_pk:
+				pkids[rr[2]]=rr[1] # id per pk 
+			
+			# print(pk_not_in,'pk_not_in')	
+			max_id=global_db.select_max_val('priv_keys','id' )
+			next_id=1
+			if len(max_id)>0:
+				if  len(max_id[0])>0 and max_id[0][0]!=None:
+					# print()
+					next_id=max_id[0][0]+1  
+			# print(next_id,'next_id')
+			table={'priv_keys':[]}
+			# table['priv_keys']=[] #{'id':next_id, 'address':aa, 'pk':pk }]
+			# to_add_arr=['id','address','pk']
+			to_add_arr=['id','address','pk','usage_first_block' ] #,'usage_first_block'
+			first_block_per_addr={}
+			# if with_usage_blocks!=None: to_add_arr=['id','address','pk','usage_first_block' ]
+			# else:
+			# print('with_usage_blocks',with_usage_blocks)
+			if with_usage_blocks==None:
+				tmp_ba=global_db.select_min_val('tx_history', 'block' ,groupby=['to_str']) 
+				# print('tmp_ba',tmp_ba)
+				for rr in tmp_ba:
+					first_block_per_addr[rr[0]]=rr[1]
+					
+				# print('first_block_per_addr',first_block_per_addr)
+			
+			for ii, aa in enumerate(pk_not_in):
+				# self.output('Updating priv key table '+str(ii)+'/'+str(len(pk_not_in)-1) )
+				# ddict=self.db_main.set_que_waiting('Update priv\nkey table' )
+				# ddict["type"]='auto'
+				# ddict["status"]="in progress" #table['queue_waiting']=[ddict]
+				global_db.update( {'queue_waiting':[{'status':"in progress\n"+str(ii)+'/'+str(len(pk_not_in)-1) }]},[ 'status' ],where={'id':['=',str(update_id)]})
+				self.sending_signal.emit(['cmd_queue'])
+				time.sleep(0.1)
+				
+				
+				pk=self.the_wallet.exp_prv_key(aa).replace('\r','').replace('\\n','').replace('\\r','')
+				pk=pk[-8:] # for security only 8 last chars
+				
+				toadd={'id':next_id, 'address':aa, 'pk':pk, 'usage_first_block':None  } #, 'usage_first_block':1790000 
+				
+				if pk in pkids: # if pk already got id from another addr 
+					toadd['id']=pkids[pk]
+					# toadd={'id':pkids[pk], 'address':aa, 'pk':pk  } #, 'usage_first_block':1790000
+				else:
+					# print('new addr, pk',aa[:9],pk.replace('secret-extended-key-','')[:64],next_id)
+					pkids[pk]=next_id
+					next_id+=1
+				# toadd={'id':next_id, 'address':aa, 'pk':pk , 'usage_first_block':1790000 }
+				
+				
+				
+				# here better take first tx from history ... 
+				
+				# print(toadd)
+				if with_usage_blocks!=None :
+					try:
+						if 'usage_first_block' in with_usage_blocks[aa]:
+							toadd['usage_first_block']=with_usage_blocks[aa]['usage_first_block']
+					except:
+						print('with_usage_blocks!=None but none for addr ',aa,with_usage_blocks)
+						# pass
+				elif aa in first_block_per_addr and first_block_per_addr[aa]>0:
+					toadd['usage_first_block']=first_block_per_addr[aa]
+					
+				table['priv_keys'].append(toadd)
+				
+				# only iterate next_id if pk not yet in 
+				
+			# print('def update_priv_keys_table(self,with_usage_blocks=None)',table)
+			global_db.insert(table,to_add_arr) 
+			
+			global_db.delete_where('queue_waiting',{'id':['=',str(update_id) ] })
+			self.sending_signal.emit(['cmd_queue'])
+			# , 'usage_first_block':'int' 
+			
+			
+			
+			
 	
 	def get_last_load(self):
 
@@ -1080,13 +1300,19 @@ class DeamonInit(gui.QObject):
 					
 		return last_load
 		
+		
+
+		
 	# @gui.Slot()	
 	def output(self,ostr,ttype='set'): #self.output()
 		 
-		self.wallet_status_update.emit([ttype,ostr]) # 'Wallet synced!'
+		self.wallet_status_update.emit([ttype,ostr   ]) # 'Wallet synced!'
 		
 		# error: couldn't connect to server: timeout reached (code 0)
 # (make sure server is running and you are connecting to the correct RPC port)
+
+
+
 		
 	@gui.Slot()	
 	def run_subprocess(self,CLI_STR,cmd_orig,sleep_s=4 ):
@@ -1135,6 +1361,7 @@ class DeamonInit(gui.QObject):
 				if deamon_warning in gitmp:
 					self.output(gitmp)
 				elif 'error message:' in gitmp:
+					# print(gitmp)
 					tmps=gitmp.split('error message:')
 					self.output(tmps[1].strip()+'\n')
 					
@@ -1153,12 +1380,12 @@ class DeamonInit(gui.QObject):
 								gtmpstr+=vv+str(y[kk])
 					
 					# gtmpstr="Synced: "+str(y["synced"])+"\nCurrent block: "+str(y["blocks"])+"\nLongest chain: "+str(y["longestchain"])+"\nConnections: "+str(y["connections"])
-				
+                
 					if y['longestchain']==y["blocks"] and y['longestchain']>0:
 						if cmd_orig=='start':
 							self.output('Wallet synced!')
 							self.wallet_synced_signal.emit(True) #init_app.check_if_new_wallet_backup_needed
-							
+                            
 						break
 					elif y['longestchain']>0 and y["blocks"]>0:
 						
@@ -1287,37 +1514,54 @@ class DeamonInit(gui.QObject):
 			self.output('Blockchain stopped\nEncrypting wallet...')
 			
 			self.encrypt_wallet_and_data()
-		
+			
+			
+			
+			
+			
+	# wallet hash vs backup_wallet_hash in init checks ... 
+	# create unecessary copies ... 
+	# will be switched of in ecrnypted version for pirate 
+	# but still usable for other wallets ? potentially 
+	# also not encrypting even when found decrypted on going off ... 
+	
+	# currently this is only informative ?? wallet_hash
+	
+	## ORIG REASON : CHECK IF DECRYPTION WAS OK
+	# changed to have common with 'backup_wallet_hash'
 	def check_wallet_hash(self,dat_file,insert_on_exception=False):
-		cc=aes.Crypto()
-		# print('self.db',self.db)
-		# db=localdb.DB(self.db)
-		last_wallet_hash=global_db.select('jsons', ['json_content'],{'json_name':['=',"'wallet_hash'"]})
+		cc=aes.Crypto() # regular algo
+		
+		last_wallet_hash=global_db.select('jsons', ['json_content'],{'json_name':['=',"'backup_wallet_hash'"]}) # 'backup_wallet_hash' 'wallet_hash'
 		
 		cur_dat_hash= cc.hash2utf8_1b( cc.read_bin_file( dat_file),1)
 		
-		def insertNewHash(tmparr):
-			# print('Inserting hash',cur_dat_hash,'self.db',self.db)
-			tmparr.append(cur_dat_hash)
+		def insertNewHash(tmparr): # print('Inserting hash',cur_dat_hash,'self.db',self.db)
+			# tmparr.append(cur_dat_hash)
 			table={}
-			table['jsons']=[{'json_name':"wallet_hash", 'json_content':json.dumps(tmparr), 'last_update_date_time': app_fun.now_to_str(False)}]
-			# db=localdb.DB(self.db)
-			global_db.upsert(table,['json_name','json_content','last_update_date_time'],{'json_name':['=',"'wallet_hash'"]})
-			# print('after upser',db.select('jsons', ['json_content'],{'json_name':['=',"'wallet_hash'"]}))
-		
+			table['jsons']=[{'json_name':"backup_wallet_hash", 'json_content':json.dumps(tmparr), 'last_update_date_time': app_fun.now_to_str(False)}]
+			 
+			global_db.upsert(table,['json_name','json_content','last_update_date_time'],{'json_name':['=',"'backup_wallet_hash'"]})
+			 
+		# print('1518 cur_dat_hash,last_wallet_hash_arr\n',json.dumps(cur_dat_hash),last_wallet_hash)
 		if len(last_wallet_hash)>0:
 			last_wallet_hash_arr=json.loads(last_wallet_hash[0][0])
-			if cur_dat_hash in last_wallet_hash_arr: #==last_wallet_hash[0][0]:
-				print('Decrypted wallet hash exists in history - ok.')
-			else:
+			# if cur_dat_hash in last_wallet_hash_arr: #==last_wallet_hash[0][0]:
+				# print('Decrypted wallet hash exists in history - ok.')
+			# else:
+			if cur_dat_hash not in last_wallet_hash_arr:
 				if insert_on_exception:
-					print('New wallet hash detected - inserting')
+					# print('New wallet hash detected - inserting')
+					last_wallet_hash_arr.append(cur_dat_hash)
 					insertNewHash(last_wallet_hash_arr)
 				else:
 					print('Warning - wallet decryption might have been wrong - existing wallet hash does not exist in history ... ! ')
+					# print(' 1530 cur_dat_hash,last_wallet_hash_arr',cur_dat_hash,last_wallet_hash_arr)
+			# else:
+				# print('hash matched',last_wallet_hash_arr.index(cur_dat_hash),'of',len(last_wallet_hash_arr)-1)
 		else: # no last hash - save new one 
-			print('No last wallet hash - saving the new one!',cur_dat_hash)
-			insertNewHash([])
+			# print('No last wallet hash - saving the new one!',cur_dat_hash)
+			insertNewHash([cur_dat_hash]) # before empty
 
 		
 	def decrypt_wallet(self):
@@ -1361,24 +1605,33 @@ class DeamonInit(gui.QObject):
 			time.sleep( 1) # 1+ t_to_wait ) # 1MB = 1s waiting
 			
 			
-	def encrypt_wallet_and_data(self):
+	def encrypt_wallet_and_data(self,ppath=''):
 	
 		if self.wallet_display_set.password==None:
 			return
 			
 		# idb=localdb.DB('init.db')
-		ppath=global_db_init.select('init_settings',['datadir'] )
+		# print('encrypt_wallet_and_data deamon.global_db_init,deamon.global_db', global_db_init, global_db)
+		# print(global_db_init.select('init_settings',[ ] ) )
+		if ppath=='': # arg passed on exception signout in init check 
+			ppath=global_db_init.select('init_settings',['datadir'] )
+			ppath=ppath[0][0]
+		else:
+			print('! Emergency wallet encrypt - please wait') # for some reason does not print on the gui 
+		# print(ppath) # can be empty on error - not saved init ... 
+		# any option to backup init ?
 		
 		cc=aes.Crypto()
-		path2encr=os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.dat')
+		path2encr=os.path.join(ppath ,self.wallet_display_set.data_files['wallet']+'.dat')
 		t_to_wait=int(os.path.getsize(path2encr)/1e7 )
 		# print('Waiting '+str(t_to_wait)+' seconds \nto ensure wallet \nis not working ... ' )
 		self.output('\nWaiting '+str(t_to_wait)+' seconds to ensure \nwallet is not working\n','append')
+		# print('encr check_wallet_hash')
 		self.check_wallet_hash( path2encr, True )
 		self.counterPrint(t_to_wait)
 		# return
 		
-		path_end=os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.encr')
+		path_end=os.path.join(ppath ,self.wallet_display_set.data_files['wallet']+'.encr')
 		# print('Encrypting ... ' )
 		self.output('\nEncrypting ... ','append')
 		rv=cc.aes_encrypt_file( path2encr, path_end , self.wallet_display_set.password)
@@ -1393,7 +1646,7 @@ class DeamonInit(gui.QObject):
 		# time.sleep(1)
 		
 		if rv  and os.path.exists(path_end) and encrypted_size>10000: #rv!=''
-			datf=os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.dat')
+			datf=os.path.join(ppath ,self.wallet_display_set.data_files['wallet']+'.dat')
 			# print('Deleting .dat after encryption:',datf)
 			self.output('\nDeleting .dat after encryption:\n'+datf,'append')
 			app_fun.secure_delete(datf)
