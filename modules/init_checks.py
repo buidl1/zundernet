@@ -71,6 +71,7 @@ class InitApp:
 			
 		return p1,p2
 
+	# after changing pc wrong path - ask for proper path again ?
 	def deamon_setup(self,tt):
 		
 		self.chain='pirate'
@@ -151,10 +152,10 @@ class InitApp:
 		
 	# need to generate name here for config and save it 	
 	def __init__(self):
-		self.app_db_version=3 # change when changing db tables to update 
+		self.app_db_version=5 # change when changing db tables to update 
 		self.wallet ='tmpwallet.dat'
 		# self.data_files['wallet']
-		self.data_files={'wallet':'wallet','db':'local_storage'} # .dat/.encr or .db/.encr
+		self.data_files={'wallet':'wallet','db':'local_storage','datadir':os.getcwd()} # .dat/.encr or .db/.encr
 		self.was_derypted_warning=False
 		self.did_init_backup=False # needed cause self.was_derypted_warning also used for encr_db function
 		
@@ -184,13 +185,49 @@ class InitApp:
 
 		# tt= self.init_db.select('init_settings',columns=["komodo","datadir",'data_files']) #,"password_on" "start_chain",
 		tt= self.init_db.select('init_settings',columns=["komodo","datadir","data_files"]) 
+		self.data_dir='' #tt[0][1]
 		# print('after select tt',tt)
+		self.paths_confirmed=False
 		
 		if is_deamon_working[0]:
+			# print('is_deamon_working',is_deamon_working)
+			# working_file=is_deamon_working[3][1].replace('-wallet=','').replace('.dat','')
 			if len(tt)==0:
-				gui.messagebox_showinfo("init.db file missing while running - exit", "init.db file missing while running - exit")
-				self.unload_init_db()
-				exit()
+				# data_file=is_deamon_working[3][1].replace('-wallet=','').replace('.dat','')
+				# tt=[[is_deamon_working[3][0], is_deamon_working[3][2].replace('-datadir=',''), is_deamon_working[3][1]]]
+				deamon_head_tail = os.path.split(is_deamon_working[3][0])
+				tt=[ [deamon_head_tail[0] , is_deamon_working[3][2].replace('-datadir=','') , None ] ]
+				# print('tt',tt) 
+				 
+				ord_arr=["komodo","datadir" ]
+				dict_set={ }
+				dict_set['init_settings']=[]
+				dict_set['init_settings'].append({ "komodo":  tt[0][0]  ,
+												"datadir": tt[0][1]   # "data_files":json.dumps(self.data_files)
+											})
+				self.save_init( dict_set,ord_arr)
+				# why not saving init?
+				# why msg created new db file ?
+				# 
+				
+				# self.ask_paths(tt)
+				# if not self.paths_confirmed:
+					# gui.messagebox_showinfo("Exiting app...", "Exiting app...")
+					# self.unload_init_db()
+					# exit()
+				# tt= self.init_db.select('init_settings',columns=["komodo","datadir", "data_files"])  
+				# if len(tt)==0 :
+					# gui.messagebox_showinfo("init.db file missing while running - exit", "init.db file missing while running - exit")
+					# self.unload_init_db()
+					# exit()
+				# else: 
+					# self.data_files['datadir']=tt[0][1] #={ 'datadir':tt[0][1] } #'wallet':tmp['wallet'],'db':tmp['db'],
+					
+					
+					
+				# gui.messagebox_showinfo("init.db file missing while running - exit", "init.db file missing while running - exit")
+				# self.unload_init_db()
+				# exit()
 			# print(tt)	
 			tmp={}
 			if tt[0][2]==None: # replace None with current file wallet in use 
@@ -198,13 +235,19 @@ class InitApp:
 				tmptt=is_deamon_working[3][1].replace('-wallet=wallet_','').replace('.dat','')
 				tmp={ 'wallet':'wallet_'+tmptt ,'db':'local_storage_'+tmptt }
 				# print('recreated',tmp)
+				# 
+				# print('updated data file on closing ',dict_set)
 			else:
 				tmp=json.loads(tt[0][2])
 				
-			self.data_files={ 'wallet':tmp['wallet'],'db':tmp['db'] }
+			self.data_files={ 'wallet':tmp['wallet'],'db':tmp['db'],'datadir':tt[0][1] } # self.data_files['datadir']
+			
+			if tt[0][2]==None: 
+				print('exceptional update data file init',self.data_files)
+				self.init_db.update( {'init_settings':[{"data_files":json.dumps(self.data_files)}]} , ["data_files"], {} )
 
 		else: # deamon starting - ask paths 
-			self.paths_confirmed=False
+			
 			self.ask_paths(tt) 
 			if not self.paths_confirmed:
 				gui.messagebox_showinfo("Exiting app...", "Exiting app...")
@@ -216,6 +259,9 @@ class InitApp:
 				gui.messagebox_showinfo("init.db file missing while running - exit", "init.db file missing while running - exit")
 				self.unload_init_db()
 				exit()
+			else:
+				# print('set datadir 221')
+				self.data_files['datadir']=tt[0][1] #={ 'datadir':tt[0][1] } #'wallet':tmp['wallet'],'db':tmp['db'],
 				
 			# idb.upsert(dict_set,["lock"],{})
 
@@ -258,8 +304,8 @@ class InitApp:
 		
 		
 					
-		encr_wal=os.path.join(tt[0][1],self.data_files['wallet']+'.encr')
-		self.cur_sess=''
+		encr_wal=os.path.join(self.data_files['datadir'] ,self.data_files['wallet']+'.encr') #tt[0][1]
+		self.cur_sess='' # self.wallet = self.data_files['wallet']+'.dat'
 		sess_dir=''
 		if not self.is_started:
 		
@@ -273,7 +319,7 @@ class InitApp:
 				last_local_wal_back=os.path.join(last_sess_dir,self.data_files['wallet']+'.encr') 
 				if os.path.exists(last_local_wal_back):
 					last_local_wal_back_hash= self.cc.hash2utf8_1b( self.cc.read_bin_file( last_local_wal_back),1)
-					encr_wal=os.path.join(tt[0][1],self.data_files['wallet']+'.encr') 
+					encr_wal=os.path.join(self.data_files['datadir'] ,self.data_files['wallet']+'.encr')  #tt[0][1]
 					if os.path.exists(encr_wal):
 						cur_wal_hash= self.cc.hash2utf8_1b( self.cc.read_bin_file( encr_wal),1) 
 						
@@ -344,6 +390,9 @@ class InitApp:
 		# print(155,deamon_cfg)
 		deamon.global_db_init=self.init_db
 		deamon.global_db =self.db_main 
+		# print('deamon.global_db_init,deamon.global_db',deamon.global_db_init,deamon.global_db)
+		# print(deamon.global_db_init.select('init_settings',['datadir'] ))
+		# print(deamon.global_db_init.select('init_settings',[ ] ))
 		self.dmn=deamon.DeamonInit(deamon_cfg,self.db)
 		# print(' DeamonInit dt',time.time()-t0)
 		# t0=time.time()
@@ -353,7 +402,7 @@ class InitApp:
 		# print(idb.select( 'current_session'  ) )
 		if need_new_local_backup:
 			# print('pre local backup needed',os.path.exists(encr_wal), not self.is_started, encr_wal) # OK
-			if True: # these already checked above os.path.exists(encr_wal) and not self.is_started:
+			if os.path.exists(encr_wal): # these already checked above os.path.exists(encr_wal) and not self.is_started:
 				# print('encr_wal',encr_wal)
 				# self.cur_sess=self.init_db.select_last_val( 'current_session', 'datetime'  )
 				# print(self.cur_sess)
@@ -378,7 +427,7 @@ class InitApp:
 		# db=localdb.DB(self.data_files['db']+'.db')
 		# print('from db',self.data_files['db']+'.db')
 		last_wallet_hash=self.db_main.select('jsons', ['json_content'],{'json_name':['=',"'backup_wallet_hash'"]})
-		# print('last_wallet_hash',last_wallet_hash)
+		# print('last_wallet_hash',last_wallet_hash )
 		# print('all',db.select('jsons', [] )) #'json_content'
 		if len(last_wallet_hash)==0:
 			return [], cur_dat_hash
@@ -455,7 +504,9 @@ class InitApp:
 		elif self.was_derypted_warning:
 			# print('self.was_derypted_warning')
 			 
-			 
+			# print('cur_dat_hash',cur_dat_hash )
+			# print('last_wallet_hash_arr',last_wallet_hash_arr )
+			# print()
 			if cur_dat_hash in last_wallet_hash_arr: 
 				print('Decrypted wallet hash consistent with history - no backup needed') # if cur_dat_hash in last_wallet_hash_arr: #==last_wallet_hash[0][0]:
 				return
@@ -518,7 +569,7 @@ class InitApp:
 			# dict_set={'init_settings':[{"data_files":json.dumps(self.data_files)}]}
 			# self.init_db.delete_where('init_settings')
 			# self.init_db.insert(dict_set,["data_files" ]) #,"data_files"
-		
+			self.data_files["datadir"]=data # self.save_init( dict_set,ord_arr)
 			ord_arr=["komodo","datadir" ]
 			dict_set={ }
 			dict_set['init_settings']=[]
@@ -530,11 +581,12 @@ class InitApp:
 											
 			if not self.creating_new_wallet:
 				dict_set['init_settings'][0]["data_files"]=json.dumps(self.data_files)
-				ord_arr.append("data_files")
-				# print('added exception',dict_set,ord_arr)
+				ord_arr.append("data_files") # print('added exception',dict_set,ord_arr)
 			
-			self.init_db.delete_where('init_settings')
-			self.init_db.insert(dict_set,ord_arr) #,"data_files"
+			# self.init_db.delete_where('init_settings')
+			# self.init_db.insert(dict_set,ord_arr) #,"data_files"
+			# print('updated init',dict_set)
+			self.save_init( dict_set,ord_arr)
 			
 		elif not komodod_ok:
 			gui.messagebox_showinfo('Path for pirate deamon is wrong', deamon +'\n - no pirated file !')
@@ -550,7 +602,14 @@ class InitApp:
 			exit()
 			
 	
-	
+	def save_init(self,dict_set,ord_arr):
+		# if not self.creating_new_wallet:
+			# dict_set['init_settings'][0]["data_files"]=json.dumps(self.data_files)
+			# ord_arr.append("data_files")
+			# print('added exception',dict_set,ord_arr)
+		
+		self.init_db.delete_where('init_settings')
+		self.init_db.insert(dict_set,ord_arr)
 	
 	
 	
@@ -568,10 +627,16 @@ class InitApp:
 		# tt= self.init_db.select('init_settings',columns=["komodo","datadir",'data_files']) #,"password_on" "start_chain",
 		if len(tt)>0:  
 
-			for t in tt[0]: # single row only
-				preset.append(t)
+			for ii,t in enumerate(tt[0]): # single row only
+				if ii<2 :
+					if os.path.exists(t):
+						preset.append(t)
+					else:
+						preset.append(None)
+				else:
+					preset.append(t)
 				
-			if preset[2]!=None:
+			if len(preset)>1 and preset[2]!=None:
 				tmpj=json.loads(preset[2])
 				tmpwallet=[tmpj['wallet'] , 'Create new','Select file']
 		else:
@@ -709,24 +774,31 @@ class InitApp:
 	def unload_main_db(self,pswd):
 	
 		self.db_main.connected=False # block new operations 
-		
+		# print(pswd)
+		# print('self.db_main.processing',self.db_main.processing)
+		# print('self.db_main.processing_list',self.db_main.processing_list)
 		# wait till no sql on the queue and last one is done 
 		while self.db_main.processing!={'sql':'','fname':''} or len(self.db_main.processing_list)>0:
-			print('waiting to finish',self.db_main.processing)
+			# print('waiting to finish',self.db_main.processing)
 			if len(self.db_main.processing_list)>1:
 				print('sql # in the queue',len(self.db_main.processing_list) )
 			time.sleep(1)
 			
 		encr_fname=self.data_files['db']+'.encr'
 		
+		file_existed_b4=os.path.exists(encr_fname)
+		
 		larr=''
 		for line in self.db_main_conn.iterdump(): 
 			larr+=line+'\n' 
 			
+		# print('b4 cc write')
 		self.cc.write_file(encr_fname,  self.cc.aes_encrypt( larr,kkey=pswd,encode=True) )
+		# print('b4 close')
 		self.db_main_conn.close()
-		
-		gui.messagebox_showinfo("Created new database","Created new database file:\n"+self.data_files['db']+'.encr' )
+		# print('file_existed_b4',file_existed_b4)
+		if not file_existed_b4:
+			gui.messagebox_showinfo("Created new database","Created new database file:\n"+self.data_files['db']+'.encr' )
 		
 		
 	
@@ -914,46 +986,60 @@ class InitApp:
 	def on_closing(self,parent):
 		# self.close_thread=True
 		# db=localdb.DB(self.data_files['db']+'.db' )
-		
+		# print('closing 1')
 		# on new wallet creation add new entry on exit:
 		_unload_main_db=True
 		if self.creating_new_wallet:
-			tt= self.init_db.select('init_settings',columns=[ "datadir" ]) 
-			data=tt[0][0]
+			# print('closing 2')
+			# tt= self.init_db.select('init_settings',columns=[ "datadir" ]) 
+			data=self.data_files['datadir'] #tt[0][0]
 			if len(data)>0 and self.creating_new_wallet and app_fun.fileExist(data,cond={'start':self.data_files['wallet'] }) : 
+				# print('closing 3')
 				dict_set={'init_settings':[{"data_files":json.dumps(self.data_files)}]} 
 				self.init_db.update( dict_set, ["data_files"], {} )
-				print('saved new init_settings data dir',self.init_db.select('init_settings',columns=[ ])  )
+				# print('updated data file on closing ',dict_set)
+				# print('saved new init_settings data dir',self.init_db.select('init_settings',columns=[ ])  )
 			else:
-				print('# wallet file not found - not save local storage db!:')
+				# print('# wallet file not found - not save local storage db!:')
 				_unload_main_db=False
 				# if os.path.exists()
 		
+		# print('closing 4')
 		self.db_main.vacuum()
+		
+		# print('closing 5')
 		is_deamon_working=app_fun.check_deamon_running()
+		# print('closing 6')
 		
 		self.unload_init_db()
+		# print('closing 7')
 		
 		def unload_main():
 			if _unload_main_db:
-				print('_unload_main_db',_unload_main_db)
+				# print('_unload_main_db',_unload_main_db)
 				# print('encrypting with',self.app_password)
+				# print('closing 8s')
 				self.unload_main_db(self.app_password)
 		
+		# print('closing 7.1')
+		if not is_deamon_working[0] and os.path.exists( os.path.join(self.data_files['datadir'],self.wallet) ):
+			# print('closing 7.11')
+			self.dmn.encrypt_wallet_and_data(self.data_files['datadir'])
 		
-		if is_deamon_working[0]:
+		# print('closing 7.2')
+		unload_main()
+		
+		# if is_deamon_working[0]:
 			
-			if gui.askokcancel("Quit", "Are you sure you want to quit? Blockchain deamon is still running. If you plan to shut down your computer it is better to STOP blockchain and quit afterwards.",parent):
-			
-				# self.encr_db(parent)
-				unload_main()
+			# if gui.askokcancel("Quit", "Are you sure you want to quit? Blockchain deamon is still running. If you plan to shut down your computer it is better to STOP blockchain and quit afterwards.",parent):
+			 
+				# unload_main() # self.encr_db(parent)
 						
-				return True
-			else:
-				return False
-		else:
-			# save last views for init load 
-		
-			# self.encr_db(parent)	
-			unload_main()
-			return True
+				# return True
+			# else:
+				# return False
+		# else: # if deamon not working , closing and wallet not encrypted: encrypt 
+			# if os.path.exists( os.path.join(self.data_files['datadir'],self.wallet) ):
+				# self.dmn.encrypt_wallet_and_data(self.data_files['datadir']) # self.encr_db(parent)	
+			# unload_main()
+			# return True
