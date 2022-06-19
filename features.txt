@@ -1,8 +1,19 @@
-1. Wallet.dat encryption when going offline.
-2. Database (being able to see historical transactions of yourself in and out). DB in encrypted when going offline.
-3. Signatures - after initial recognition if 2 people use this wallet it will automatically recognize sender (if same addresses are used between)
-4. Address book with categories
-5. Messaging arbitrary length text (with signatures and auto recognition)
-6. Categories and aliases for addresses.
-7. Easy address and view key export (with 2 option - encrypted and decrypted).
-8. Notifications when receiving new tx.
+Security features:
+1. Wallet.dat encryption when going offline/stopping deamon (plan to move to persistent encryption mode).
+2. Encrypted DB.
+
+Wallet management features:
+1. Categories, easy names and stats for addresses.
+2. Create new address from specific seed.
+3. Importing/exporting priv keys, addresses, view keys.
+
+Conveniet features:
+1. Database (being able to see historical transactions in and out even when deamon is off).
+2. Signatures - after initial recognition if addr A sends tx with addr B - it will automatically recognize sender A/B. Sender/receiver recognitions (tx threading makes it more easy after initial validation) using reversed hash chain.
+3. Address book with categories and view keys.
+4. Channels/forums: ability to have multi people (public or private) chat with threading (user recognition). Only people who you share channel with will see messages. If you share view keys in public - anyone can see.
+
+Future:
+- persistent wallet encryption
+- publishing channel to txt file (to be able to publish content in a website)
+- public id - currently ID is generated per address in "send to" field and recognized this way in threads. It is possible however to make ID registation on a public channel to have single ID used and ecognized in any channel/conversation. More complicated but may be more convinient for most users. Currently each user will have multiple ID's between channels because "send to" addr of each channel is different.
