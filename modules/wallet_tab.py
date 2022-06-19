@@ -34,6 +34,7 @@ class Worker(gui.QObject):
 		self.dmn=dmn
 		self.init_app=init_app
 		self.block_closing=True
+		self.current_task=''
 		# self.queue_status=queue_status
 
 	@gui.Slot()
@@ -46,7 +47,7 @@ class Worker(gui.QObject):
 			
 		xx=0
 		while not self.init_app.close_thread:
-			
+			# print('close_thread',self.init_app.close_thread)
 			if self.queue_start_stop.qsize(): # start stop blockchain ON/OFF
 				
 				try:
@@ -57,6 +58,7 @@ class Worker(gui.QObject):
 						if cmd['cmd']=='stop_deamon':
 							
 							self.block_closing=True
+							self.current_task='Stopping deamon'
 							self.dmn.stop_deamon()
 							# un block main window closing
 							self.block_closing=False
@@ -65,6 +67,7 @@ class Worker(gui.QObject):
 							# self.dmn.start_stop_enable.emit(False)
 							# print('start_deamon')
 							self.block_closing=True
+							self.current_task='Starting deamon'
 							self.dmn.start_deamon(cmd['addrescan'] )
 							self.block_closing=False
 							# print(' deamon started')
@@ -75,11 +78,13 @@ class Worker(gui.QObject):
 			
 			# print(87,self.dmn.started,flush=True)
 			vemit=[]
+			# print('close_thread 2',self.init_app.close_thread)
 			if self.dmn.started:
 				# print('worker update status')
 				
 				# actually should only block when encryption or wallet command running / waiting if finish
 				self.block_closing=True
+				self.current_task='Updating chain status'
 				vemit=self.dmn.update_status(xx)
 				# print('after worker update status')
 				vemit.append('worker_loop')
@@ -96,13 +101,16 @@ class Worker(gui.QObject):
 				self.block_closing=False
 				
 			
+			# print('close_thread 3',self.init_app.close_thread)
 			self.refreshed.emit(vemit)
 			time.sleep(0.3) # change to 0.3
 			xx+=1
 			
 		print('worker finished' )
+		self.current_task='Worker finished'
 		self.block_closing=False
 		self.finished.emit()
+		# print('self.finished.emit()' )
 
 
 
@@ -161,6 +169,44 @@ class WalletTab:
 				self.wds.wallet_copy_progress()
 	
 	
+	# some exception needed for dots 
+	def _maxLineLength(self,ostr):
+		_max_l_=32 
+		ret='' if '\n'!=ostr[0] else  '\n'
+		_left=[] 
+		
+		for _l in ostr.split('\n'): 
+			_rem_line='' if len(_left)==0 else (' '.join(_left)+'\n') 
+		
+			if len(_l)+len(_rem_line)  <=_max_l_:  
+				ret+= _rem_line+_l #+'\n'
+				if not _l.strip()=='.' and not ' ... '==_l[:5] : ret+='\n'
+				# if _l.strip()=='.' or ' ... '==_l[:5]: ret+= _rem_line+_l # no \n
+				# else: ret+= _rem_line+_l+'\n'
+				_left=[]
+				continue
+			 
+			_words=_left+['\n']+_l.split(' ')  
+			curline=''
+			curlen=0 
+			_last_w=''
+			for _i,_w in enumerate(_words): 
+				
+				wlen=len(_w)+1 # plus space
+				if curlen+wlen<=_max_l_: 
+					curline+=_w+' '
+					curlen+=wlen
+					_last_w=_w
+				else: 
+					_left= _words[_i:].copy()
+					break
+			
+			ret+=curline +'\n'
+			# if not _last_w.strip()=='.' and not ' ... '==_last_w[:5] : ret+='\n'
+		# if len(ret)>0 and ret[-1]=='\n': return ret[:-1]
+		return ret 
+	
+	
 	@gui.Slot(list)
 	def updateStatus(self,ll):
 		# print('waiting update status')
@@ -172,10 +218,17 @@ class WalletTab:
 		# print(' update status',ll)
 		if len(ll)==2:
 			if ll[0]=='append':
-				self.stat_lab.setText(self.stat_lab.text()+ll[1]) 
+				# here no need to take all - just the last line from text 
+				# lines=self.stat_lab.text().split('\n')
+				# plines=''
+				# if len(lines)>1:  plines='\n'.join(lines[:-1])
+				# if len(lines)>0: lines=lines[-1]
+				# self.stat_lab.setText(plines+'\n'+self._maxLineLength(lines+ll[1])    ) 
+				
+				self.stat_lab.setText( self.stat_lab.text()+ll[1]     ) 
 			
 			elif ll[0]=='set':
-				self.stat_lab.setText(ll[1])
+				self.stat_lab.setText( ll[1]) 
 		
 		self.update_status_locked=False
 		# print('done update status')
