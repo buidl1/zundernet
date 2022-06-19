@@ -333,10 +333,14 @@ class Crypto:
 	
 		return bytes
 		
-	def write_file(self,path,wstr):
+		
+		# self.copy_progress_fun=gui_copy_progr
+	def write_file(self,path,wstr,gui_copy_progr=None):
+		if gui_copy_progr!=None: self.copy_progress_fun=gui_copy_progr
+		# print('self.copy_progress_fun',self.copy_progress_fun)
 		if self.copy_progress_fun!=None:
 			#          copy_progress(path,deftxt               ,src ,dest,fromfile=True)
-			return gui.copy_progress(path,'Encrypting to '+path,wstr,path, False)
+			return self.copy_progress_fun(path,'Encrypting to '+path,wstr,path, False)
 		else:
 			# print('[Encrypting]\n Gui copy progress not passed!') #'[Encrypting] Not writing file to',path,
 			with open(path, 'w', encoding="utf-8") as fo:
@@ -347,14 +351,15 @@ class Crypto:
 			# f.write(wstr)
 			
 			
-	def write_bin_file(self,path,bstr):
+	def write_bin_file(self,path,bstr,gui_copy_progr=None):
+		if gui_copy_progr!=None: self.copy_progress_fun=gui_copy_progr
 		# with open(path, "wb") as f:
 			# f.write(bstr)
 		# return gui.copy_progress(path,'Decrypting to '+path,bstr,path, False)
 		# return (path,'Decrypting to '+path,bstr,path, False)
 		if self.copy_progress_fun!=None:
 			#          copy_progress(path,deftxt               ,src ,dest,fromfile=True)
-			return gui.copy_progress(path,'Decrypting to '+path,bstr,path, False)
+			return self.copy_progress_fun(path,'Decrypting to '+path,bstr,path, False)
 		else:
 			# print('[Decrypting]\n Gui copy progress not passed!') #'[Decrypting] Not writing file to',path,
 			with open(path, 'wb') as fo:
