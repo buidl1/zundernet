@@ -1,4 +1,10 @@
-# -*- coding: utf-8 -*-
+# Win32 exception occurred releasing IUnknown at
+# ssd used in app_fun in D:\zunqt\modules\deamon.py (2 hits)
+	# Line 1406: 				app_fun.secure_delete(encr_file) #os.path.join(ppath[0][0],self.wallet_display_set.data_files['wallet']+'.encr'))
+	# Line 1456: 			app_fun.secure_delete(datf)
+	# to pass - check only in init and then use with argument is / not ssd
+	# long term - use perma encryption
+	
 
 from __future__ import absolute_import, division
 
