@@ -1,3 +1,61 @@
+## TODO 1h:
+# [ok] add first usage block per key / addr to sync on import faster 
+# [ok]  add exporting with info about first block - if none get latest saved block
+# [ok] add importing with block nr
+# [test: importing - pass the same ; importing to new wallet - scannig faster ... ]
+
+# add channel creation init block 
+# also add in import / export 
+ 
+# [ok] new table with addr - key assignment
+# [ok] on start after wallet synced - check if all addr got keys
+# [ok] also after import priv keys - insert
+# [ok] if no priv key - get and update
+# >>>> refresh display to show priv key nr next to and addr in brackets (1)
+# or better rename cagtegory to seed 1 if default category (Edit) or extende category _s1 if non default 
+# >>>> allow priv key selection when doing new diversified addr 
+
+
+# assign each addr to keys, assign ids to keys 1,2...
+# display next to each addr? in brackets (1)
+# when importing spending key ? also create one ?
+# make sure if addr is there and i missing a spending key - extract one 
+
+######### set primary key 
+# z_setprimaryspendingkey
+# D:\zunqt\newPIRATE\bin3>pirate-cli.exe -datadir=D:/zunqt/newPIRATE/PIRATE help z_setprimaryspendingkey
+# z_setprimaryspendingkey
+
+# Set the primary spending key used to create diversified payment addresses.
+
+# Result: Returns True if the spending key was successfully set.
+
+
+
+###### match keys with addresses:
+# z_exportkey "zaddr"
+
+# Reveals the zkey corresponding to 'zaddr'.
+# Then the z_importkey can be used with this output
+
+# Arguments:
+# 1. "zaddr"   (string, required) The zaddr for the private key
+
+# Result:
+# "key"                  (string) The private key
+
+# create new addr from new key
+# z_getnewaddresskey ( type )
+# This creates a new sapling extended spending key and
+# returns a new shielded address for receiving payments.
+
+# With no arguments, returns a Sapling address.
+
+# Arguments:
+# 1. "type"         (string, optional, default="sapling") The type of address. One of ["sprout", "sapling"].
+
+# Result:
+# "PIRATE_address"    (string) The new shielded address.
 
 import os
 import time
@@ -83,6 +141,7 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 		self.confirmed={}
 		self.all_unspent={}
 		self.utxids={}
+		self.last_refresh_time=0
 		
 		# idb=localdb.DB(self.db)	
 		 
@@ -137,12 +196,94 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 			if outindex not in self.historical_txs[aa][txid]:
 				self.historical_txs[aa][txid][outindex]	= { "amount":ti[9]} #,"conf": self.last_block-ti[4],"memo":ti[7]  }
 				
-		# print('init self.historical_txs',self.historical_txs)
+		# update priv keys to get start block
+		tmp_addr_pk=global_db.select('priv_keys',['address','pk' ],{'usage_first_block':[' is '," null "]})
+		# print(201,tmp_addr_pk)
+		self.addr_privkey_start={}
+		if len(tmp_addr_pk)>0:
+			for rr in tmp_addr_pk:
+				self.addr_privkey_start[rr[0]]=rr[1]
+		
+		# print('self.addr_privkey_start',self.addr_privkey_start)
+		self.update_privkey_start()
+		 
+		# print('self.addr_privkey_start\n',self.addr_privkey_start)
+		
+		
+		# table['view_keys']={'address':'text', 'vk':'text' }
+		# tmp_addr_vk=global_db.select('view_keys',['address','vk', 'usage_first_block' ] )
+		self.addr_viewkey_start={}
+		# every addr to this vk shuold get start block 
+		# not onnly on new tx insert (if first tx ever!
+		# but also for historical - if key uploaded after first tx )
+		
+		# self.view_key_list=[]
+		self.addr_view_key_dict={}
+		self.view_key_addr_dict={} # vk->[a1,a2,...]
+		
+		self.update_vk_objects()
+		
+		# print('self.addr_viewkey_start\n',self.addr_viewkey_start)
+		# print('self.addr_view_key_dict\n',self.addr_view_key_dict)
+		# print('self.view_key_addr_dict\n',self.view_key_addr_dict)
+		# for tt in tmp_addr_vk:
+		
+			# if tt[2]==None: #tmp_addr_vk=global_db.select('view_keys',['address','vk', 'usage_first_block' ] )
+				# tt2=self.get_first_block( tt[0])
+				# if tt2==None:
+					# print('view key without start block',tt)
+					# self.addr_viewkey_start[tt[0]]=tt[1] 
+				# else: # update for all addr wih this vk 
+					# table={'view_keys':[{'usage_first_block':tt2}]} 
+					# global_db.upsert(table,['usage_first_block'],where={'vk':['=','"'+tt[1] +"'"]}) # separate viewkey table - was insert
+			
+			# if tt[1] not in self.view_key_addr_dict:
+				# self.view_key_addr_dict[tt[1]]=[tt[0]]
+			# elif tt[0] not in self.view_key_addr_dict[tt[1]]:
+				# self.view_key_addr_dict[tt[1]].append(tt[0]])
+		
+			# if tt[1] not in self.view_key_list:
+				# self.view_key_list.append(tt[1])
 				
-		# depends on self.historical_txs 
+			# if tt[0] not in self.addr_view_key_dict:
+				# self.addr_view_key_dict[tt[0]]=tt[1]
+		# table['priv_keys']={'address':'text', 'pk':'text','id':'int', 'usage_first_block':'int'  } # firstblock init usage block
+	
+	def update_privkey_start(self): # from history , run on init and when added new 
+		tmp_pk_aa={}
+		for aa,pk in self.addr_privkey_start.items() : # reverse assignment
+			if pk not in tmp_pk_aa: tmp_pk_aa[pk]=[aa]
+			elif aa not in tmp_pk_aa[pk]: tmp_pk_aa[pk].append(aa)
+		# print(252,tmp_pk_aa)
+		pk_to_del=[]
+		for pk in tmp_pk_aa :
+			# print('pk',pk)
+			fibl=self.get_first_block( tmp_pk_aa[pk] )
+			# print('fibl',fibl)
+			if fibl==None: continue # if still none - keep as is 
+			# print('inserting',fibl)
+			table={'priv_keys':[{'usage_first_block':fibl}]} 
+			global_db.upsert(table,['usage_first_block'],where={'pk':['=',"'"+pk+"'"]}) # separate viewkey table - was insert
+			
+			pk_to_del.append(pk)
+			
+			# print('del',tmp_pk_aa[pk])
+			for aa in tmp_pk_aa[pk]:
+				# print('del aa',aa)
+				del self.addr_privkey_start[aa]
+			
+	 
+	
 		
-		
+	# block to frequent run
+	# if less then 15 seconds reject?
 	def refresh_wallet(self): # once a 1-2 minutes?
+	
+		if time.time()-self.last_refresh_time<15: 
+			# print('reject too freq refresh',time.time()-self.last_refresh_time)
+			return 0
+		self.last_refresh_time=time.time()
+	
 		
 		if self.history_update_counter==0:
 			self.update_all_addr() # disp_dict['addr_list']=self.addr_list # disp_dict['external_addr']=self.external_addr	
@@ -311,8 +452,99 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 							, 'uid':'auto'
 						}]
 		global_db.insert(table,['Category','Type','status','txid','block','timestamp','date_time','from_str','to_str','amount','uid'])
-		# print('inserted tx history\n',table)
 		if 'tx_history' not in self.to_refresh: self.to_refresh.append('tx_history') # channels,addr_book,tx_history
+		
+		# update pk usage_first_block for all addr [per pk]
+		if to_str in self.addr_privkey_start:
+			pk_to_update=self.addr_privkey_start[to_str]
+			table={'priv_keys':[{'usage_first_block':block}]}
+			global_db.update(table,['usage_first_block'],{'pk':[' = ',"'"+pk_to_update+"'"]})
+			
+			# prep list to delete from future updates 
+			tmp_list_to_del=[] 
+			for aa,pk in self.addr_privkey_start.items():
+				if pk==pk_to_update:
+					tmp_list_to_del.append(aa)
+			
+			for dd in tmp_list_to_del:
+				del self.addr_privkey_start[dd] # del from dict all adr conn to pk - already have start block 
+				
+		elif to_str in self.addr_viewkey_start: #[tt[0]]=tt[1]
+			vk_to_update=self.addr_viewkey_start[to_str]
+			table={'view_keys':[{'usage_first_block':block}]}
+			global_db.update(table,['usage_first_block'],{'vk':[' = ',"'"+vk_to_update+"'"]})
+			
+			# prep list to delete from future updates 
+			tmp_list_to_del=[] 
+			for aa,vk in self.addr_viewkey_start.items(): # may be multiple adr fro vk 
+				if vk==vk_to_update:
+					tmp_list_to_del.append(aa)
+			
+			for dd in tmp_list_to_del:
+				del self.addr_viewkey_start[dd] # del from dict all adr conn to pk - already have start block 
+				
+				
+		
+	def get_first_block(self,addr): # search for specific adddr or group of addr assoc with vk 
+		# print('get_first_block',addr)
+		if type(addr)==type('asdf'):
+			retarr=global_db.select_min_val( 'tx_history','block',where={'to_str':['=',"'"+addr+"'"]} ) 
+			# print(retarr)
+			if len(retarr)>0:
+				# print('return retarr[0][0]',retarr[0][0])
+				return retarr[0][0]
+		elif  type(addr)==type([]):  
+			minv=None
+			for aa in addr:
+				retarr=global_db.select_min_val( 'tx_history','block',where={'to_str':['=',"'"+aa+"'"]} ) 
+				# print(aa,retarr)
+				if len(retarr)>0:
+					if minv==None or retarr[0][0]<minv: minv=retarr[0][0]
+			# print('return minv',minv)
+			return minv
+		
+			
+		return None
+		
+		
+		
+	# at start also read min block nr per addr/pk and fill in
+	# same for missing vk start block	
+		
+	def add_pk_for_start_block(self,aa,pk): # used only in new addr gen 
+		
+		self.addr_privkey_start[aa]=pk
+		
+		self.update_privkey_start() # update from history 
+		# if addr on new seed only
+		# if old seed - als ocheck if proper start lbock exist
+		
+		
+		
+		
+		# if aa in self.addr_privkey_start:
+			# pk_to_update=self.addr_privkey_start[aa]
+			# table={'priv_keys':[{'usage_first_block':block}]}
+			# global_db.update(table,['usage_first_block'],{'pk':[' = ',"'"+pk_to_update+"'"]})
+			 
+			# tmp_list_to_del=[] 
+			# for aa,pk in self.addr_privkey_start.items():
+				# if pk==pk_to_update:
+					# tmp_list_to_del.append(aa)
+			
+			# for dd in tmp_list_to_del:
+				# del self.addr_privkey_start[dd]  
+				
+				
+				
+	
+
+
+				
+	# def add_vk_for_start_block(self,aa,vk):
+		
+		# self.addr_viewkey_start[aa]=vk
+		
 	
 	#freshutxo [{"address","txid","amount"},..]
 	def update_historical_txs(self): #,freshutxo): # max count: 80*tps * 60 =4800 < 5000
@@ -447,6 +679,7 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 				global_db.update( {'queue_waiting':[{'status':'processing\n'+working_on+'\nanalyzing tx\'s '+str(len(tt)) }]} ,['status'],{'id':[ '=',queue_id ]})
 				self.sending_signal.emit(['cmd_queue'])
 			
+				
 				conf_dict={}
 				tx_to_process=0
 				# ttiter=0
@@ -1280,28 +1513,99 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 			print('wallet api update_all_addr')
 			return
 		
+		self.update_vk_objects()
+		
+	def update_vk_objects(self):
+	
+		tmp_addr_vk=global_db.select('view_keys',['address','vk', 'usage_first_block' ] )
+		# print(tmp_addr_vk)
+		
+		for tt in tmp_addr_vk:
+		 
+			if tt[1] not in self.view_key_addr_dict:
+				self.view_key_addr_dict[tt[1]]=[tt[0]]
+			elif tt[0] not in self.view_key_addr_dict[tt[1]]:
+				self.view_key_addr_dict[tt[1]].append(tt[0])
+					 
+			
+			# if tt[1] not in self.view_key_list:
+				# self.view_key_list.append(tt[1])
+				
+			if tt[0] not in self.addr_view_key_dict:
+				self.addr_view_key_dict[tt[0]]=tt[1]
+				
+		# try to update addr_viewkey_start:
+		# del tt[0] if got block 
+		self.addr_viewkey_start={} # delete all and only add none
+		for tt in tmp_addr_vk:
+			if tt[2]!=None: continue # if got value - pass 
+			
+			tt2=self.get_first_block(self.view_key_addr_dict[tt[1]] ) # extract from history using  array of addr per vk 
+			if tt2==None :
+				self.addr_viewkey_start[tt[0]]=tt[1] 
+			else:
+				table={'view_keys':[{'usage_first_block':tt2}]} 
+				global_db.upsert(table,['usage_first_block'],where={'vk':['=',"'"+tt[1] +"'"]}) # separate viewkey table - was insert
+				
+			# if not in addr_viewkey_start - check if should be - noene start block
+			# if on the lsit - check if to delete;/ 
+			# tt2=tt[2]
+			# if tt2==None:  # try to find in history for any addr associated with vk ; else: update and delete 
+				# tt2=self.get_first_block(self.view_key_addr_dict[tt[1]] ) # array of addr per vk 
+				# if tt2==None and tt[0] not in self.addr_viewkey_start:
+					# self.addr_viewkey_start[tt[0]]=tt[1] 
+			
+			# if tt[0] in self.addr_viewkey_start and tt2!=None:
+				# table={'view_keys':[{'usage_first_block':tt2}]} 
+				# global_db.upsert(table,['usage_first_block'],where={'vk':['=','"'+tt[1] +"'"]}) # separate viewkey table - was insert
+				# del self.addr_viewkey_start[tt[0]]
+		
+		
+			# if tt[2]==None:  
+				# tt2=self.get_first_block(self.view_key_addr_dict[tt[1]] ) # array of addr per vk 
+				# if tt2==None: 
+					# self.addr_viewkey_start[tt[0]]=tt[1] 
+				# elif tt[0] in self.addr_viewkey_start: # update for all addr wih this vk 
+					# table={'view_keys':[{'usage_first_block':tt2}]} 
+					# global_db.upsert(table,['usage_first_block'],where={'vk':['=','"'+tt[1] +"'"]}) # separate viewkey table - was insert
+					# del self.addr_viewkey_start[tt[0]]
+			# elif tt[0] in self.addr_viewkey_start:
+				# table={'view_keys':[{'usage_first_block':tt[2]}]} 
+				# global_db.upsert(table,['usage_first_block'],where={'vk':['=','"'+tt[1] +"'"]}) # separate viewkey table - was insert
+				# del self.addr_viewkey_start[tt[0]]
+		
 		# print('self.addr_list',self.addr_list)
 		# print('self.external_addr',self.external_addr)
 		
 		
-	def new_zaddr(self,new_seed=False):
+	def new_zaddr(self,new_seed='New'):
 
 		try:
+		# if True:
 			tmpnewaddr=''
 			
-			if new_seed: 
-				print('creating address from new seed')
+			if new_seed=='New': 
+				# print('creating address from new seed')
 				tmpnewaddr=app_fun.run_process(self.cli_cmd,"z_getnewaddresskey ")	
+				return str(tmpnewaddr).strip() 
 			else: 
-				print('creating diversified address')
-				tmpnewaddr=app_fun.run_process(self.cli_cmd,"z_getnewaddress")		
+				get_pk= global_db.select('priv_keys',['pk'],where={'id':['=',new_seed]},distinct=True)
+				# print(get_pk)
+				if len(get_pk)>0:
+					set_pk_ok=app_fun.run_process(self.cli_cmd,"z_setprimaryspendingkey "+get_pk[0][0])	
+					# print('try set primary key to',new_seed,'result',set_pk_ok)					
 			
-			self.update_all_addr()
-			self.address_aliases() # this takes only own addr 
-			# self.update_unspent() # this important only for own addr 
-			self.any_change.append('z_getnewaddress')
-			# self.refresh_wallet()
-			return str(tmpnewaddr).strip()
+					# print('creating diversified address')
+					tmpnewaddr=app_fun.run_process(self.cli_cmd,"z_getnewaddress")		
+			
+					self.update_all_addr()
+					self.address_aliases() # this takes only own addr 
+					# self.update_unspent() # this important only for own addr 
+					self.any_change.append('z_getnewaddress')
+					# self.refresh_wallet()
+					return str(tmpnewaddr).strip()
+				else:
+					return 'no addr exception'
 		except:
 			print('wallet api no addr exception')
 			return 'no addr exception'
@@ -1320,11 +1624,14 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 		
 	def exp_view_key(self,zaddr): # 'False' 'cannot export'
 		try:
-			print('exporting viewkey for zaddr',zaddr)
-			return str(app_fun.run_process(self.cli_cmd,"z_exportviewingkey "+zaddr)) 
+			# print('exporting viewkey for zaddr',zaddr)
+			return str(app_fun.run_process(self.cli_cmd,"z_exportviewingkey "+zaddr)).strip().replace('\r','').replace('\\n','').replace('\\r','') 
 		except:
 			print('wallet api cannot export')
 			return 'cannot export'
+			
+			
+			
 		
 	# "yes", "no" or "whenkeyisnew"
 	def imp_view_key(self,zaddr,vkey,rescan="whenkeyisnew",startHeight=1790000 ): #996000 1575757 1780000
@@ -1335,37 +1642,77 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 	
 		rescan="yes"
 		tmpnewaddr=''
-		print("started z_importviewingkey",vkey[:7]+'...','rescan',rescan,'start height',str(startHeight))
+		# print("started z_importviewingkey",vkey[:7]+'...','rescan',rescan,'start height',str(startHeight))
 		tmpnewaddr=app_fun.run_process(self.cli_cmd,["z_importviewingkey",vkey,rescan,str(startHeight)]) #,zaddr
-		print('finished z_importviewingkey')
+		# print('finished z_importviewingkey')
 		
 		if 'error' in tmpnewaddr.lower():
 			# if already in the wallet - test: 
-			print('error',tmpnewaddr)
-			print('additional check...')
-			tmparr=self.get_all_txs( zaddr)
-			if 'error' not in str(tmparr):
-				print('... ok - valid - finishing update ... ')
-				return {'address':zaddr, 'type':'sapling'}
+			print('error importing view key',tmpnewaddr)
+			# print('additional check...')
+			# tmparr=self.get_all_txs( zaddr)
+			# if 'error' not in str(tmparr):
+				# print('... ok - valid - finishing update ... ')
+				# return {'address':zaddr, 'type':'sapling'}
 		
 			return {'error':tmpnewaddr}
 		
-		print('updating wallet addresses')
-		self.update_all_addr()
-		self.any_change.append('z_importviewingkey')
+		# print('updating wallet addresses')
+		
+		
 		
 		if tmpnewaddr.strip()=='': # current api vs future api	
 			return {'address':zaddr, 'type':'sapling'} #'type' in tmpresult and tmpresult['type']=='sapling':
-		
-		return json.loads(tmpnewaddr) #future api	
-		# print('Done')	
+			
 		
 		
+		tmpresult=json.loads(tmpnewaddr)
+		
+		table={}
+		if 'type' in tmpresult :
+			if tmpresult['type'].lower() in ['sapling','z-sapling','zsapling']:
+				table['addr_book']=[{ 'viewkey_verif':1 }]
+				# vkey update cancell - only update start block on usage 
+				# table_vk={'view_keys':[{'address':zaddr, 'vk':vkey}]}
+				# arrtmp=['address','vk']
+				# if startHeight>1790000: # insert usage_first_block only if realistic value from init usage - not to propagate from import to import if was not yet used 
+					# table_vk['view_keys'][0]['usage_first_block']= startHeight
+					# arrtmp.append( 'usage_first_block')
+					
+				# global_db.upsert(table_vk,arrtmp,where={'vk':['=',"'"+vkey+"'"],'address':['=',"'"+zaddr+"'"]}) # separate viewkey table - was insert
+		else:
+			table['addr_book']=[{ 'viewkey_verif':-1 }]
+			
+		if table!={}:
+			global_db.update(table,[  'viewkey_verif'],{'Address':['=',"'"+zaddr+"'"]}) 
+			 
+		self.update_all_addr()
+		self.any_change.append('z_importviewingkey')
+		
+		
+		
+		return tmpresult #future api 
+		
+		
+		 
+		# tmpresult={}
+		# for rr in aa_pk_blk: # res[addr]={pk:,usage_first_block:}
+			# tmpresult[rr[0]]={'pk':rr[1]} #,'usage_first_block':min(rr[2],last_block ) }
+			# if rr[2]!=None: tmpresult[rr[0]]['usage_first_block']=rr[2]
 	def export_wallet(self):
 		retv={}
+		aa_pk_blk=global_db.select('priv_keys',['address', 'usage_first_block' ])
+		aa_uu={}
+		for rr in aa_pk_blk:
+			aa_uu[rr[0]]=rr[1]
+			
+		# print(aa_uu)
+		
 		for aa in self.addr_list:
 			# print('fetching priv key for',aa)
-			retv[aa]=self.exp_prv_key(aa)
+			retv[aa]={'pk':self.exp_prv_key(aa)}
+			if aa in aa_uu: retv[aa]['usage_first_block']=aa_uu[aa]
+			
 			# print('   ',retv[aa])
 			
 			
@@ -1385,7 +1732,7 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 
 	def exp_prv_key(self,zaddr):
 		try:
-			return str(app_fun.run_process(self.cli_cmd,["z_exportkey",zaddr])) 
+			return str(app_fun.run_process(self.cli_cmd,["z_exportkey",zaddr])).strip().replace('\r','').replace('\\n','').replace('\\r','') # sometimes giving '\n' in the end 
 		except:
 			print('wallet api cannot export exp_prv_key')
 			return 'cannot export'
@@ -1397,6 +1744,7 @@ class Wallet(gui.QObject): # should store last values in DB for faster preview -
 		
 		tmpnewaddr=app_fun.run_process(self.cli_cmd,["z_importkey",zkey,rescan,str(startHeight) ])
 		tmpnewaddr_json=json.loads(tmpnewaddr) 
+		# print('\n\n\nz_importkey result\n',tmpnewaddr_json)
 		# deamon.run_subprocess(self.cli_cmd,"z_importkey "+zkey+rescan+str(startHeight), 64 ) 
 		self.update_all_addr()
 		self.address_aliases()
