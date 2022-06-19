@@ -145,7 +145,7 @@ class AddressBook:
 		
 		# idb=global_db #localdb.DB(self.db)
 		
-		sel_view=global_db.select('msgs_inout',[ 'date_time', 'msg' ],{'addr_to':['=',"'"+addr+"'"]}, orderby=[{'date_time':'desc'}] )
+		sel_view=global_db.select('msgs_inout',[ 'date_time', 'msg' ],{'addr_to':['=',global_db.qstr(addr) ]}, orderby=[{'date_time':'desc'}] )
 		
 		if len(sel_view)>0:
 			# print(sel_view)
@@ -265,7 +265,7 @@ class AddressBook:
 			
 			if tf:
 				# idb=global_db #localdb.DB(self.db)
-				global_db.delete_where('addr_book',{'Address':['=',"'"+addr+"'"]})
+				global_db.delete_where('addr_book',{'Address':['=',global_db.qstr(addr)  ]})
 				grid_settings,colnames,cur_addr=self.addr_book_view()
 				self.main_table.updateTable(grid_settings,colnames)
 				
@@ -404,10 +404,10 @@ class AddressBook:
 			
 	def increment_usage(self,addr): # when copy or sendto
 		# idb=localdb.DB(self.db)
-		sel_addr_book=global_db.select('addr_book',[ 'usage'],{'Address':['=',"'"+addr+"'"]} )
+		sel_addr_book=global_db.select('addr_book',[ 'usage'],{'Address':['=',global_db.qstr(addr)  ]} )
 		table={}
 		table['addr_book']=[{'usage':int(sel_addr_book[0][0])+1}]  
-		global_db.upsert(table,['usage'],{'Address':['=',"'"+addr+"'"]})
+		global_db.upsert(table,['usage'],{'Address':['=',global_db.qstr(addr)]})
 		
 		grid_settings,colnames,cur_addr=self.addr_book_view()
 		self.main_table.updateTable(grid_settings,colnames)
@@ -461,6 +461,7 @@ class AddressBook:
 					[{'T':'LabelC', 'L':'Alias' } , {'T':'LineEdit','uid':'alia'} ],
 					[{'T':'LabelC', 'L':'Full address' } , 	{'T':'LineEdit','uid':'addr','width':32} ],
 					[{'T':'LabelC', 'L':'View key' } , 	{'T':'LineEdit','uid':'viewkey','width':32} ],
+					[{'T':'LabelC', 'L':'Start block' } , 	{'T':'LineEdit','uid':'startblock','width':32} ],
 					[{'T':'Button','L':'Save','uid':'enter', 'span':2}]
 						]	
 		form_grid=[]
@@ -479,7 +480,7 @@ class AddressBook:
 		
 		
 		
-		# vk_valid=-2 not processesd vk_valid=0 empty no need to process 
+		# vk_valid=-2 not processesd vk_valid=0 empty no need to process  5
 		def save_new():
 			# global idb, form_grid, grid_settings
 			# table={}
@@ -492,8 +493,9 @@ class AddressBook:
 			tmpvk=self.form_table.cellWidget(4,1).text().strip() #.get_value('viewkey').strip()
 			tmpcat=self.form_table.cellWidget(1,1).text().strip() #.get_value('cat').strip()
 			tmpalia=self.form_table.cellWidget(2,1).text().strip() #.get_value('alia').strip()
+			tmp_start_block=self.form_table.cellWidget(5,1).text().strip() #'usage_first_block'
 			
-			sel_addr_book=global_db.select('addr_book',[ 'ViewKey','addr_verif','viewkey_verif'],{'Address':['=',"'"+tmpaddr+"'"]})
+			sel_addr_book=global_db.select('addr_book',[ 'ViewKey','addr_verif','viewkey_verif'],{'Address':['=',global_db.qstr(tmpaddr)  ]})
 			# print(477,sel_addr_book)
 			# print(tmpvk)
 			
@@ -506,20 +508,23 @@ class AddressBook:
 					# tmpvk_valid=-2
 				else:
 					tmpaddr_valid=sel_addr_book[0][1]
-					tmpvk_valid=-2 #sel_addr_book[0][2]
+					tmpvk_valid=-2 #verify again anywa and with new block height
 			
 			
 			table={}
 			# print('self.cur_addr',self.cur_addr,tmpvk_valid,tmpvk)
 			if tmpaddr in self.cur_addr: # = editing addr already in 
 				table['addr_book']=[{'Category':tmpcat,'Alias':tmpalia,'Address':tmpaddr,'ViewKey':tmpvk,'addr_verif':tmpaddr_valid,'viewkey_verif':tmpvk_valid }] 
-				global_db.upsert(table,[ 'Category','Alias','Address','ViewKey','addr_verif','viewkey_verif' ],{'Address':['=',"'"+tmpaddr+"'"]})
+				global_db.upsert(table,[ 'Category','Alias','Address','ViewKey','addr_verif','viewkey_verif' ],{'Address':['=',global_db.qstr(tmpaddr)]})
 				
 				if tmpvk_valid==-2: # if not valid add validation 
 					table={}
-					tmpjson=json.dumps({'addr':tmpaddr,'viewkey':tmpvk})
-					table['queue_waiting']=[global_db.set_que_waiting(command='import_view_key',jsonstr=tmpjson, wait_seconds=0)]
-					global_db.upsert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ],{'command':['=',"'import_view_key'"],'json':['=',"'"+tmpjson+"'"] })
+					tmpjson={'addr':tmpaddr,'viewkey':tmpvk} #json.dumps({'addr':tmpaddr,'viewkey':tmpvk})
+					if tmp_start_block!='':  
+						tmpjson['usage_first_block']=tmp_start_block
+					tmpjson=json.dumps(tmpjson)
+					table['queue_waiting']=[global_db.set_que_waiting(command='import_view_key',jsonstr= tmpjson, wait_seconds=0)]
+					global_db.upsert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ],{'command':['=',"'import_view_key'"],'json':['=',global_db.qstr(tmpjson) ] })
 			else: # new 
 				table['addr_book']=[{'Category':tmpcat,'Alias':tmpalia,'Address':tmpaddr,'ViewKey':tmpvk,'usage':0,'addr_verif':tmpaddr_valid,'viewkey_verif':tmpvk_valid}]  
 				global_db.insert(table,[ 'Category','Alias','Address','ViewKey','usage','addr_verif','viewkey_verif'])
@@ -530,8 +535,10 @@ class AddressBook:
 				
 				if tmpvk!='':
 					table={}
-					tmpjson=json.dumps({'addr':tmpaddr,'viewkey':tmpvk})
-					table['queue_waiting']=[global_db.set_que_waiting(command='import_view_key',jsonstr=tmpjson, wait_seconds=0)]
+					tmpjson={'addr':tmpaddr,'viewkey':tmpvk} #json.dumps({'addr':tmpaddr,'viewkey':tmpvk}) # {'addr':tmpaddr,'viewkey':tmpvk, 'usage_first_block':tmp_start_block}
+					if tmp_start_block!='': tmpjson['usage_first_block']=tmp_start_block
+					tmpjson=json.dumps(tmpjson)
+					table['queue_waiting']=[global_db.set_que_waiting(command='import_view_key',jsonstr= tmpjson, wait_seconds=0)]
 					global_db.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 				
 				# idb.upsert(table,[ 'Category','Alias','Address','ViewKey','usage'],{'Address':['=',"'"+tmpaddr+"'"]})
@@ -540,13 +547,14 @@ class AddressBook:
 			self.form_table.cellWidget(2,1).setText( '')
 			self.form_table.cellWidget(3,1).setText( '')
 			self.form_table.cellWidget(4,1).setText('')
+			self.form_table.cellWidget(5,1).setText('')
 			
 			self.refresh_addr_book()
 			
 			# update_filter_values()
 			
 			
-		self.form_table.cellWidget(5,0).set_fun(True,save_new)
+		self.form_table.cellWidget(6,0).set_fun(True,save_new)
 		
 		
 		
@@ -578,6 +586,8 @@ class AddressBook:
 				if 'viewkey' in ddi:
 					self.form_table.cellWidget(4,1).setText(ddi['viewkey']) 
 					self.form_table.cellWidget(1,1).setText('ViewKey')
+				if 'usage_first_block' in ddi:
+					self.form_table.cellWidget(5,1).setText(ddi['usage_first_block'])  
 			
 				return isjok
 				
@@ -604,14 +614,7 @@ class AddressBook:
 						
 						ddi=json.loads(decr_val)	
 
-						load_values(ddi)						
-				
-						# if 'viewkey' in ddi:
-							# self.form_table.cellWidget(1,1).setText('ViewKey') #self.form_table.set_textvariable('cat','ViewKey')
-							# self.form_table.cellWidget(3,1).setText( ddi['addr'])
-							# self.form_table.cellWidget(4,1).setText(ddi['viewkey'])
-						# else:							
-							# self.form_table.cellWidget(3,1).setText(ddi['addr'])	 # self.form_table.set_textvariable('addr',ddi['addr'])		
+						load_values(ddi)
 						
 					except:
 						gui.showinfo('Could not decrypt file','File '+zpath+' does not contain encrypted address or view key or you have wrong password!', self.form_table)
