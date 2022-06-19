@@ -1,3 +1,20 @@
+
+# todo: update table['priv_keys'] 'usage_first_block' where {'address':'text', 'pk':'text' _ON_ first incoming payment
+# and export with this block nr and import with
+# update 'channels' 'creation_block' on creation and export with this time and import with 
+# to_Str in tx_history is wallet addr receiving
+# table['tx_history']=[{  'Type':ttype
+							# , 'status':'received'
+							# ,'txid':txid
+							# ,'block':block 
+							# ,'to_str':to_str 
+						# }]
+# on start generate list of addr/pk with no init usage_first_block
+# then each time check on passing update in wallet deamon - update and exclude when inserted
+# for channels - on creation add firstblock info 
+
+
+
 # create new .encr storage only when blockchain run was done (wallet file created too)
 # otherwise do not save
 # and do not write to init - set default create new option / delete last file value 
@@ -109,10 +126,12 @@ class DB:
 		
 		
 		
-		
 		table={}
-		table['view_keys']={'address':'text', 'vk':'text' }
-		table['channels']={'address':'text', 'vk':'text', 'creator':'text', 'channel_name':'text', 'channel_intro':'text', 'status':'text', 'own':'text', 'channel_type':'text' }
+		# usage_first_block update when:
+		# first time receiving tx 
+		table['priv_keys']={'address':'text', 'pk':'text','id':'int', 'usage_first_block':'int'  } # firstblock init usage block
+		table['view_keys']={'address':'text', 'vk':'text', 'usage_first_block':'int' }
+		table['channels']={'address':'text', 'vk':'text', 'creator':'text', 'channel_name':'text', 'channel_intro':'text', 'status':'text', 'own':'text', 'channel_type':'text', 'creation_block':'int' }
 		# 2 indexes:
 		# indexes['channels']=[{'idx_name':'chnl_idx1','cname':['address' ]}]  
 		# indexes['channels'].append({'idx_name':'chnl_idx2','cname':['creator' ]})  
@@ -207,6 +226,9 @@ class DB:
 		indexes['view_keys']=[{'idx_name':'vk_idx1','cname':['address' ]} ] 
 		indexes['channels']=[{'idx_name':'chnl_idx1','cname':['address' ]}]  
 		indexes['channels'].append({'idx_name':'chnl_idx2','cname':['creator' ]})  
+		
+		indexes['priv_keys']=[{'idx_name':'pk_idx1','cname':['address' ]}]  
+		indexes['priv_keys'].append({'idx_name':'pk_idx2','cname':['id' ]})  
 		
 		self.create_indexes(indexes)
 		
@@ -923,7 +945,7 @@ class DB:
 		
 		sqlstr="insert into "+tname+"("+','.join(items_order)+") values ("+','.join(['?' for ii in items_order])+")"
 		tmpsql=sqlstr
-			
+		# print(tmpsql)
 		
 		if not self.sql_init_check( tmpsql,tname): #self.connected:	 
 			return []
@@ -995,7 +1017,7 @@ class DB:
 	
 	
 	
-	def select_min_val(self,table_name,column,where={},groupby=[]):
+	def select_min_val(self,table_name,column,where={},groupby=[]): #'select min("'+column+'") as mmin from '+table_name
 		fname='select_min_val'
 		
 		sqlstr='select min("'+column+'") as mmin from '+table_name
@@ -1141,6 +1163,9 @@ class DB:
 		
 		return retv[0][0]
 		
+	# db.qstr(tmpstr)
+	def qstr(self,tmpstr): # helper function to turn 'asdf' into "'asdf'" in sql creation
+		return "'"+tmpstr+"'"
 		
 	def add_where(self,where_dict): # either 'is_channel':['=',"'False'"] or OR  'is_channel':[ ['=',"'False'"], [' is ','null']]
 	
