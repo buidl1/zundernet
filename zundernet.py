@@ -1,4 +1,5 @@
 
+
 import os
 import sys
 import queue
@@ -52,6 +53,14 @@ if init_app.creating_new_wallet:
 
 new_root=gui.MainWindow(title="zUndernet | Wallet file: "+top_title_wallet,central_widget=tabs0)
 # self.setWindowTitle(title)
+
+
+# here 
+# to close set schwedule: block threads and lock db# , then on close 
+# 1. clear queue and insert closing to schedule
+# 2. wait worker is finished
+# 3. run gui close 
+
 new_root.setOnClose(init_app.on_closing)
 new_root.show()
 # print(' new_root dt',time.time()-t0)
@@ -62,21 +71,12 @@ queue_start_stop = queue.Queue()
 
 wds=WalDispSet([init_app.app_password],init_app.data_files, _db_main=init_app.db_main , _db_init=init_app.init_db   )
 
-init_app.wds_addr_cat_map=wds.addr_cat_map # pointer to object for next init ? 
-init_app.wds_addr_book=wds.grid_lol_select # pointer to object for next init ? grid_lol_select
-init_app.wds_addr_book_category_alias=wds.addr_book_category_alias # pointer to object for next init ? grid_lol_select
-init_app.wds_disp_dict=wds.disp_dict # pointer to object for next init ? grid_lol_select
 
 # print(' WalDispSet dt',time.time()-t0) #0.16
 # t0=time.time()
   
 wata=wallet_tab.WalletTab(init_app.is_started,queue_start_stop, wds, new_root, init_app.data_files['wallet'])
 
-# not needed pointers?
-init_app.wallet_tab_byaddr_frame =wata.byaddr_frame  # pointer to object for next init ?
-init_app.wallet_tab_summary_frame =wata.summary_frame  # pointer to object for next init ?
-init_app.wallet_tab_summary_options =wata.summary_options  # pointer to object for next init ?
-init_app.wallet_tab_queue_frame =wata.queue_frame  # pointer to object for next init ?
 
 dmn=init_app.dmn
 def upload_0():
@@ -105,7 +105,7 @@ tabs0.insertTab( tab_dict={'Wallet':wata.tabs1})
 wds.sending_signal.connect(wata.updateWalletDisplay)
 
 addrb=addr_book.AddressBook( wds)
-init_app.addr_book_view_grid=addrb.addr_book_view_grid # pointer to object for next init ?
+# init_app.addr_book_view_grid=addrb.addr_book_view_grid # pointer to object for next init ?
 def upload_1():
 	# t0=time.time()
 	tabs0.insertTab( tab_dict={'Address Book':addrb.setaddrbook()})
@@ -123,9 +123,6 @@ def uploadTabs():
 	# t0=time.time()
 	mmm=msg.Msg( addrb )
 
-	init_app.msg_grid_main=mmm.grid_threads_msg # pointer to object for next init ?
-	init_app.msg_grid_threads=mmm.grid_threads # pointer to object for next init ?
-	init_app.msg_grid_order=mmm.thr_ord # pointer to object for next init ?
 	tabs0.insertTab( tab_dict={'Messages':mmm.parent_frame})
 	# print(' Msg dt',time.time()-t0) #  2
 	gui.QTimer.singleShot(500,mmm.update_msgs)
@@ -135,9 +132,6 @@ def uploadTabs():
 	ccc.refreshAddrBook.connect(addrb.refresh_addr_book)
 	dmn.wallet_synced_signal.connect(ccc.updateFilter)
 	
-	init_app.msg_grid_main=ccc.grid_threads_msg # pointer to object for next init ?
-	init_app.msg_grid_threads=ccc.grid_threads # pointer to object for next init ?
-	init_app.msg_grid_order=ccc.thr_ord # pointer to object for next init ?
 	tabs0.insertTab( tab_dict={'Channels':ccc.parent_frame})
 	gui.QTimer.singleShot(1000,ccc.update_channels)
 	# print('uploadTabs 2 ')
@@ -171,9 +165,10 @@ def uploadTabs():
 
 	wrk_thread=gui.QThread(parent=new_root)
 	wrk.moveToThread(wrk_thread)
-	wrk_thread.finished.connect(wrk_thread.deleteLater)
+	# wrk_thread.finished.connect(wrk_thread.deleteLater)
+	# wrk.finished.connect(wrk.quit)
 	wrk.finished.connect(wrk_thread.quit)
-	wrk.finished.connect(wrk.deleteLater)
+	# wrk.finished.connect(wrk.deleteLater)
 	wrk.refreshed.connect(wata.updateWalletDisplay)
 	
 	wrk_thread.started.connect(wrk.run)
