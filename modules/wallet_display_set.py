@@ -559,121 +559,7 @@ class WalDispSet(gui.QObject):
 		
 		
 		
-		
-		
-		
-	# from def exported file / might be encrypted
-	# from other source file
-	# manual entry - text area 
-	def import_priv_keys(self,btn):
-		# [{'T':'Button', 'L':'Load from file' }, {'T':'LabelV', 'L':''  } ] ,
-							# [{'T':'LineEdit', 'span':2 } , { } ] , # 
-		w0=gui.Button(None,'Load from file')
-		w0.setMaximumWidth(128)
-		w1=gui.Label(None,'...')
-		w2=gui.LineEdit(None)
-		w2.setMaximumWidth(256)
-		
-		w3=gui.Table(None,{'dim':[1,1],'toContent':1 })
-		w3.updateTable([[{'T':'LabelV' }]])
-		# w3.setMaximumWidth(512)
-		# w3=gui.Label(None,'')
-		w4=gui.Button(None,'Import')
-		w4.setMaximumWidth(128)
-			
-		
-		def setfile(btn2,lbl,lblk):	
-			gui.set_file( lbl , dir=False,parent=btn2 , title="Select file with private keys")
-			
-			def trysplit(tmpstr):
-				try:
-					tmpstr2=json.loads(tmpstr)
-					retv=''
-					for kk,vv in tmpstr2.items():
-						retv+=vv.replace('\r','').replace('\\n','').replace('\\r','')
-					# print(retv)
-					return retv
-				except:
-					pass
-			
-				c=[',',';','\r'] #separators
-				best=1
-				ci='\n'
-				for cc in c:
-					tmp=tmpstr.split(cc)
-					if len(tmp)>best:
-						best=len(tmp)
-						ci=cc
-				if ci!='\n':
-					return tmpstr.replace(ci,'\n')
-				else:
-					return tmpstr
-			
-			# try to unpack or read
-			# 1. encrypted - aks password json.dumps({'iv':iv, 'ct':ct})
-			path1=lbl.text()
-			if len(path1)>1:
-				if os.path.exists(path1):
-					rstr=''
-					with open(path1, "r", encoding="utf-8") as f:
-						rstr = f.read()
-					keys=''	
-					if 'iv' in rstr and 'ct' in rstr:
-						# print('decrypt')
-						
-						try:
-							# print('set LabelV')
-							tmpval=[]
-							gui.PassForm(tmpval, first_time=False, parent = btn2,  title="Enter password to decrypt file")
-							if len(tmpval)>0:
-								cc=aes.Crypto()
-								keys=cc.aes_decrypt_file( path1,None,tmpval[0])
-								if keys==False:
-									1/0
-									
-								keys=trysplit(keys)
-								lblk.setText(keys)		
-								# lblk.setToolTip(keys)	
-							else:
-								1/0
-						except:
-							gui.showinfo('Could not decrypt file','File '+path1+' does not contain encrypted address or view key or you have wrong password!', btn2)
-							lblk.setText('')		
-							lbl.setText('')
-					else:
-						keys=trysplit(rstr)
-						lblk.setText(keys)
-			
-		w0.set_fun(False,setfile,w1,w3.item(0,0))
-				
-		w2.setEventFilter(w3.item(0,0))
-				
-		# \n \r problem 		
-				
-		def import_keys(btn3,lbl):
-			tmpstr=lbl.text().split('\n')
-			keys=[]
-			for kk in tmpstr:
-				if len(kk)>50:
-					keys.append(kk)
-					
-			# print('importing',keys)		
-			ddict={'keys': keys	}
-			table={}
-			table['queue_waiting']=[self.db_main.set_que_waiting('import_priv_keys',jsonstr=json.dumps(ddict) ) ]
-			
-			# idb=localdb.DB(self.db)
-			self.db_main.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
-			
-			expo=btn3.parent().parent()
-			expo.close() #.parent()
-				
-		w4.set_fun(False,import_keys,w3.item(0,0))
-		
-		gui.CustomDialog(btn,[w0,w1,w2,w3,w4], title='Import Private keys',wihi=[512,256])
-
-		
-		
+	
 		
 		
 		
@@ -836,6 +722,144 @@ class WalDispSet(gui.QObject):
 		
 		
 		
+	# from def exported file / might be encrypted
+	# from other source file
+	# manual entry - text area 
+	def import_priv_keys(self,btn):
+		# [{'T':'Button', 'L':'Load from file' }, {'T':'LabelV', 'L':''  } ] ,
+							# [{'T':'LineEdit', 'span':2 } , { } ] , # 
+		w0=gui.Button(None,'Load from file')
+		w0.setMaximumWidth(128)
+		w1=gui.Label(None,'...')
+		w2=gui.LineEdit(None)
+		w2.setMaximumWidth(256)
+		# BXEUcroM7V2InteuVVGE4lMHm$qfrXMs
+		w3=gui.Table(None,{'dim':[1,1],'toContent':1 })
+		w3.updateTable([[{'T':'LabelV' }]])
+		# w3.setMaximumWidth(512)
+		# w3=gui.Label(None,'')
+		w4=gui.Button(None,'Import')
+		w4.setMaximumWidth(128)
+			
+		
+		def setfile(btn2,lbl,lblk):	
+			gui.set_file( lbl , dir=False,parent=btn2 , title="Select file with private keys")
+			
+			# def trysplit(tmpstr):
+				# try:
+					# tmpstr2=json.loads(tmpstr) # res[addr]={pk:,usage_first_block:}
+					# return json.loads(tmpstr) # res[addr]={pk:,usage_first_block:}
+					# for kk in tmpstr2:
+						# tmpstr2[kk]['pk']=tmpstr2[kk]['pk'].replace('\r','').replace('\\n','').replace('\\r','')
+					# retv='' 
+					# for kk,dd in tmpstr2.items():
+						
+						# retv+=vv.replace('\r','').replace('\\n','').replace('\\r','')
+					# print(retv)
+					# return retv
+				# except:
+					# return {}
+			
+				# find delimiter separater values - abNDON 
+				# c=[',',';','\r'] #separators
+				# best=1
+				# ci='\n'
+				# for cc in c:
+					# tmp=tmpstr.split(cc)
+					# if len(tmp)>best:
+						# best=len(tmp)
+						# ci=cc
+				# if ci!='\n':
+					# return tmpstr.replace(ci,'\n')
+				# else:
+					# return tmpstr
+			
+			# try to unpack or read
+			# 1. encrypted - aks password json.dumps({'iv':iv, 'ct':ct})
+			path1=lbl.text()
+			if len(path1)>1:
+				if os.path.exists(path1):
+					rstr=''
+					with open(path1, "r", encoding="utf-8") as f:
+						rstr = f.read()
+					keys= ''	
+					if 'iv' in rstr and 'ct' in rstr: # print('decrypt')
+						
+						try: 
+							tmpval=[]
+							gui.PassForm(tmpval, first_time=False, parent = btn2,  title="Enter password to decrypt file")
+							if len(tmpval)>0:
+								cc=aes.Crypto()
+								keys=cc.aes_decrypt_file( path1,None,tmpval[0])
+								if keys==False: 
+									1/0
+									
+								# keys=trysplit(keys)
+								lblk.setText(keys)	 # lblk.setToolTip(keys)	
+							else:
+								1/0
+						except:
+							gui.showinfo('Could not decrypt file','File '+path1+' does not contain encrypted address or view key or you have wrong password!', btn2)
+							lblk.setText('')		
+							lbl.setText('')
+					else:
+						keys=rstr #trysplit(rstr) # if not encrypted file 
+						lblk.setText(keys)
+			
+		w0.set_fun(False,setfile,w1,w3.item(0,0))
+				
+		w2.setEventFilter(w3.item(0,0))
+				
+		# \n \r problem 		
+				
+		def import_keys(btn3,lbl):
+			try:
+			# if True:
+				tmpstr=json.loads(lbl.text()) #{"addr": {"pk": "secret-extended-key-main1q02cqs ", "usage_first_block": 11111} 
+				
+				# exclude already existing keys - 
+				all_pk= self.db_main.select('priv_keys') #{'address':'text', 'pk':'text','id':'int', 'usage_first_block':'int'  }
+				all_addr=[rr[0] for rr in all_pk]
+				todel=[]
+				for kk in tmpstr :
+					if kk in all_addr: #print('pk already in db - removing addr/key pair',kk)
+						todel.append(kk)
+				for kk in todel:
+					del tmpstr[kk]
+				
+				if len(tmpstr)==0: #print('all keys already in b')
+					gui.showinfo('All keys already in DB','All keys already in DB.\nNo key to import.', btn3)
+				else:
+					# ddict=json.loads(lbl.text()) # ddict[addr]={pk, usage_first_block}
+				# tmpstr=lbl.text().split('\n')
+					# keys=[]
+					# for kk in tmpstr:
+						# if len(kk)>50:
+							# keys.append(kk)
+							
+					# print('importing',keys)		
+					# ddict={'keys': keys	}
+					
+					# print('INSERTING KEYS',tmpstr)
+					table={}
+					table['queue_waiting']=[self.db_main.set_que_waiting('import_priv_keys',jsonstr=json.dumps(tmpstr)  ) ] # json.dumps(ddict)
+					# print('importing',table)
+					self.db_main.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
+			except:
+				gui.showinfo('Error when importing keys','Error when importing keys.\nWrong import file?', btn3)
+				pass
+				
+			expo=btn3.parent().parent()
+			expo.close() #.parent()
+				
+		w4.set_fun(False,import_keys,w3.item(0,0))
+		
+		gui.CustomDialog(btn,[w0,w1,w2,w3,w4], title='Import Private keys',wihi=[512,256])
+
+		
+			
+		
+		
 		
 				
 				
@@ -911,6 +935,8 @@ class WalDispSet(gui.QObject):
 						
 				expo.parent().close()
 				return
+				
+				
 			else: #export priv keys 
 
 				if gui.msg_yes_no("Encrypt private keys with your password?", "If you make a backup for yourself 'yes' is good option. If you share or sell the wallet better select 'no' since sharing personal passwords is not good practice."):
@@ -922,14 +948,12 @@ class WalDispSet(gui.QObject):
 				else:
 					ddict['password']='no'
 					
-					
-			table={}
-			table['queue_waiting']=[self.db_main.set_que_waiting('export_wallet',jsonstr=json.dumps(ddict) ) ]
+				# self.export_priv_kes_new( ddict)	# reversed not to keep priv keys in db 
+				table={}
+				table['queue_waiting']=[self.db_main.set_que_waiting('export_wallet',jsonstr=json.dumps(ddict) ) ]
+				
+				self.db_main.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 			
-			# idb=localdb.DB(self.db)
-			self.db_main.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
-			
-			# rootframe.destroy()
 			expo.parent().close() #.destroy()
 		
 		# expo.set_cmd( 'enter',[],enter)
@@ -937,6 +961,56 @@ class WalDispSet(gui.QObject):
 		rootframe =gui.CustomDialog(btn,expo, title='Exporting wallet')
 		
 		
+		
+		
+	# def export_priv_kes_new(self,ddict): 
+		# aa_pk_blk=self.db_main.select('priv_keys',['address','pk','usage_first_block' ]) 
+		
+		# tmpresult={}
+		# for rr in aa_pk_blk: # res[addr]={pk:,usage_first_block:}
+			# tmpresult[rr[0]]={'pk':rr[1]} #,'usage_first_block':min(rr[2],last_block ) }
+			# if rr[2]!=None: tmpresult[rr[0]]['usage_first_block']=rr[2]
+		
+		# tmppassword=ddict['password']
+		# path2=os.path.join(ddict['path'],'addrkeys_'+app_fun.now_to_str(True)+'.txt')
+		
+		# cc=aes.Crypto( gui_copy_progr=gui.copy_progress)	
+		# if tmppassword=='current':
+			# cc.aes_encrypt_file( json.dumps(tmpresult),path2 ,self.password)	 
+		# elif tmppassword=='random':			 
+			# tmppassword=cc.rand_password(32)
+			# cc.aes_encrypt_file( json.dumps(tmpresult) , path2 , tmppassword )				
+		# else:
+			# cc.write_file( path2 , json.dumps(tmpresult)  )
+			# tmppassword=''
+		
+		# tmptitle='Private keys exported. Private keys exported to\n'+path2
+		
+		# if tmppassword!='': tmptitle+='. File was encrypted with password:\n'  
+		# if tmppassword=='current':
+		
+			# tmptitle+='Your current password'
+			# self.display_message( tmptitle,'','') 
+		# else:
+			# self.display_message(tmptitle,'',tmppassword)
+			
+			
+			
+	# sim in wata trig from deamon 			
+	def display_message(self,title,content,to_copy):
+		
+		if to_copy!='': gui.output_copy_input(None,title,(to_copy,))
+	
+		else:
+			strtitle_split=title.split('.')
+			tmptitle=title  
+			tmpcont=content
+			
+			if len(strtitle_split)>1:
+				tmptitle= strtitle_split[0]
+				tmpcont='.'.join(strtitle_split[1:])
+			
+			gui.messagebox_showinfo(tmptitle,tmpcont,None)			
 		
 		
 		
@@ -991,6 +1065,7 @@ class WalDispSet(gui.QObject):
 		
 	# encrypt with random password and present the password , save the pass in db 
 	# ask where t odrop the file 
+	# [new] add start block nr from addr from prv key 
 	def export_viewkey(self,btn,addr):
 		
 		automate_rowids=[ 
@@ -1048,18 +1123,27 @@ class WalDispSet(gui.QObject):
 				return
 		
 		############### new addr setup
+		# self.priv_keys={}
+		# all_pk= self.db_main.select('priv_keys',['address','id']) #{'address':'text', 'pk':'text','id':'int', 'usage_first_block':'int'  }
+		seed_opt=['New']
+		if len(self.priv_keys)>0:
+			seed_opt+=[str(id) for id in sorted(self.priv_keys.values())]
 		
+		seed_tt='For channel use different seed then main address to preserve main address privacy.\nFor best performance have all channels on the same seed.'
 		
 		automate_rowids=[ [{'T':'LabelV', 'L':'Number of addresses to create: ',  'style':{'bgc':'#eee','fgc':'red'} },{'T':'LineEdit', 'V':'1','valid':{'ttype':int, 'rrange':[1,9999]}} ] ,
 						[{'T':'LabelV', 'L':'Category for new addresses: ', 'style':{'bgc':'#eee','fgc':'red'} },{'T':'LineEdit', 'V':''} ],
 						[{'T':'LabelV', 'L':'Set category counter' },{'T':'Combox','V':['No','Yes'] } ] ,
-						[{'T':'LabelV', 'L':'Address from new seed' },{'T':'Combox','V':['No (better for wallet performance)','Yes (better for privacy when sharing a viewing key)'] } ] ,
+						# [{'T':'LabelV', 'L':'Address from new seed' },{'T':'Combox','V':['No (better for wallet performance)','Yes (better for privacy when sharing a viewing key)'] } ] ,
+						[{'T':'LabelV', 'L':'Select seed', 'tooltip': seed_tt},{'T':'Combox','V':seed_opt } ] ,
 						[{'T':'Button', 'L':'Create', 'span':2}   ] 
 						]
 		
 		tw=gui.Table( params={'dim':[5,2],"show_grid":False, 'colSizeMod':[ 'toContent','toContent'], 'rowSizeMod':['toContent','toContent' ]})		
 		tw.updateTable(automate_rowids)
 		
+		if len(self.priv_keys)>1:
+			tw.cellWidget(3,1).setIndexForText(seed_opt[-1])
 		
 		def create_addr(btn_c,addr_num,addr_cat,addr_cat_counter, new_seed):
 			# print ('create_addr wds ')
@@ -1070,11 +1154,14 @@ class WalDispSet(gui.QObject):
 			if addr_cat_counter=='No': 	addr_cat_counter=False
 			else: addr_cat_counter=True
 			
-			if 'No' in new_seed: new_seed=False
-			else: new_seed=True 
+			# if 'New'==new_seed: new_seed=str(-1)
+			# else: new_seed=True 
+			# if 'No' in new_seed: new_seed=False
+			# else: new_seed=True global_db. self.db_main
 				
+			# print(json.dumps({'addr_count':int(addr_num),'addr_cat':addr_cat,'addr_cat_counter':addr_cat_counter, 'new_seed':new_seed}) )
 			table={}
-			table['queue_waiting']=[global_db.set_que_waiting('new_addr', json.dumps({'addr_count':int(addr_num),'addr_cat':addr_cat,'addr_cat_counter':addr_cat_counter, 'new_seed':new_seed}) ) ]
+			table['queue_waiting']=[self.db_main.set_que_waiting('new_addr', json.dumps({'addr_count':int(addr_num),'addr_cat':addr_cat,'addr_cat_counter':addr_cat_counter, 'new_seed':new_seed}) ) ]
  
 			self.db_main.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 
@@ -1298,6 +1385,14 @@ class WalDispSet(gui.QObject):
 		self.alias_map=tmp_disp_dict['aliasmap']
 		
 		self.addr_amount_dict=tmp_disp_dict['addr_amount_dict'] #=self.addr_amount_dict #self.addr_amount_dict[aa]={'confirmed':amount_init,'unconfirmed':am_unc,'#conf':cc_conf,'#unconf':cc_unc}
+		
+		self.priv_keys={}
+		self.priv_keys_start_blocks={}
+		all_pk= self.db_main.select('priv_keys',['address','id', 'usage_first_block']) #{'address':'text', 'pk':'text','id':'int', 'usage_first_block':'int'  }
+		for rr in all_pk:
+			self.priv_keys[rr[0]]=rr[1]
+			self.priv_keys_start_blocks[rr[0]]=rr[2]
+			
 	
 		
 		
@@ -1471,7 +1566,7 @@ class WalDispSet(gui.QObject):
 			ch_type=expo.cellWidget(4,1).text().strip() #.currentText()
 			
 			msg=json.dumps({'channel_name':chname,'channel_owner':creator, 'channel_intro':initcontent, 'channel_type':ch_type })
-			got_bad_char, msg_arr=global_db.prep_msg(msg,addr)
+			got_bad_char, msg_arr=self.db_main.prep_msg(msg,addr)
 			
 			if got_bad_char:
 				gui.showinfo(msg_arr[0], msg_arr[1])
@@ -1482,7 +1577,7 @@ class WalDispSet(gui.QObject):
 				ddict['to'].append({'z':addr,'a':0.0001,'m':mm})
 				
 			table={}
-			table['queue_waiting']=[global_db.set_que_waiting('send',jsonstr=json.dumps(ddict) ) ]
+			table['queue_waiting']=[self.db_main.set_que_waiting('send',jsonstr=json.dumps(ddict) ) ]
 			table['queue_waiting'][0]['type']='channel'
 			
 			# idb=localdb.DB(self.db)
@@ -1531,7 +1626,7 @@ class WalDispSet(gui.QObject):
 
 		
 		
-									
+					
 	def export_or_create_channel(self,btn,addr ):
 		if btn.currentText()=='Select:':
 			return
@@ -1652,9 +1747,18 @@ class WalDispSet(gui.QObject):
 				if bills<=0:
 					bill_state=False
 				
-					
-				tmpalias=ddict['aliasmap'][ddict['wl'][ii]['addr']]	
 				tmpaddr=ddict['wl'][ii]['addr']
+				tmp_seed_id=''
+				seed_tooltip='Priv key table not set yet for seed value'
+				tmp_usage_start_block='Not used yet'
+				if tmpaddr in self.priv_keys:
+					tmp_seed_id=' ('+str(self.priv_keys[tmpaddr])+')'
+					seed_tooltip='\n'+tmp_seed_id+' - seed number, used for new address generation.'
+					
+					# self.priv_keys_start_blocks[rr[0]]=rr[2]
+					tmp_usage_start_block='First usage block:\n'+str(self.priv_keys_start_blocks[tmpaddr] )
+					
+				tmpalias=ddict['aliasmap'][ddict['wl'][ii]['addr']]+tmp_seed_id
 				
 				tmpdict2={}
 				tmpdict2['rowk']=tmpalias
@@ -1674,7 +1778,7 @@ class WalDispSet(gui.QObject):
 									{'T':'LabelV', 'L':format(tmp_confirmed , self.format_str).replace(',',"'")    },
 									{'T':'LabelV', 'L':format(tmp_unconfirmed , self.format_str).replace(',',"'")  },
 									
-									{'T':'LabelV', 'L':str( ddict['lol'][ii][3] ) },
+									{'T':'LabelV', 'L':str( ddict['lol'][ii][3] ), 'tooltip': tmp_usage_start_block },
 									{'T':'Button', 'L':'Select' , 'uid':'select'+tmpalias , 'tooltip': tmpaddr , 'IS':b_enabled},
 									{'T':'LabelV', 'L':tmpaddr  }
 									]
@@ -1685,14 +1789,14 @@ class WalDispSet(gui.QObject):
 				
 					tmpdict2['rowv']=[ 
 									{'T':'Button', 'L':tmpcurcat,  'tooltip':'Edit category for address '+tmpaddr, 'fun':self.edit_category, 'args':(tmpalias,tmpaddr) }, 
-									{'T':'LabelV', 'L':tmpalias,  'tooltip':'Alias of address '+tmpaddr },
+									{'T':'LabelV', 'L':tmpalias,  'tooltip':'Alias of address '+tmpaddr +seed_tooltip},
 									{'T':'LabelV', 'L':format(tmp_total , self.format_str).replace(',',"'")  },
 									{'T':'LabelV', 'L':format(tmp_confirmed , self.format_str).replace(',',"'") },
 									{'T':'Button', 'L':u"\u25B6"   , 'tooltip':'Send from this address' , 'IS':b_enabled, 'fun':self.send_from_addr, 'args':(tmpaddr, tmp_total), 'style':send_style},
 									{'T':'LabelV', 'L':format(tmp_unconfirmed , self.format_str).replace(',',"'")  },
 									{'T':'Button', 'L':str(bills)+'/'+str(billsunc) , 'tooltip':'Show bills / UTXOs' , 'IS':bill_state, 'fun':self.show_bills, 'args':(tmpaddr,) },
 									
-									{'T':'LabelV', 'L':str( ddict['lol'][ii][3] ) },
+									{'T':'LabelV', 'L':str( ddict['lol'][ii][3] ), 'tooltip': tmp_usage_start_block },
 									{'T':'Combox', 'V':['Select:','address','view key','set channel'],'fun':self.export_or_create_channel,'args':(tmpaddr,), 'every_click':1  }
 									
 									# {'T':'Button', 'L':u"\u2398" , 'tooltip': 'Export address '+tmpaddr, 'fun':self.export_addr, 'args':(tmpaddr,), 'style':'padding:-4px;font-size:24px; ' },
