@@ -188,7 +188,7 @@ class Chnls(gui.QObject):
 		
 		
 		# table['addr_book']={'Category':'text', 'Alias':'text', 'Address':'text','ViewKey':'text','usage':'int','addr_verif':'int','viewkey_verif':'int' }
-		xx=global_db.select('addr_book', [ 'Address', 'viewkey_verif'] ,{'Address':['=',  "'"+self.defchnls.activation_channel_addr+"'" ] } )
+		xx=global_db.select('addr_book', [ 'Address', 'viewkey_verif'] ,{'Address':['=',global_db.qstr(self.defchnls.activation_channel_addr)   ] } )
 		
 		if len(xx)==0:
 			print('no def channel - need to activate channels')
@@ -237,16 +237,17 @@ class Chnls(gui.QObject):
 						]
 						 
 			self.filter_table.updateTable([tmpdict])  
+			
 			def activateChannels(*evargs):  
 				# idb=localdb.DB(self.db)
 				
 				tmpaddr=self.defchnls.activation_channel_addr
 				tmpvk=self.defchnls.channels[tmpaddr]
 				table={'addr_book':[{'Category':'Channel','Alias':'Tavern','Address':tmpaddr,'ViewKey':tmpvk,'usage':0,'addr_verif':1,'viewkey_verif':-2}]   }
-				global_db.upsert(table,[ 'Category','Alias','Address','ViewKey','usage','addr_verif','viewkey_verif'], {'Address':['=',  "'"+tmpaddr+"'" ] } )
+				global_db.upsert(table,[ 'Category','Alias','Address','ViewKey','usage','addr_verif','viewkey_verif'], {'Address':['=', global_db.qstr(tmpaddr)   ] } )
 				
 				self.refreshAddrBook.emit() 
-				tmpjson=json.dumps({'addr':tmpaddr,'viewkey':tmpvk})
+				tmpjson=json.dumps({'addr':tmpaddr,'viewkey':tmpvk, 'usage_first_block':1750000})
 				table={'queue_waiting':[global_db.set_que_waiting(command='import_view_key',jsonstr=tmpjson, wait_seconds=0)]}
 				global_db.insert(table,['type','wait_seconds','created_time','command' ,'json','id','status' ])
 				gui.messagebox_showinfo('Channels activated','Initial public channel (Tavern) added to wallet! Syncing will take few minutes.',None) 
@@ -263,7 +264,7 @@ class Chnls(gui.QObject):
 							, {'T':'LabelC', 'L':'Messages:','align':'center'}
 							, {'T':'Combox', 'uid':'msg', 'V':['Last 10','Last 100', 'All'] }
 							# , {'T':'Button', 'L':'Import', 'tooltip':'new channel' }
-							, {'T':'Button', 'L':'Export','tooltip':'Export this channel (current)'  }
+							, {'T':'Button', 'L':'Export','tooltip':'Export this channel (current)'  } # line 4
 							, {'T':'Button', 'L':'Reply','tooltip':'Reply to current channel'  }
 						] 
 			self.filter_table.updateTable([tmpdict]) 
@@ -277,7 +278,7 @@ class Chnls(gui.QObject):
 			if self.cur_uid in self.valid_uid_to_name:
 				tmpalias=self.valid_uid_to_name[self.cur_uid] #'CHANNEL NAME!!!' #self.grid_threads_msg[curid][0]['rowv'][1]['uid'] #TO CHANGE CHANNEL
 				
-				 
+				 # start_block
 				self.filter_table.cellWidget(0,4).updateButton(name='Export '+ tmpalias['name'], actionFun=self.export_channel,args=( self.cur_uid, tmpalias['vk'] ) )
 				self.filter_table.cellWidget(0,5).updateButton(name='Reply to '+ tmpalias['name'], actionFun=self.send_reply,args=('r',tmpalias['name'] ) )
 				 
@@ -329,7 +330,7 @@ class Chnls(gui.QObject):
 		# frame0.setMaximumHeight(128)
 		self.parent_frame.insertWidget(frame0) #ttk.LabelFrame(parent_frame,text='Options')  
 		
-		self.filter_table=gui.Table(None,params={'dim':[1,6],'updatable':1} ) 
+		self.filter_table=gui.Table(None,params={'dim':[1,6],'updatable':1, 'toContent':1} ) 
 		self.updateFilter()
 		
 			
@@ -372,15 +373,31 @@ class Chnls(gui.QObject):
 		self.msg_thrd_frame.insertWidget(self.frame2)	
 		 
 		self.main_table=None
-		self.main_table_params={ 'updatable':1,'sortable':1,'default_sort_col':'Date time' ,'rowSizeMod':1} #self.main_table_params['dim']=[len(self.grid_threads_msg[self.cur_uid]),2],
+		self.main_table_params={ 'updatable':1,'sortable':1,'default_sort_col':'Date time' ,'rowSizeMod':1} #self.main_table_params['dim']=[len(self.grid_threads_msg[self.cur_uid]),2], 
 		
 		
 		self.updating_threads=False
 		self.updating_chat=False
 		
 		
-	 
+	# if addr is own - take start block from priv key
+	# if addr is external - take from  view key table
+	# able['priv_keys']={'address':'text', 'pk':'text','id':'int', 'usage_first_block':'int'  } # firstblock init usage block
+	# table['view_keys']={'address':'text', 'vk':'text', 'usage_first_block':'int' }
+	
 	def export_channel(self,btn,addr,vk):
+		start_block=-1
+		# would be better to take min per pk or vk since few addr can have same pk/vk on different block start 
+		# pk00= global_db.select('priv_keys',[ 'pk'],where={'address':['=','"'+ddict['addr']+'"') # 'usage_first_block'
+		ufb_vk= global_db.select_min_val('view_keys', 'usage_first_block' ,where={'vk':['=', global_db.qstr(vk)   ]})
+		
+		# ufb_vk=global_db.select('view_keys',[ 'usage_first_block' ],where={'address':['=',"'"+addr+"'"] )
+		if len(ufb_vk)>0:
+			start_block=int(ufb_vk[0][0])
+		else:
+			ufb_pk=global_db.select('priv_keys',[ 'usage_first_block' ],where={'address':['=', global_db.qstr(addr)  ]} )
+			if len(ufb_pk)>0:
+				start_block=int(ufb_pk[0][0])
 		
 		automate_rowids=[ 
 							[{'T':'LabelC', 'L':'Export type: ' } , {'T':'Combox', 'V':['encrypted file','display on screen','not encrypted file']  } ] ,
@@ -396,8 +413,10 @@ class Chnls(gui.QObject):
 			expo=btn2.parent().parent()
 			table={}
 			ddict={'addr':addr, 
-					'viewkey':vk
+					'viewkey':vk,
+					# 'usage_first_block':start_block
 					}
+			if start_block>-1 and start_block!=None: ddict['usage_first_block']=start_block
 			tmpresult=json.dumps(ddict)
 			
 			if expo.cellWidget(0,1).currentText()=='display on screen':
@@ -496,7 +515,7 @@ class Chnls(gui.QObject):
 			self.cur_uid=evargs[-1]
 		
 		try:
-		 
+		# if True: 
 			if len(self.thr_ord )>0:
 				if self.cur_uid not in self.valid_uids:
 					# print('init self.cur_uid',self.cur_uid)
@@ -510,8 +529,10 @@ class Chnls(gui.QObject):
 				self.update_list()
 				 
 				tmpcolnames=[]
+				# print('self.maxMsgColWidth',self.maxMsgColWidth)
 				if self.main_table==None: 
-					self.main_table_params['colSizeMod']=[80,self.maxMsgColWidth-100 ] #-80
+					# self.main_table_params['colSizeMod']=[80,self.maxMsgColWidth-100 ] #-80
+					self.main_table_params['colSizeMod']=[80,'stretch' ] #works except height 
 			
 					self.main_table_params['dim']=[len(self.grid_threads_msg[self.cur_uid]),2]
 					self.main_table=gui.Table(None,params=self.main_table_params ) 
@@ -609,7 +630,7 @@ class Chnls(gui.QObject):
 				# chnl name :
 				
 				# alias_from_book
-			chnl_info=global_db.select('channels', [ 'vk' , 'creator' , 'channel_name' , 'channel_intro'],{'address':['=',  "'"+ad[0]+"'" ] } ) # idb.select('addr_book', [ 'Alias'],{'Address':['=',  "'"+ad[0]+"'" ] } ) ##
+			chnl_info=global_db.select('channels', [ 'vk' , 'creator' , 'channel_name' , 'channel_intro'],{'address':['=', global_db.qstr(ad[0])  ] } ) # idb.select('addr_book', [ 'Alias'],{'Address':['=',  "'"+ad[0]+"'" ] } ) ##
 			# print('chnl_info',chnl_info)
 			if len(chnl_info)==0:
 				continue
@@ -675,7 +696,7 @@ class Chnls(gui.QObject):
 			
 			# wwhere={}
 			 
-			wwhere={'proc_json':['=',"'True'"],'addr_to':['=',"'"+threads_aa[k][0]+"'"], 'in_sign_uid':['>',-2],'is_channel':['=',"'True'"], 'type':['=',"'in'"] } #, 'Type':
+			wwhere={'proc_json':['=',"'True'"],'addr_to':['=',global_db.qstr(threads_aa[k][0])  ], 'in_sign_uid':['>',-2],'is_channel':['=',"'True'"], 'type':['=',"'in'"] } #, 'Type':
 			# wwhere={'proc_json':['=',"'True'"],'addr_to':['=',"'"+threads_aa[k][0]+"'"], 'in_sign_uid':['>',-2],'is_channel':['=',"'True'"], 'type':[' like ',"'in%'"] } ## ' like ',"'in%'"
 				
 			# addr ext here is name of sender 
@@ -686,25 +707,40 @@ class Chnls(gui.QObject):
 			msg_flow=[]
 			
 			ccounter=0
+			
+			# background not working on pure item
+			# bad sizing for qlabels - sticking to items 
 			for tm in tmp_msg:
 				
-				sstyle1=" background-color:#fff;color:#333; padding:2px "
-				sstyle2=" background-color:#fff;color:#333; min-width:668px;max-width:768px;padding:2px "
+				# sstyle1=" background-color:#ffffff;color:#333333; padding:2px;"
+				# sstyle2=" background-color:#ffffff;color:#333333; min-width:668px;max-width:768px;padding:2px "
+				sstyle1=" color:green; padding:2px; min-height:40px;"
+				sstyle2=" color:green; min-width:668px;max-width:768px;padding:2px "
 				# tmppadx=0
 				# writer='['+threads_aa[k][1]+']: '
-				writer='['+tm[5]+']: '
+				writer='[unknown]'
+				if tm[5] not in ['',None]:
+					writer='['+tm[5]+']: '
 				if ccounter==0: #tm[0]=='out':
 					# writer='[me]: '
 					ccounter=1
-					sstyle1=" background-color:#ddd;color:black; padding:2px "
-					sstyle2="background-color:#ddd;color:black; min-width:668px;max-width:768px;padding:2px  "
+					# sstyle1=" background-color:#dddddd;color:black; padding:2px "
+					# sstyle2="background-color:#dddddd;color:black; min-width:668px;max-width:768px;padding:2px  "
+					sstyle1=" color:blue; padding:2px ; min-height:40px;"
+					sstyle2=" color:blue; min-width:668px;max-width:768px;padding:2px  "
 				else:
 					ccounter=0
-					
+				# print('tm[2]',tm[2],writer+tm[1],'sstyle1',sstyle1)
 				# tm[1]=tm[1]+' aaa '
 				tmptoinsert=writer+tm[1] #+' aaa </br> bbb <br> ccc \n ddd \\n eee '
 				# {'T':'QLabel', 'L':tm[2] ,  'style':sstyle1,'ttype':gui.QDateTime  } {'T':'TextEdit', 'L': tm[2],  'style':sstyle1, 'readonly':1,'width': 80  }
-				tmpdict={'rowk':tm[2], 'rowv':[{'T':'QLabel', 'L':tm[2] ,  'style':sstyle1,'ttype':gui.QDateTime  } , {'T':'TextEdit', 'L': tmptoinsert, 'uid':str(threads_aa[k][0]),  'style':sstyle2, 'readonly':1,'width': (self.maxMsgColWidth-100)  }] } # -80
+				
+				
+				#need more unique rowk - date_time plus counter? plus block plus username?
+				tmpdict={'rowk':tm[2], 'rowv':[{'T':'QLabel', 'L':tm[2] ,  'style':sstyle1,'ttype':gui.QDateTime, 'align':['AlignTop']  } , {'T':'LabelV', 'L': tmptoinsert ,  'style':sstyle1 }]}
+				# tmpdict={'rowk':tm[2], 'rowv':[{'T':'QLabel', 'L':tm[2] ,  'style':sstyle1,'ttype':gui.QDateTime  } , {'T':'LabelV', 'L': tmptoinsert, 'uid':str(threads_aa[k][0]),  'style':sstyle1, 'margin':10}]} # , 'rowSizeMod':'toContent' , 'rowSizeMod':'stretch'
+				# print('self.maxMsgColWidth',self.maxMsgColWidth)
+				# tmpdict={'rowk':tm[2], 'rowv':[{'T':'QLabel', 'L':tm[2] ,  'style':sstyle1,'ttype':gui.QDateTime  } , {'T':'TextEdit', 'L': tmptoinsert, 'uid':str(threads_aa[k][0]),  'style':sstyle2, 'readonly':1,'width': (self.maxMsgColWidth-100)  }] } # -80
 				msg_flow.append(tmpdict)
 				
 			# print('\n\nchannel msg format')
