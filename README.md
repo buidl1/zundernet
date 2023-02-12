@@ -7,7 +7,7 @@ Zundernet is new proof of concept wallet, with features not available in other w
 It works with Pirate (komodod or pirated) .
 
 **Why Pirate Chain?** Two reasons:
-1. Proven double spend protection via Komodo Platform
+1. Proven double spend protection & 51% attack prevention via Komodo Platform's dPoW (delayed Proof of Work) tech
 2. Forced private blockchain, using ZEC tech but with forced p2p tx (biggest anon set among private chains).
 
 NOTE: when using zundernet do not run Pirate at the same time with different wallets.
@@ -31,8 +31,6 @@ Small:
 5. able to send many tx in a single one (z_sendmany)
 6. easy maintenance - export, import options in gui layer
 
-
-
 It is an experimental software. Expect changes and updates as we progress through the development.
 
 It should work on Windows and Linux as long as user has python3 installed with following libraries: `pyside2, pycryptodome` and some other standard libraries.
@@ -43,13 +41,14 @@ It should work on Windows and Linux as long as user has python3 installed with f
 - To use the app you also need Komodo/Pirate deamon
 - zcash params (Zcash params for Windows and Linux may be downloaded using attached scripts (komodo-win, komodo-lin) containing also komodo deamons)
 - For database you can sync fresh from the network or use bootstrap
+- USB flash drive to keep backup of encrypted wallet.dat file
 
 **Important: Before you start - backup your wallet.dat file just in case.**
 
 ## Dependencies
 Install the following dependencies to run Zundernet properly:
 ```shell
-sudo apt-get install python3-pip
+sudo apt-get install python3-pip qt5-default
 pip3 install pycryptodome
 pip3 install pyside2
 pip3 install psutil
